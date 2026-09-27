@@ -17,7 +17,7 @@ export default async function EquipePage() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td className="font-semibold">{u.name}</td>
+                  <td className="font-bold">{u.name}</td>
                   <td className="text-cacau-500">{u.email}</td>
                   <td className="text-right">{u._count.sales}</td>
                 </tr>

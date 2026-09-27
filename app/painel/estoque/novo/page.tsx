@@ -18,7 +18,9 @@ export default async function NovoProdutoPage() {
           categoryId: "",
           trackStock: true,
           priceOnRequest: false,
+          onStore: true,
           active: true,
+          image: null,
           variants: [{ name: "Único", servings: "", price: "", cost: "", minStock: "0", active: true }],
         }}
       />

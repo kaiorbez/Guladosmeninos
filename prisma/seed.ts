@@ -1,252 +1,165 @@
-// Carrega o cardápio oficial (Menú Gula dos Meninos 2026/01) e o usuário admin.
-// Seguro para rodar a cada deploy: o cardápio só é carregado com o banco vazio.
-// Depois disso quem manda são os sócios pelo painel (preços, nomes, estoque).
+// Carrega o cardápio, o catálogo do PedidosYa e o usuário admin.
+// Roda a cada deploy (npm start) e é idempotente:
+//  - banco vazio: carrega tudo;
+//  - banco da 1ª versão (nomes em espanhol): traduz nomes e põe fotos, sem tocar em
+//    preços, custos, estoque ou vendas;
+//  - sem anúncios do PedidosYa ainda: cria os produtos que faltavam e o catálogo do app;
+//  - depois disso não faz nada: quem manda são os sócios pelo painel.
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed } from "./data/cardapio";
+import { PEDIDOSYA } from "./data/pedidosya";
 
 const prisma = new PrismaClient();
 
-type VariantSeed = { name: string; servings?: string; price: number };
-type ProductSeed = {
-  name: string;
-  description?: string;
-  variants: VariantSeed[];
-  priceOnRequest?: boolean;
-  trackStock?: boolean;
-};
-type CategorySeed = {
-  name: string;
-  slug: string;
-  description?: string;
-  /** Tortas são feitas sob encomenda; cuchareables ficam prontos em estoque. */
-  trackStock: boolean;
-  products: ProductSeed[];
-};
-
-const TAMANHOS = {
-  P: "Entre 8 y 10 personas",
-  M: "Hasta 15 personas",
-  G: "Hasta 25 personas",
-  GG: "Hasta 40 personas",
-};
-
-function tamanhos(p: number, m: number, g: number, gg: number): VariantSeed[] {
-  return [
-    { name: "P", servings: TAMANHOS.P, price: p },
-    { name: "M", servings: TAMANHOS.M, price: m },
-    { name: "G", servings: TAMANHOS.G, price: g },
-    { name: "GG", servings: TAMANHOS.GG, price: gg },
-  ];
-}
-
-const unico = (price: number): VariantSeed[] => [{ name: "Único", price }];
-const tamanhoG = (price: number): VariantSeed[] => [
-  { name: "G", servings: TAMANHOS.G, price },
-];
-
-const personalizada = (name: string, description: string): ProductSeed => ({
-  name,
-  description,
-  priceOnRequest: true,
-  trackStock: false,
-  variants: [{ name: "A consultar", price: 0 }],
-});
-
-const CARDAPIO: CategorySeed[] = [
-  {
-    name: "Campeones de Ventas",
-    slug: "campeones",
-    trackStock: false,
-    description: "Tortas favoritas dos clientes, em 4 tamanhos.",
-    products: [
-      {
-        name: "Brigadeiro de Nido con Brigadeiro de Chocolate",
-        variants: tamanhos(120, 190, 230, 400),
-      },
-      {
-        name: "Brigadeiro de Beijinho con Brigadeiro de Chocolate",
-        variants: tamanhos(120, 190, 230, 400),
-      },
-      {
-        name: "Brigadeiro de Chocolate",
-        variants: tamanhos(120, 190, 230, 400),
-      },
-      {
-        name: "Brigadeiro de Maracuyá con Chocolate",
-        description:
-          "Brigadeiro de maracuyá con brigadeiro de chocolate y mermelada de maracuyá.",
-        variants: tamanhos(130, 200, 260, 450),
-      },
-    ],
-  },
-  {
-    name: "Cuchareables Clásicos",
-    slug: "cuchareables-clasicos",
-    trackStock: true,
-    description: "Tortas de pote com massa de chocolate. 20 Bs.",
-    products: [
-      { name: "Cuchareable Nido con Brigadeiro de Chocolate", variants: unico(20) },
-      {
-        name: "Cuchareable Dulce de Leche con Brigadeiro de Chocolate",
-        variants: unico(20),
-      },
-      { name: "Cuchareable Brigadeiro de Chocolate", variants: unico(20) },
-      {
-        name: "Cuchareable Prestigio",
-        description: "Brigadeiro de chocolate con coco.",
-        variants: unico(20),
-      },
-      {
-        name: "Cuchareable Maracuyá con Brigadeiro de Chocolate",
-        variants: unico(20),
-      },
-    ],
-  },
-  {
-    name: "Cuchareables Premium",
-    slug: "cuchareables-premium",
-    trackStock: true,
-    description: "Tortas de pote especiais. 25 Bs.",
-    products: [
-      {
-        name: "Cuchareable Nido con Frutilla",
-        description: "Nido con mermelada de frutilla, con masa de vainilla.",
-        variants: unico(25),
-      },
-      {
-        name: "Cuchareable Nido con Frutos Rojos",
-        description: "Nido con mermelada de frutos rojos, con masa de vainilla.",
-        variants: unico(25),
-      },
-      {
-        name: "Cuchareable Chocolate con Zanahoria",
-        description: "Brigadeiro de chocolate con masa de zanahoria.",
-        variants: unico(25),
-      },
-      {
-        name: "Cuchareable Moca",
-        description: "Brigadeiro de moca (café), con masa de chocolate.",
-        variants: unico(25),
-      },
-    ],
-  },
-  {
-    name: "Tortas Premium",
-    slug: "tortas-premium",
-    trackStock: false,
-    description: "Tortas especiais tamanho G (até 25 pessoas).",
-    products: [
-      {
-        name: "Torta Avellana & Cereza",
-        description:
-          "Masa de chocolate, relleno de brigadeiro de avellana, cubierta con ganache de chocolate. Decorada con cerezas y avellanas.",
-        variants: tamanhoG(550),
-      },
-      {
-        name: "Torta Coco Premium",
-        description:
-          "Masa de chocolate, relleno de brigadeiro de coco, cubierta con ganache blindada de brigadeiro de chocolate. Decorada con coco rallado y bolitas de beijinho.",
-        variants: tamanhoG(375),
-      },
-      {
-        name: "Torta Nido Intenso",
-        description:
-          "Masa de chocolate, relleno de brigadeiro de Nido con crema de avellanas, cubierta con ganache blindada de chocolate. Decorada con brigadeiro de Nido, bolitas de Nido y frutillas frescas.",
-        variants: tamanhoG(500),
-      },
-      {
-        name: "Torta Rosa Negra",
-        description:
-          "Masa de chocolate, relleno de brigadeiro de chocolate y brigadeiro de maracuyá. Cubierta con brigadeiro de chocolate y perlas de chocolate.",
-        variants: tamanhoG(400),
-      },
-      {
-        name: "Matilda Gula",
-        description:
-          "Masa de chocolate, relleno de brigadeiro de chocolate, cubierta con brigadeiro de chocolate y bolitas de brigadeiro.",
-        variants: tamanhoG(420),
-      },
-    ],
-  },
-  {
-    name: "Tortas Personalizadas",
-    slug: "personalizadas",
-    trackStock: false,
-    description:
-      "Chantilly y ganache, sob encomenda. Preço sob consulta, sem controle de estoque.",
-    products: [
-      personalizada("Personalizada Infantil", "Diversión, color y dulzura para los peques."),
-      personalizada("Personalizada Temática", "Diseños únicos que cuentan historias."),
-      personalizada("Personalizada Elegancia Minimalista", "Belleza simple que impacta en cada detalle."),
-      personalizada("Personalizada Perlas de Elegancia", "Clásica, delicada y sofisticada."),
-      personalizada("Personalizada Amor en cada Detalle", "Ideal para sorprender y celebrar con amor."),
-      personalizada("Personalizada Floral Azul", "Delicadeza en cada detalle."),
-      personalizada("Personalizada Romántica", "Suave, elegante y encantadora."),
-      personalizada("Personalizada Perlas Doradas", "Clásica, fina y sofisticada."),
-      personalizada("Personalizada Bosque", "Intensa, húmeda y llena de sabor."),
-      personalizada("Personalizada Deportiva", "Para los amantes del deporte y la energía."),
-    ],
-  },
-];
-
-async function main() {
+async function ensureAdmin() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
-  if (email && password) {
-    await prisma.user.upsert({
-      where: { email: email.toLowerCase() },
-      update: {},
-      create: {
-        email: email.toLowerCase(),
-        name: process.env.ADMIN_NAME ?? "Admin",
-        passwordHash: await bcrypt.hash(password, 10),
-      },
-    });
-    console.log(`Usuário admin: ${email}`);
-  } else {
+  if (!email || !password) {
     console.warn("ADMIN_EMAIL/ADMIN_PASSWORD não definidos: nenhum usuário criado.");
-  }
-
-  if ((await prisma.product.count()) > 0) {
-    console.log("Cardápio já carregado: nada a fazer.");
     return;
   }
+  await prisma.user.upsert({
+    where: { email: email.toLowerCase() },
+    update: {},
+    create: {
+      email: email.toLowerCase(),
+      name: process.env.ADMIN_NAME ?? "Admin",
+      passwordHash: await bcrypt.hash(password, 10),
+    },
+  });
+  console.log(`Usuário admin: ${email}`);
+}
 
-  for (const [ci, cat] of CARDAPIO.entries()) {
-    const category = await prisma.category.upsert({
-      where: { slug: cat.slug },
-      update: {},
-      create: { name: cat.name, slug: cat.slug, description: cat.description, sortOrder: ci },
+const ORDER = [...new Set([...CARDAPIO, ...EXTRAS].map((c) => c.slug))];
+
+/** Garante a categoria; na migração da 1ª versão traduz o nome e define o grupo. */
+async function ensureCategory(cat: CategorySeed, migrate: boolean) {
+  const sortOrder = ORDER.indexOf(cat.slug);
+  const existing = await prisma.category.findUnique({ where: { slug: cat.slug } });
+  if (!existing) {
+    return prisma.category.create({
+      data: { slug: cat.slug, name: cat.name, group: cat.group, description: cat.description, sortOrder },
     });
+  }
+  if (migrate || existing.group === null) {
+    return prisma.category.update({
+      where: { id: existing.id },
+      data: {
+        name: existing.name === (cat.legacy ?? cat.name) ? cat.name : existing.name,
+        group: existing.group ?? cat.group,
+        description: cat.description ?? existing.description,
+        sortOrder,
+      },
+    });
+  }
+  return existing;
+}
 
+async function createProduct(categoryId: string, cat: CategorySeed, p: ProductSeed, sortOrder: number) {
+  return prisma.product.create({
+    data: {
+      name: p.name,
+      description: p.description ?? null,
+      imageUrl: p.image ?? null,
+      categoryId,
+      priceOnRequest: p.priceOnRequest ?? false,
+      trackStock: p.trackStock ?? cat.trackStock,
+      onStore: p.onStore ?? true,
+      sortOrder,
+      variants: {
+        create: p.variants.map((v, i) => ({
+          name: v.name,
+          servings: v.servings ?? null,
+          price: v.price,
+          sortOrder: i,
+        })),
+      },
+    },
+  });
+}
+
+async function main() {
+  await ensureAdmin();
+
+  const empty = (await prisma.product.count()) === 0;
+  const legacyOnly = CARDAPIO.flatMap((c) => c.products)
+    .filter((p) => p.legacy && p.legacy !== p.name)
+    .map((p) => p.legacy!);
+  const migrate = !empty && (await prisma.product.count({ where: { name: { in: legacyOnly } } })) > 0;
+
+  // 1. Cardápio da loja
+  for (const cat of CARDAPIO) {
+    const category = await ensureCategory(cat, migrate);
     for (const [pi, p] of cat.products.entries()) {
-      const existing = await prisma.product.findFirst({
-        where: { name: p.name, categoryId: category.id },
-      });
-      const data = {
-        name: p.name,
-        description: p.description ?? null,
-        categoryId: category.id,
-        priceOnRequest: p.priceOnRequest ?? false,
-        trackStock: p.trackStock ?? cat.trackStock,
-        sortOrder: pi,
-      };
-      if (existing) continue;
-      const product = await prisma.product.create({ data });
-
-      for (const [vi, v] of p.variants.entries()) {
-        await prisma.variant.create({
-          data: {
-            productId: product.id,
-            name: v.name,
-            servings: v.servings ?? null,
-            price: v.price,
-            sortOrder: vi,
-          },
+      if (empty) {
+        await createProduct(category.id, cat, p, pi);
+        continue;
+      }
+      if (!migrate) continue;
+      const old = p.legacy ? await prisma.product.findFirst({ where: { categoryId: category.id, name: p.legacy } }) : null;
+      if (old) {
+        await prisma.product.update({
+          where: { id: old.id },
+          data: { name: p.name, description: p.description ?? old.description, imageUrl: old.imageUrl ?? p.image ?? null, sortOrder: pi },
         });
+        // Vendas já registradas guardam o nome antigo: atualiza para o nome em português.
+        for (const v of await prisma.variant.findMany({ where: { productId: old.id } })) {
+          await prisma.saleItem.updateMany({
+            where: { variantId: v.id },
+            data: { description: v.name === "Único" || v.name === "A consultar" ? p.name : `${p.name} (${v.name})` },
+          });
+        }
+      } else if (!(await prisma.product.findFirst({ where: { categoryId: category.id, name: p.name } }))) {
+        await createProduct(category.id, cat, p, pi);
       }
     }
-    console.log(`✓ ${cat.name}: ${cat.products.length} produtos`);
+    if (empty || migrate) console.log(`✓ ${cat.name}`);
+  }
+  if (migrate) {
+    for (const [es, pt] of Object.entries(LEGACY_SERVINGS)) {
+      await prisma.variant.updateMany({ where: { servings: es }, data: { servings: pt } });
+    }
+    await prisma.variant.updateMany({ where: { name: "A consultar" }, data: { name: "Sob consulta" } });
+  }
+
+  // 2. Produtos que só apareciam no PedidosYa + catálogo do app (uma vez só)
+  if ((await prisma.pedidosYaItem.count()) === 0) {
+    for (const cat of EXTRAS) {
+      const category = await ensureCategory(cat, false);
+      const base = await prisma.product.count({ where: { categoryId: category.id } });
+      for (const [pi, p] of cat.products.entries()) {
+        const exists = await prisma.product.findFirst({ where: { name: p.name } });
+        if (!exists) await createProduct(category.id, cat, p, base + pi);
+      }
+    }
+
+    let created = 0;
+    for (const [i, item] of PEDIDOSYA.entries()) {
+      const variant = await prisma.variant.findFirst({
+        where: { name: item.variant, product: { name: item.product } },
+      });
+      if (!variant) {
+        console.warn(`PedidosYa: sem produto para "${item.name}" (${item.product} / ${item.variant})`);
+        continue;
+      }
+      await prisma.pedidosYaItem.create({
+        data: {
+          section: item.section,
+          name: item.name,
+          description: item.description ?? null,
+          price: item.price,
+          listPrice: item.listPrice ?? null,
+          variantId: variant.id,
+          needsReview: item.review ?? false,
+          sortOrder: i,
+        },
+      });
+      created++;
+    }
+    console.log(`✓ PedidosYa: ${created} anúncios`);
+  } else if (!empty && !migrate) {
+    console.log("Cardápio já carregado: nada a fazer.");
   }
 }
 

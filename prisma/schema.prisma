@@ -25,6 +25,8 @@ model Category {
   name        String
   slug        String    @unique
   description String?
+  // Agrupa as categorias no menu lateral: Tortas, Bolos de Pote, Salgados, Doces...
+  group       String?
   sortOrder   Int       @default(0)
   products    Product[]
 }
@@ -39,8 +41,15 @@ model Product {
   priceOnRequest Boolean   @default(false)
   // Produtos feitos por encomenda não controlam estoque.
   trackStock     Boolean   @default(true)
+  // Vende na loja / WhatsApp com o preço da loja. Itens que só existem no PedidosYa ficam false.
+  onStore        Boolean   @default(true)
   active         Boolean   @default(true)
   sortOrder      Int       @default(0)
+  // Foto do cardápio (arquivo em /public) ou enviada pelo painel (guardada no banco).
+  imageUrl       String?
+  photo          Bytes?
+  photoType      String?
+  photoUpdatedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   variants       Variant[]
@@ -64,6 +73,7 @@ model Variant {
   active    Boolean         @default(true)
   movements StockMovement[]
   saleItems SaleItem[]
+  pedidosYa PedidosYaItem[]
 
   @@unique([productId, name])
 }
@@ -98,6 +108,7 @@ enum SaleChannel {
   WHATSAPP
   DELIVERY
   INSTAGRAM
+  PEDIDOSYA
 }
 
 enum SaleStatus {
@@ -142,4 +153,25 @@ model SaleItem {
   quantity    Int
   unitPrice   Decimal @db.Decimal(10, 2)
   unitCost    Decimal @db.Decimal(10, 2)
+}
+
+// Anúncio no PedidosYa: preço próprio (mais caro por causa da taxa do app),
+// ligado a um item do cardápio para dar baixa no estoque e comparar preços.
+model PedidosYaItem {
+  id          String   @id @default(cuid())
+  section     String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  // Preço "de" quando há desconto no app
+  listPrice   Decimal? @db.Decimal(10, 2)
+  variantId   String
+  variant     Variant  @relation(fields: [variantId], references: [id])
+  // Preço lido de print com baixa resolução: confirmar
+  needsReview Boolean  @default(false)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([variantId])
 }

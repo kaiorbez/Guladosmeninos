@@ -37,6 +37,8 @@ Um único sistema web (painel + backend do agente), hospedado de forma barata:
 | Produtos | Criar e editar produto, categoria, descrição (usada pelo agente) e tamanhos com **preço, custo, margem calculada e estoque mínimo**. Flags: *controla estoque* (pronta entrega × sob encomenda), *preço sob consulta* (personalizadas), *ativo*. |
 | Nova venda | O atendente toca no produto, escolhe o tamanho, e o **preço vem do cardápio** (editável: desconto ou preço combinado). Personalizadas **exigem** o preço combinado. Canal (Balcão/WhatsApp/Delivery/Instagram), pagamento (QR/Dinheiro/Cartão/Outro), cliente, telefone e observação. **Baixa automática de estoque.** |
 | Vendas | Histórico com filtro (hoje / 7 dias / mês / 30 dias / tudo), totais do período e **cancelamento com estorno** automático ao estoque (com confirmação). |
+| PedidosYa | Aba própria com os 46 anúncios do app (preços com taxa), ligados aos produtos do painel. Análise: em falta (zerado), do cardápio mas fora do app, só no app, anúncios repetidos, diferença de preço app × loja e preços a conferir. Canal **PedidosYa** na Nova venda usa os preços do app. |
+| Fotos | Foto de cada produto (recortadas do cardápio oficial) e envio de foto nova pelo painel (reduzida no navegador e guardada no banco). |
 | Fuso horário | "Hoje", "semana" e "mês" calculados no fuso de **La Paz (UTC-4)**, mesmo com o servidor em UTC. |
 
 ### Fase 2: Agente de WhatsApp (a fazer)
@@ -80,8 +82,8 @@ Um único sistema web (painel + backend do agente), hospedado de forma barata:
 
 Tirado do **cardápio oficial 2026/01** (o painel segue a identidade da marca):
 
-- **Cores:** creme de fundo (`#F8F0E5`), marrom-cacau nos textos e botões principais (`#2E1F17`), dourado nos destaques (`#B8863B`), coral/terracota nos alertas e ações de destaque (`#E8735A`, o mesmo dos números "1, 2, 3" do cardápio).
-- **Tipografia:** serifada elegante nos títulos (Cormorant Garamond) e sans limpa no corpo (Nunito Sans).
+- **Cores:** tema escuro chocolate (`#18100C` fundo, `#261B14` cartões) com texto creme, dourado nos destaques e botões (`#D4A048`) e coral nos alertas (`#EA7558`). A caixa de login usa a versão clara (creme `#F8F0E5`). Cores definidas como variáveis CSS em `app/globals.css`.
+- **Tipografia:** Montserrat em todo o painel, com pesos 500 a 800 para boa leitura.
 - **Logo:** ilustração dos dois meninos com a torta (`public/logo.png`, extraída do cardápio).
 - Tom: acolhedor, "Pastelería con amor, para ti".
 
@@ -128,7 +130,10 @@ Slogan: *"¡Tu idea, nuestra creación!"*. Para toda ocasião: aniversários, ev
 ## Anexo B: Pendências de informação com o cliente
 
 - [ ] Preço de tortas montadas com massa e recheios livres (ver acima).
-- [ ] **Empadões, docinhos e kits de festa** aparecem na proposta, mas **não estão no cardápio PDF**. Pedir itens e preços e cadastrar pelo painel (Novo produto).
+- [x] Empadões, fatias, combos, bebidas e velas: cadastrados a partir do PedidosYa (marcados "Só no PedidosYa" até definirem preço de loja).
+- [ ] **Docinhos e kits de festa**: categoria criada, faltam itens e preços.
+- [ ] Preços de loja dos itens que hoje só existem no PedidosYa.
+- [ ] Conferir no app: Combo fiesta p, Combo porción nido con frutos rojos, Empadão m fricassê (preço cortado no print).
 - [ ] **Custo** de cada produto, para o lucro ficar real (hoje o painel avisa quantos itens estão sem custo).
 - [ ] Quais itens ficam **prontos em estoque**. Padrão atual: cuchareables = estoque; tortas = sob encomenda (dá para alternar por produto).
 - [ ] Horário de funcionamento, dias de delivery (terça só delivery), taxa e área de entrega, antecedência mínima para encomendas e formas de pagamento aceitas. **Necessário para o agente.**

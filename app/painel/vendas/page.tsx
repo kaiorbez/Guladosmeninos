@@ -46,7 +46,7 @@ export default async function VendasPage({
       </PageHeader>
 
       {sp.registrada && (
-        <p className="mb-4 rounded-xl bg-cacau-900 px-4 py-3 text-sm font-semibold text-creme-50">
+        <p className="mb-4 rounded-xl border border-dourado-500/50 bg-dourado-500/15 px-4 py-3 text-sm font-bold text-dourado-600">
           ✓ Venda #{sp.registrada} registrada e estoque atualizado.
         </p>
       )}
@@ -63,7 +63,7 @@ export default async function VendasPage({
             <Link
               key={p}
               href={`/painel/vendas?periodo=${p}`}
-              className={`btn py-1.5 ${p === periodo ? "bg-cacau-900 text-creme-50" : "btn-ghost"}`}
+              className={`btn py-1.5 ${p === periodo ? "btn-on" : "btn-ghost"}`}
             >
               {PERIODS[p].label}
             </Link>
@@ -113,7 +113,7 @@ export default async function VendasPage({
                     </td>
                     <td>{CHANNEL_LABEL[s.channel]}</td>
                     <td>{PAYMENT_LABEL[s.payment]}</td>
-                    <td className="whitespace-nowrap text-right font-semibold">{bs(s.total)}</td>
+                    <td className="whitespace-nowrap text-right font-bold">{bs(s.total)}</td>
                     <td className="whitespace-nowrap pr-5 text-right no-underline">
                       {cancelled ? (
                         <span className="badge bg-creme-200 text-cacau-500 no-underline">Cancelada</span>

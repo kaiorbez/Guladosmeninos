@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { AdjustStock } from "@/components/AdjustStock";
 import { PageHeader } from "@/components/PageHeader";
 import { ProductForm } from "@/components/ProductForm";
-import { prisma } from "@/lib/db";
-import { MOVEMENT_LABEL, dateTime, toNumber } from "@/lib/format";
+import { prisma, productImage } from "@/lib/db";
+import { MOVEMENT_LABEL, bs, dateTime, toNumber } from "@/lib/format";
 
 export default async function ProdutoPage({
   params,
@@ -18,7 +18,10 @@ export default async function ProdutoPage({
   const [product, categories] = await Promise.all([
     prisma.product.findUnique({
       where: { id },
-      include: { category: true, variants: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        category: true,
+        variants: { orderBy: { sortOrder: "asc" }, include: { pedidosYa: { orderBy: { sortOrder: "asc" } } } },
+      },
     }),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
@@ -36,7 +39,7 @@ export default async function ProdutoPage({
       <PageHeader title={product.name} subtitle={product.category.name}>
         <Link href={`/painel/estoque?categoria=${product.category.slug}`} className="btn-ghost">← Voltar</Link>
       </PageHeader>
-      {salvo && <p className="mb-4 rounded-xl bg-creme-200 px-4 py-2 text-sm font-semibold text-cacau-900">Produto criado.</p>}
+      {salvo && <p className="mb-4 rounded-xl bg-creme-200 px-4 py-2 text-sm font-bold text-cacau-900">Produto criado.</p>}
 
       <ProductForm
         categories={categories}
@@ -47,7 +50,9 @@ export default async function ProdutoPage({
           categoryId: product.categoryId,
           trackStock: product.trackStock,
           priceOnRequest: product.priceOnRequest,
+          onStore: product.onStore,
           active: product.active,
+          image: productImage(product),
           variants: product.variants.map((v) => ({
             id: v.id,
             name: v.name,
@@ -59,6 +64,27 @@ export default async function ProdutoPage({
           })),
         }}
       />
+
+      {product.variants.some((v) => v.pedidosYa.length > 0) && (
+        <section className="card mt-6">
+          <h2 className="text-xl">No PedidosYa</h2>
+          <p className="mb-2 text-xs text-cacau-400">Anúncios ligados a este produto. Edite os preços na aba PedidosYa.</p>
+          <table className="table-base">
+            <tbody>
+              {product.variants.flatMap((v) =>
+                v.pedidosYa.map((py) => (
+                  <tr key={py.id}>
+                    <td className="font-bold">{py.name}</td>
+                    <td>{v.name}</td>
+                    <td className="text-right font-bold">{bs(py.price)}</td>
+                    <td className="text-right text-cacau-400">loja: {product.onStore ? bs(v.price) : "—"}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {product.trackStock && (
         <section className="card mt-6">
@@ -88,7 +114,7 @@ export default async function ProdutoPage({
                     <td className="whitespace-nowrap">{dateTime(m.createdAt)}</td>
                     <td>{m.variant.name}</td>
                     <td>{MOVEMENT_LABEL[m.type]}</td>
-                    <td className={`text-right font-semibold ${m.quantity > 0 ? "text-dourado-600" : "text-coral-600"}`}>
+                    <td className={`text-right font-bold ${m.quantity > 0 ? "text-dourado-600" : "text-coral-600"}`}>
                       {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
                     </td>
                     <td className="text-right">{m.stockAfter}</td>

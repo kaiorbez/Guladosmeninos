@@ -38,6 +38,7 @@ export const CHANNEL_LABEL: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   DELIVERY: "Delivery",
   INSTAGRAM: "Instagram",
+  PEDIDOSYA: "PedidosYa",
 };
 
 export const PAYMENT_LABEL: Record<string, string> = {

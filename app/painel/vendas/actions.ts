@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { InventoryError, cancelSale, createSale, type SaleItemInput } from "@/lib/inventory";
 
-const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM"];
+const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
 const PAYMENTS: PaymentMethod[] = ["QR", "EFECTIVO", "TARJETA", "OTRO"];
 
 export async function createSaleAction(_: string | null, form: FormData): Promise<string | null> {

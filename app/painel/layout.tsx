@@ -21,7 +21,7 @@ export default async function PainelLayout({ children }: { children: React.React
     <div className="lg:flex">
       <Suspense>
         <Sidebar
-          categories={categories.map((c) => ({ slug: c.slug, name: c.name, count: c._count.products }))}
+          categories={categories.map((c) => ({ slug: c.slug, name: c.name, group: c.group ?? "Outros", count: c._count.products }))}
           alerts={lowStock.length}
           userName={session.name}
           logout={logout}

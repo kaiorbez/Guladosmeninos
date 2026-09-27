@@ -1,4 +1,4 @@
-import { prisma } from "./db";
+import { prisma, productImage } from "./db";
 import { dayKey, startOfDay, startOfMonth } from "./time";
 
 const confirmed = { status: "CONFIRMADA" as const };
@@ -52,13 +52,13 @@ export async function getTopProducts(from: Date, limit = 6) {
       quantity: true,
       unitPrice: true,
       unitCost: true,
-      variant: { select: { product: { select: { id: true, name: true } } } },
+      variant: { select: { product: { select: { id: true, name: true, imageUrl: true, photoUpdatedAt: true } } } },
     },
   });
-  const map = new Map<string, { name: string; quantity: number; revenue: number; profit: number }>();
+  const map = new Map<string, { id: string; name: string; image: string | null; quantity: number; revenue: number; profit: number }>();
   for (const i of items) {
     const p = i.variant.product;
-    const row = map.get(p.id) ?? { name: p.name, quantity: 0, revenue: 0, profit: 0 };
+    const row = map.get(p.id) ?? { id: p.id, name: p.name, image: productImage(p), quantity: 0, revenue: 0, profit: 0 };
     row.quantity += i.quantity;
     row.revenue += Number(i.unitPrice) * i.quantity;
     row.profit += (Number(i.unitPrice) - Number(i.unitCost)) * i.quantity;

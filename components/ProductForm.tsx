@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useActionState, useState } from "react";
 import { saveProductAction } from "@/app/painel/estoque/actions";
 
@@ -21,9 +22,31 @@ export type ProductFormData = {
   categoryId: string;
   trackStock: boolean;
   priceOnRequest: boolean;
+  onStore: boolean;
   active: boolean;
+  image: string | null;
   variants: Omit<Variant, "key">[];
 };
+
+/** Reduz a foto no navegador (máx. 800 px, JPEG) antes de enviar. */
+function resizeImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 800;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    img.src = url;
+  });
+}
 
 let seq = 0;
 const newKey = () => `n${++seq}`;
@@ -36,6 +59,8 @@ export function ProductForm({
   categories: { id: string; name: string }[];
 }) {
   const [state, action, pending] = useActionState(saveProductAction, null);
+  const [photo, setPhoto] = useState<string>("");
+  const [photoError, setPhotoError] = useState("");
   const [variants, setVariants] = useState<Variant[]>(() =>
     initial.variants.map((v) => ({ ...v, key: v.id ?? newKey() })),
   );
@@ -54,8 +79,40 @@ export function ProductForm({
     <form action={action} className="space-y-6">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="variantCount" value={variants.length} />
+      <input type="hidden" name="photoData" value={photo} />
 
-      <div className="card grid gap-4 sm:grid-cols-2">
+      <div className="card grid gap-5 sm:grid-cols-[auto_1fr]">
+        <div className="flex flex-col items-center gap-2">
+          {photo || initial.image ? (
+            <img src={photo || initial.image!} alt="" className="thumb h-40 w-40" />
+          ) : (
+            <div className="thumb flex h-40 w-40 items-center justify-center text-center text-xs font-bold text-cacau-400">
+              Sem foto
+            </div>
+          )}
+          <label className="btn-ghost cursor-pointer py-1.5 text-xs">
+            {photo || initial.image ? "Trocar foto" : "Enviar foto"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  setPhotoError("");
+                  setPhoto(await resizeImage(file));
+                } catch (err) {
+                  setPhotoError((err as Error).message);
+                }
+              }}
+            />
+          </label>
+          {photo && <span className="text-[11px] font-bold text-dourado-600">Salve para aplicar</span>}
+          {photoError && <span className="text-[11px] font-bold text-coral-600">{photoError}</span>}
+        </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="label" htmlFor="name">Nome do produto</label>
           <input id="name" name="name" defaultValue={initial.name} required className="input" />
@@ -79,14 +136,19 @@ export function ProductForm({
             Preço sob consulta (personalizada)
           </label>
           <label className="flex items-center gap-2">
+            <input type="checkbox" name="onStore" defaultChecked={initial.onStore} />
+            Vende na loja / WhatsApp
+          </label>
+          <label className="flex items-center gap-2">
             <input type="checkbox" name="active" defaultChecked={initial.active} />
-            Ativo no cardápio
+            Ativo
           </label>
         </div>
         <div className="sm:col-span-2">
           <label className="label" htmlFor="description">Descrição (o agente do WhatsApp usa este texto)</label>
           <textarea id="description" name="description" defaultValue={initial.description} rows={3} className="input" />
         </div>
+      </div>
       </div>
 
       <div className="card">
@@ -111,7 +173,7 @@ export function ProductForm({
               <tr>
                 <th>Tamanho</th>
                 <th>Serve</th>
-                <th>Preço (Bs)</th>
+                <th>Preço loja (Bs)</th>
                 <th>Custo (Bs)</th>
                 <th>Margem</th>
                 <th>Estoque mín.</th>
@@ -167,8 +229,8 @@ export function ProductForm({
         <button type="submit" disabled={pending} className="btn-primary">
           {pending ? "Salvando..." : "Salvar produto"}
         </button>
-        {state?.error && <p className="text-sm font-semibold text-coral-600">{state.error}</p>}
-        {state?.ok && <p className="text-sm font-semibold text-dourado-600">{state.ok}</p>}
+        {state?.error && <p className="text-sm font-bold text-coral-600">{state.error}</p>}
+        {state?.ok && <p className="text-sm font-bold text-dourado-600">{state.ok}</p>}
       </div>
     </form>
   );

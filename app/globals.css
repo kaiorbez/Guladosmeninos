@@ -2,47 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tema escuro (padrão): chocolate profundo, texto creme, dourado e coral da marca. */
+:root {
+  --creme-100: 24 16 12;     /* fundo #18100C */
+  --creme-50: 38 27 20;      /* cartões #261B14 */
+  --creme-200: 54 39 29;     /* realces #36271D */
+  --creme-300: 76 57 43;     /* bordas #4C392B */
+  --cacau-900: 253 246 236;  /* texto principal #FDF6EC */
+  --cacau-700: 238 225 208;  /* texto secundário */
+  --cacau-500: 214 196 176;  /* rótulos */
+  --cacau-400: 178 158 138;  /* apoio */
+  --dourado-400: 222 177 100;
+  --dourado-500: 212 160 72;
+  --dourado-600: 232 190 112; /* dourado para texto sobre fundo escuro */
+  --coral-400: 244 145 118;
+  --coral-500: 234 117 88;
+  --coral-600: 248 150 124;
+  color-scheme: dark;
+}
+
+/* Tema claro: usado só na caixa de login. */
+.tema-claro {
+  --creme-100: 248 240 229;
+  --creme-50: 253 249 243;
+  --creme-200: 240 226 207;
+  --creme-300: 229 207 178;
+  --cacau-900: 46 31 23;
+  --cacau-700: 74 50 38;
+  --cacau-500: 107 78 61;
+  --cacau-400: 138 106 85;
+  --dourado-400: 207 163 94;
+  --dourado-500: 184 134 59;
+  --dourado-600: 150 105 42;
+  --coral-400: 240 138 112;
+  --coral-500: 232 115 90;
+  --coral-600: 204 90 66;
+  color-scheme: light;
+  @apply text-cacau-900;
+}
+
 @layer base {
   body {
-    @apply bg-creme-100 font-sans text-cacau-900 antialiased;
+    @apply bg-creme-100 font-sans text-[15px] font-medium text-cacau-900;
+    text-rendering: optimizeLegibility;
   }
   h1, h2, h3 {
-    @apply font-serif font-semibold text-cacau-900;
+    @apply font-bold tracking-tight text-cacau-900;
+  }
+  input::placeholder, textarea::placeholder {
+    @apply text-cacau-400;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-creme-300/70 bg-creme-50 p-5 shadow-sm;
+    @apply rounded-2xl border border-creme-300 bg-creme-50 p-5 shadow-lg shadow-black/20;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-cacau-900 text-creme-50 hover:bg-cacau-700;
+    @apply btn bg-dourado-500 text-[#1E140E] hover:bg-dourado-400;
   }
   .btn-accent {
-    @apply btn bg-coral-500 text-white hover:bg-coral-600;
+    @apply btn bg-coral-500 text-white hover:bg-coral-400;
   }
   .btn-ghost {
-    @apply btn border border-creme-300 bg-white/60 text-cacau-700 hover:bg-creme-200;
+    @apply btn border border-creme-300 bg-creme-200/60 text-cacau-900 hover:bg-creme-200;
+  }
+  .btn-on {
+    @apply btn bg-cacau-900 text-creme-100;
   }
   .input {
-    @apply w-full rounded-xl border border-creme-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-dourado-500 focus:ring-2 focus:ring-dourado-400/30;
+    @apply w-full rounded-xl border border-creme-300 bg-creme-100 px-3 py-2 text-sm font-medium text-cacau-900 outline-none transition focus:border-dourado-500 focus:ring-2 focus:ring-dourado-400/30;
   }
   .label {
-    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-cacau-500;
+    @apply mb-1 block text-xs font-bold uppercase tracking-wide text-cacau-500;
   }
   .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold;
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold;
   }
   .table-base {
     @apply w-full text-left text-sm;
   }
   .table-base th {
-    @apply border-b border-creme-300 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cacau-500;
+    @apply border-b border-creme-300 px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-cacau-500;
   }
   .table-base td {
-    @apply border-b border-creme-200 px-3 py-2.5 align-middle;
+    @apply border-b border-creme-300/60 px-3 py-2.5 align-middle;
+  }
+  .thumb {
+    @apply shrink-0 rounded-xl border border-creme-300 bg-creme-200 object-cover;
   }
 }

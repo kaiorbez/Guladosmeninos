@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
+import { ProductPhoto } from "@/components/ProductPhoto";
 import { StockControl } from "@/components/StockControl";
-import { prisma } from "@/lib/db";
+import { prisma, productImage } from "@/lib/db";
 import { bs, toNumber } from "@/lib/format";
 
 type Search = Promise<{ categoria?: string; alerta?: string; q?: string }>;
@@ -16,7 +17,12 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
       products: {
         where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
         orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
-        include: { variants: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          variants: {
+            orderBy: { sortOrder: "asc" },
+            include: { pedidosYa: { where: { active: true }, select: { price: true }, orderBy: { price: "asc" } } },
+          },
+        },
       },
     },
   });
@@ -98,7 +104,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                     <tr>
                       <th className="pl-5">Produto</th>
                       <th>Tamanho</th>
-                      <th className="text-right">Preço</th>
+                      <th className="text-right">Loja</th>
+                      <th className="text-right">PedidosYa</th>
                       <th className="text-right">Custo</th>
                       <th className="text-center">Estoque</th>
                       <th className="pr-5 text-right">Movimentar</th>
@@ -110,22 +117,35 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                       return variants.map((v, i) => (
                         <tr key={v.id} className={!p.active || !v.active ? "opacity-50" : ""}>
                           {i === 0 && (
-                            <td rowSpan={variants.length} className="min-w-[15rem] pl-5 align-top">
-                              <Link href={`/painel/estoque/${p.id}`} className="font-semibold hover:text-dourado-600 hover:underline">
-                                {p.name}
+                            <td rowSpan={variants.length} className="min-w-[17rem] pl-5 align-top">
+                              <Link href={`/painel/estoque/${p.id}`} className="group flex items-start gap-3">
+                                <ProductPhoto src={productImage(p)} name={p.name} size={56} />
+                                <span>
+                                  <span className="font-bold group-hover:text-dourado-600 group-hover:underline">{p.name}</span>
+                                  <span className="mt-1 flex flex-wrap gap-1">
+                                    {!p.active && <span className="badge bg-cacau-400 text-creme-100">Inativo</span>}
+                                    {!p.onStore && <span className="badge bg-pedidosya/20 text-[#FF6B98]">Só no PedidosYa</span>}
+                                    {!p.trackStock && <span className="badge bg-creme-200 text-cacau-500">Sob encomenda</span>}
+                                    {p.priceOnRequest && <span className="badge bg-dourado-400/20 text-dourado-600">Preço a consultar</span>}
+                                  </span>
+                                </span>
                               </Link>
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {!p.active && <span className="badge bg-cacau-400 text-white">Inativo</span>}
-                                {!p.trackStock && <span className="badge bg-creme-200 text-cacau-500">Sob encomenda</span>}
-                                {p.priceOnRequest && <span className="badge bg-dourado-400/30 text-dourado-600">Preço a consultar</span>}
-                              </div>
                             </td>
                           )}
                           <td className="whitespace-nowrap">
-                            <span className="font-semibold">{v.name}</span>
+                            <span className="font-bold">{v.name}</span>
                             {v.servings && <span className="block text-xs text-cacau-400">{v.servings}</span>}
                           </td>
-                          <td className="whitespace-nowrap text-right">{p.priceOnRequest ? "—" : bs(v.price)}</td>
+                          <td className="whitespace-nowrap text-right font-bold">
+                            {p.priceOnRequest || !p.onStore ? <span className="text-cacau-400">—</span> : bs(v.price)}
+                          </td>
+                          <td className="whitespace-nowrap text-right text-cacau-500">
+                            {v.pedidosYa.length === 0
+                              ? <span className="text-cacau-400">—</span>
+                              : v.pedidosYa.length === 1
+                                ? bs(v.pedidosYa[0].price)
+                                : `${bs(v.pedidosYa[0].price)}+`}
+                          </td>
                           <td className="whitespace-nowrap text-right text-cacau-500">
                             {toNumber(v.cost) > 0 ? bs(v.cost) : <span className="text-xs text-cacau-400">definir</span>}
                           </td>

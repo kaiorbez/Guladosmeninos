@@ -64,9 +64,21 @@ export async function saveProductAction(_: ActionState, form: FormData): Promise
     categoryId,
     description: String(form.get("description") ?? "").trim() || null,
     trackStock: form.get("trackStock") === "on",
+    onStore: form.get("onStore") === "on",
     priceOnRequest: form.get("priceOnRequest") === "on",
     active: form.get("active") === "on",
   };
+
+  // Foto nova: vem do navegador já reduzida para JPEG (data URL).
+  const photoData = String(form.get("photoData") ?? "");
+  let photo: { photo: Uint8Array<ArrayBuffer>; photoType: string; photoUpdatedAt: Date } | undefined;
+  if (photoData) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(photoData);
+    if (!m) return { error: "Formato de foto inválido." };
+    const bytes = Buffer.from(m[2], "base64");
+    if (bytes.length > 1_500_000) return { error: "Foto grande demais." };
+    photo = { photo: new Uint8Array(bytes), photoType: m[1], photoUpdatedAt: new Date() };
+  }
 
   const count = toInt(form.get("variantCount"));
   const variants: VariantRow[] = [];
@@ -92,8 +104,8 @@ export async function saveProductAction(_: ActionState, form: FormData): Promise
 
   const saved = await prisma.$transaction(async (tx) => {
     const p = id
-      ? await tx.product.update({ where: { id }, data: product })
-      : await tx.product.create({ data: product });
+      ? await tx.product.update({ where: { id }, data: { ...product, ...photo } })
+      : await tx.product.create({ data: { ...product, ...photo } });
 
     // Nomes temporários evitam conflito de unicidade ao renomear tamanhos entre si.
     const existing = variants.filter((v) => v.id);
