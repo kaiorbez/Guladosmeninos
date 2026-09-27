@@ -102,7 +102,7 @@ export default async function PedidosYaPage() {
               {duplicated.map((list) => (
                 <li key={list[0].variantId}>
                   <p className="font-bold">{variantLabel(list[0].variant.product.name, list[0].variant.name)}</p>
-                  <p className="text-xs text-cacau-500">{list.map((i) => `“${i.name}” ${bs(i.price)}`).join(" · ")}</p>
+                  <p className="text-xs text-cacau-500" data-py-name>{list.map((i) => `“${i.name}” ${bs(i.price)}`).join(" · ")}</p>
                 </li>
               ))}
             </ul>
@@ -130,7 +130,7 @@ export default async function PedidosYaPage() {
           {review.length === 0 ? <p className="text-sm text-cacau-500">Tudo conferido. ✓</p> : (
             <ul className="space-y-1 text-sm">
               {review.map((i) => (
-                <li key={i.id} className="flex justify-between gap-2"><span>{i.name}</span><span className="font-bold">{toNumber(i.price) ? bs(i.price) : "sem preço"}</span></li>
+                <li key={i.id} className="flex justify-between gap-2"><span data-py-name>{i.name}</span><span className="font-bold">{toNumber(i.price) ? bs(i.price) : "sem preço"}</span></li>
               ))}
             </ul>
           )}
@@ -169,7 +169,8 @@ export default async function PedidosYaPage() {
                           <div className="flex items-center gap-3">
                             <ProductPhoto src={productImage(p)} name={p.name} size={44} />
                             <div>
-                              <p className="font-bold">{i.name}</p>
+                              <p className="font-bold" data-py-name>{i.name}</p>
+                              <p className="text-[11px] font-bold uppercase tracking-wide text-[#C8003F]">nome no app</p>
                               {i.needsReview && <span className="badge bg-dourado-400/20 text-dourado-600">conferir preço</span>}
                               {toNumber(i.listPrice ?? 0) > 0 && (
                                 <span className="ml-1 text-xs text-cacau-400">de <s>{bs(i.listPrice!)}</s></span>

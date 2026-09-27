@@ -17,7 +17,7 @@ export type MenuItem = {
   stock: number;
   image: string | null;
 };
-export type MenuProduct = { id: string; name: string; image: string | null; items: MenuItem[] };
+export type MenuProduct = { id: string; name: string; image: string | null; items: MenuItem[]; appName?: string };
 export type MenuSection = { id: string; name: string; products: MenuProduct[] };
 
 type CartLine = MenuItem & { quantity: number; priceInput: string };
@@ -170,6 +170,11 @@ export function SaleForm({
                   <Photo src={p.image} alt={p.name} className="aspect-square w-full" />
                   <div className="p-2">
                     <p className="line-clamp-2 text-[13px] font-bold leading-tight">{p.name}</p>
+                    {p.appName && (
+                      <p className="line-clamp-1 text-[11px] font-semibold text-[#C8003F]" title="Nome do anúncio no PedidosYa" data-py-name>
+                        “{p.appName}”
+                      </p>
+                    )}
                     <p className="mt-0.5 text-xs font-bold text-dourado-600">
                       {p.items[0].priceOnRequest
                         ? "Preço a combinar"

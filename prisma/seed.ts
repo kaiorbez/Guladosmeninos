@@ -181,6 +181,20 @@ async function main() {
     console.log(`✓ PedidosYa: ${created} anúncios`);
   }
 
+  // Vendas registradas antes da tradução guardam o nome antigo: usa o nome atual do produto.
+  await once("2026-09-nomes-vendas-pt", async () => {
+    const legacy = CARDAPIO.flatMap((c) => c.products).map((p) => p.legacy).filter(Boolean) as string[];
+    const items = await prisma.saleItem.findMany({
+      where: { OR: legacy.map((n) => ({ description: { startsWith: n } })) },
+      include: { variant: { include: { product: { select: { name: true } } } } },
+    });
+    for (const i of items) {
+      const v = i.variant;
+      const label = v.name === "Único" || v.name === "Sob consulta" ? v.product.name : `${v.product.name} (${v.name})`;
+      await prisma.saleItem.update({ where: { id: i.id }, data: { description: label } });
+    }
+  });
+
   await once("2026-09-ordem-categorias", async () => {
     for (const [i, slug] of ORDER.entries()) {
       await prisma.category.updateMany({ where: { slug }, data: { sortOrder: i } });

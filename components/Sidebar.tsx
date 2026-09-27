@@ -27,21 +27,9 @@ export function Sidebar({
   const params = useSearchParams();
   const activeCategory = params.get("categoria");
   const [open, setOpen] = useState(false);
-  // Tópicos recolhidos no menu (lembrados neste navegador).
+  // Tópicos do menu: sempre começam abertos; recolher vale só enquanto a página está aberta.
   const [closed, setClosed] = useState<string[]>([]);
-  useEffect(() => {
-    try {
-      setClosed(JSON.parse(localStorage.getItem("menu-recolhido") ?? "[]"));
-    } catch {}
-  }, []);
-  const toggleGroup = (g: string) =>
-    setClosed((c) => {
-      const next = c.includes(g) ? c.filter((x) => x !== g) : [...c, g];
-      try {
-        localStorage.setItem("menu-recolhido", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+  const toggleGroup = (g: string) => setClosed((c) => (c.includes(g) ? c.filter((x) => x !== g) : [...c, g]));
 
   useEffect(() => setOpen(false), [pathname, activeCategory]);
 

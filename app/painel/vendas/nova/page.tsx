@@ -63,6 +63,7 @@ export default async function NovaVendaPage({ searchParams }: { searchParams: Pr
     list.push({
       id: i.id,
       name: label,
+      appName: i.name,
       image,
       items: [
         {

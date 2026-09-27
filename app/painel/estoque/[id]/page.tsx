@@ -74,7 +74,7 @@ export default async function ProdutoPage({
               {product.variants.flatMap((v) =>
                 v.pedidosYa.map((py) => (
                   <tr key={py.id}>
-                    <td className="font-bold">{py.name}</td>
+                    <td className="font-bold" data-py-name>{py.name} <span className="text-[11px] uppercase text-[#C8003F]">nome no app</span></td>
                     <td>{v.name}</td>
                     <td className="text-right font-bold">{bs(py.price)}</td>
                     <td className="text-right text-cacau-400">WhatsApp: {product.onStore ? bs(v.price) : "—"}</td>
