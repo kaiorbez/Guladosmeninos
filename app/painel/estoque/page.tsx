@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { PriceEdit } from "@/components/PriceEdit";
 import { StockControl } from "@/components/StockControl";
 import { prisma, productImage } from "@/lib/db";
 import { bs, toNumber } from "@/lib/format";
@@ -59,7 +60,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
       <div className="mb-5 rounded-xl border border-creme-300 bg-creme-50 px-4 py-3 text-sm text-cacau-700">
         <b>Como usar:</b> digite a quantidade e toque em <b className="text-cacau-900">+</b> quando produzir, ou em{" "}
         <b className="text-coral-600">−</b> para perdas. Nos itens <b>sob encomenda</b>, use o + para informar unidades já
-        prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar. As vendas dão baixa sozinhas.
+        prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar e no preço (✎) para alterar. As vendas dão baixa sozinhas.
       </div>
 
       <div className="space-y-2">
@@ -115,7 +116,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                             {v.servings && <span className="block text-xs text-cacau-400">{v.servings}</span>}
                           </td>
                           <td className="whitespace-nowrap text-right font-bold">
-                            {p.priceOnRequest || !p.onStore ? <span className="text-cacau-400">—</span> : bs(v.price)}
+                            {p.priceOnRequest ? <span className="text-cacau-400">sob consulta</span> : <PriceEdit variantId={v.id} price={toNumber(v.price)} />}
                           </td>
                           <td className="whitespace-nowrap text-right text-cacau-500">
                             {v.pedidosYa.length === 0

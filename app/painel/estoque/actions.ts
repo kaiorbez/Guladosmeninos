@@ -50,6 +50,16 @@ function parsePhoto(dataUrl: string) {
   return { photo: new Uint8Array(bytes), photoType: m[1], photoUpdatedAt: new Date() };
 }
 
+/** Altera só o preço do WhatsApp de um tamanho (edição rápida na lista de estoque). */
+export async function setVariantPriceAction(variantId: string, value: string): Promise<ActionState> {
+  await requireSession();
+  const price = toMoney(value);
+  if (Number.isNaN(price)) return { error: "Preço inválido." };
+  await prisma.variant.update({ where: { id: variantId }, data: { price } });
+  revalidatePath("/painel", "layout");
+  return { ok: "Salvo" };
+}
+
 /** Troca só a foto do produto (clique na miniatura da lista de estoque). */
 export async function setProductPhotoAction(productId: string, dataUrl: string): Promise<ActionState> {
   await requireSession();
