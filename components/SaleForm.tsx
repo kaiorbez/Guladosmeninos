@@ -130,7 +130,7 @@ export function SaleForm({
           ))}
         </div>
         {isPy && (
-          <p className="mb-4 rounded-xl border border-pedidosya/40 bg-pedidosya/10 px-3 py-2 text-xs font-bold text-[#FF8FB1]">
+          <p className="mb-4 rounded-xl border border-pedidosya/40 bg-pedidosya/10 px-3 py-2 text-xs font-bold text-[#C8003F]">
             Cardápio e preços do PedidosYa (com a taxa do app).
           </p>
         )}

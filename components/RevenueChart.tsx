@@ -5,6 +5,14 @@ type Point = { day: string; revenue: number; orders: number };
 /** Barras de faturamento diário em SVG puro (sem dependências). */
 export function RevenueChart({ data }: { data: Point[] }) {
   const max = Math.max(...data.map((d) => d.revenue), 1);
+  if (data.every((d) => d.revenue === 0)) {
+    return (
+      <div className="mt-4 flex h-52 flex-col items-center justify-center rounded-xl border border-dashed border-creme-300 bg-creme-100/60 text-center">
+        <p className="text-sm font-bold text-cacau-700">Nenhuma venda nos últimos 14 dias</p>
+        <p className="mt-1 text-xs text-cacau-400">O gráfico aparece assim que a primeira venda for registrada.</p>
+      </div>
+    );
+  }
   const W = 700;
   const H = 200;
   const gap = 8;

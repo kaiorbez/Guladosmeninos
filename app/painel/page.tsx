@@ -3,6 +3,7 @@ import { Kpi } from "@/components/Kpi";
 import { PageHeader } from "@/components/PageHeader";
 import { ProductPhoto } from "@/components/ProductPhoto";
 import { RevenueChart } from "@/components/RevenueChart";
+import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
 import {
@@ -16,6 +17,7 @@ import {
 import { startOfMonth } from "@/lib/time";
 
 export default async function VisaoGeral() {
+  const session = await requireSession();
   const month = startOfMonth();
   const [overview, series, top, lowStock, channels, missingCosts, recent] = await Promise.all([
     getOverview(),
@@ -37,11 +39,14 @@ export default async function VisaoGeral() {
   const margin = m.revenue ? Math.round((m.profit / m.revenue) * 100) : 0;
   const topMax = Math.max(...top.map((t) => t.revenue), 1);
   const channelTotal = channels.reduce((s, c) => s + c.revenue, 0) || 1;
-  const monthName = new Date().toLocaleDateString("pt-BR", { month: "long", timeZone: "America/La_Paz" });
+  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/La_Paz" });
+  const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/La_Paz" }));
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const firstName = session.name.split(" ")[0];
 
   return (
     <>
-      <PageHeader title="Visão geral" subtitle={`Números da Gula dos Meninos · ${monthName}`}>
+      <PageHeader title={`${greeting}, ${firstName}!`} subtitle={`Visão geral da Gula dos Meninos · ${today}`}>
         <Link href="/painel/vendas/nova" className="btn-accent">＋ Registrar venda</Link>
       </PageHeader>
 

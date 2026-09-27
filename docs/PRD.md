@@ -82,7 +82,7 @@ Um único sistema web (painel + backend do agente), hospedado de forma barata:
 
 Tirado do **cardápio oficial 2026/01** (o painel segue a identidade da marca):
 
-- **Cores:** tema escuro chocolate (`#18100C` fundo, `#261B14` cartões) com texto creme, dourado nos destaques e botões (`#D4A048`) e coral nos alertas (`#EA7558`). A caixa de login usa a versão clara (creme `#F8F0E5`). Cores definidas como variáveis CSS em `app/globals.css`.
+- **Cores:** painel claro (fundo off-white `#F7F2EB`, cartões brancos), texto e botões em chocolate (`#261811`), dourado nos destaques e coral nos alertas e ações (`#E2684C`). Só o fundo da tela de login é escuro. Cores como variáveis CSS em `app/globals.css`.
 - **Tipografia:** Montserrat em todo o painel, com pesos 500 a 800 para boa leitura.
 - **Logo:** ilustração dos dois meninos com a torta (`public/logo.png`, extraída do cardápio).
 - Tom: acolhedor, "Pastelería con amor, para ti".

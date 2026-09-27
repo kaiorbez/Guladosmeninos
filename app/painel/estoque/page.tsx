@@ -123,8 +123,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                                 <span>
                                   <span className="font-bold group-hover:text-dourado-600 group-hover:underline">{p.name}</span>
                                   <span className="mt-1 flex flex-wrap gap-1">
-                                    {!p.active && <span className="badge bg-cacau-400 text-creme-100">Inativo</span>}
-                                    {!p.onStore && <span className="badge bg-pedidosya/20 text-[#FF6B98]">Só no PedidosYa</span>}
+                                    {!p.active && <span className="badge bg-cacau-400 text-white">Inativo</span>}
+                                    {!p.onStore && <span className="badge bg-pedidosya/10 text-[#C8003F]">Só no PedidosYa</span>}
                                     {!p.trackStock && <span className="badge bg-creme-200 text-cacau-500">Sob encomenda</span>}
                                     {p.priceOnRequest && <span className="badge bg-dourado-400/20 text-dourado-600">Preço a consultar</span>}
                                   </span>

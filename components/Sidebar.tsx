@@ -59,7 +59,7 @@ export function Sidebar({
         </button>
       </div>
 
-      {open && <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 z-30 bg-cacau-900/40 lg:hidden" onClick={() => setOpen(false)} />}
 
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-creme-300 bg-creme-50 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
@@ -82,7 +82,7 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 font-bold transition ${
-                    active ? "bg-dourado-500 text-[#1E140E]" : "text-cacau-700 hover:bg-creme-200 hover:text-cacau-900"
+                    active ? "bg-cacau-900 text-white shadow-sm" : "text-cacau-700 hover:bg-creme-200 hover:text-cacau-900"
                   }`}
                 >
                   <span className={`w-4 text-center ${item.href === "/painel/pedidosya" && !active ? "text-pedidosya" : ""}`}>{item.icon}</span>
@@ -104,7 +104,7 @@ export function Sidebar({
                               key={c.slug}
                               href={`/painel/estoque?categoria=${c.slug}`}
                               className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${
-                                on ? "bg-creme-200 text-cacau-900" : "text-cacau-500 hover:bg-creme-200 hover:text-cacau-900"
+                                on ? "bg-dourado-400/20 text-cacau-900" : "text-cacau-500 hover:bg-creme-200 hover:text-cacau-900"
                               }`}
                             >
                               <span>{c.name}</span>

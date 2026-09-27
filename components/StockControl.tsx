@@ -30,7 +30,7 @@ export function StockControl({ variantId }: { variantId: string }) {
           aria-label="Quantidade"
           className="input w-16 px-2 py-1 text-center"
         />
-        <button name="type" value="ENTRADA" disabled={pending} title="Produzi / entrou" className="btn bg-dourado-500 px-2.5 py-1 text-[#1E140E] hover:bg-dourado-400">
+        <button name="type" value="ENTRADA" disabled={pending} title="Produzi / entrou" className="btn bg-cacau-900 px-2.5 py-1 text-white hover:bg-cacau-700">
           +
         </button>
         <button name="type" value="SAIDA" disabled={pending} title="Perda / saída sem venda" className="btn bg-coral-500 px-2.5 py-1 text-white hover:bg-coral-600">
