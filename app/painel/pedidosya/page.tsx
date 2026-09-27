@@ -41,7 +41,6 @@ export default async function PedidosYaPage() {
   // Análise
   const missingOnApp = storeProducts.filter((p) => p.variants.every((v) => v.pedidosYa.length === 0));
   const onlyOnApp = [...new Map(active.filter((i) => !i.variant.product.onStore).map((i) => [i.variant.product.id, i.variant.product])).values()];
-  const outOfStock = active.filter((i) => i.variant.product.trackStock && i.variant.stock === 0);
   const byVariant = new Map<string, typeof active>();
   for (const i of active) byVariant.set(i.variantId, [...(byVariant.get(i.variantId) ?? []), i]);
   const duplicated = [...byVariant.values()].filter((list) => list.length > 1);
@@ -60,33 +59,17 @@ export default async function PedidosYaPage() {
         <Link href="/painel/vendas/nova?canal=PEDIDOSYA" className="btn bg-pedidosya text-white hover:bg-pedidosya/85">＋ Venda PedidosYa</Link>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Kpi tone="accent" label="Vendido no PedidosYa (mês)" value={bs(pySales._sum.total ?? 0)} hint={`${pySales._count} pedido(s) · ${Math.round(share * 100)}% do faturamento`} />
         <Kpi label="Anúncios ativos" value={String(active.length)} hint={`${Object.keys(sections).length} seções no app`} />
-        <Kpi label="Diferença média de preço" value={`${avgDiff >= 0 ? "+" : ""}${Math.round(avgDiff * 100)}%`} hint={`PedidosYa × loja em ${compared.length} itens`} />
-        <Kpi label="Em falta agora" value={String(outOfStock.length)} hint="Anúncios com estoque zerado" />
+        <Kpi label="Diferença média de preço" value={`${avgDiff >= 0 ? "+" : ""}${Math.round(avgDiff * 100)}%`} hint={`PedidosYa × WhatsApp em ${compared.length} itens`} />
       </div>
 
       <h2 className="mb-3 mt-8 text-2xl">Análise</h2>
       <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <section className="card">
-          <h3 className="text-base">📦 Em falta (estoque zerado)</h3>
-          <p className="mb-2 text-xs text-cacau-400">Aparecem no app, mas não há unidade pronta. Produza ou pause o anúncio.</p>
-          {outOfStock.length === 0 ? <p className="text-sm text-cacau-500">Nada em falta. ✓</p> : (
-            <ul className="space-y-1 text-sm">
-              {outOfStock.map((i) => (
-                <li key={i.id} className="flex justify-between gap-2">
-                  <Link href={`/painel/estoque/${i.variant.product.id}`} className="hover:underline">{variantLabel(i.variant.product.name, i.variant.name)}</Link>
-                  <span className="badge bg-coral-500 text-white">Zerado</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
-          <h3 className="text-base">🛒 Do cardápio, mas fora do PedidosYa</h3>
-          <p className="mb-2 text-xs text-cacau-400">Oportunidade: produtos da loja que ainda não estão anunciados no app.</p>
+          <h3 className="text-base">🛒 No WhatsApp, mas fora do PedidosYa</h3>
+          <p className="mb-2 text-sm text-cacau-500">Oportunidade: produtos vendidos no WhatsApp que ainda não estão anunciados no app.</p>
           {missingOnApp.length === 0 ? <p className="text-sm text-cacau-500">Todo o cardápio está no app. ✓</p> : (
             <ul className="space-y-1 text-sm">
               {missingOnApp.map((p) => (
@@ -101,7 +84,7 @@ export default async function PedidosYaPage() {
 
         <section className="card">
           <h3 className="text-base">📱 Só no PedidosYa</h3>
-          <p className="mb-2 text-xs text-cacau-400">Não estão no cardápio da loja. Defina o preço de loja e marque “Vende na loja” no produto.</p>
+          <p className="mb-2 text-sm text-cacau-500">Não são vendidos no WhatsApp. Para vender, defina o preço e marque “Vende no WhatsApp” no produto.</p>
           {onlyOnApp.length === 0 ? <p className="text-sm text-cacau-500">Nenhum. ✓</p> : (
             <ul className="space-y-1 text-sm">
               {onlyOnApp.map((p) => (
@@ -113,7 +96,7 @@ export default async function PedidosYaPage() {
 
         <section className="card">
           <h3 className="text-base">🔁 Anúncios repetidos</h3>
-          <p className="mb-2 text-xs text-cacau-400">O mesmo produto anunciado mais de uma vez, às vezes com preços diferentes.</p>
+          <p className="mb-2 text-sm text-cacau-500">O mesmo produto anunciado mais de uma vez, às vezes com preços diferentes.</p>
           {duplicated.length === 0 ? <p className="text-sm text-cacau-500">Nenhum. ✓</p> : (
             <ul className="space-y-3 text-sm">
               {duplicated.map((list) => (
@@ -128,7 +111,7 @@ export default async function PedidosYaPage() {
 
         <section className="card">
           <h3 className="text-base">💰 Maiores diferenças de preço</h3>
-          <p className="mb-2 text-xs text-cacau-400">Quanto o app cobra a mais que a loja.</p>
+          <p className="mb-2 text-sm text-cacau-500">Quanto o app cobra a mais que o WhatsApp.</p>
           {compared.length === 0 ? <p className="text-sm text-cacau-500">Sem itens para comparar.</p> : (
             <ul className="space-y-1 text-sm">
               {[...compared].sort((a, b) => b.diff - a.diff).slice(0, 8).map(({ item, diff }) => (
@@ -143,7 +126,7 @@ export default async function PedidosYaPage() {
 
         <section className="card">
           <h3 className="text-base">🔎 Preços para conferir</h3>
-          <p className="mb-2 text-xs text-cacau-400">Lidos de um print com pouca resolução. Confira no app e salve abaixo.</p>
+          <p className="mb-2 text-sm text-cacau-500">Lidos de um print com pouca resolução. Confira no app e salve abaixo.</p>
           {review.length === 0 ? <p className="text-sm text-cacau-500">Tudo conferido. ✓</p> : (
             <ul className="space-y-1 text-sm">
               {review.map((i) => (
@@ -169,7 +152,7 @@ export default async function PedidosYaPage() {
                   <tr>
                     <th className="pl-5">Anúncio no app</th>
                     <th>Produto no painel</th>
-                    <th className="text-right">Loja</th>
+                    <th className="text-right">WhatsApp</th>
                     <th className="text-right">Dif.</th>
                     <th className="text-center">Estoque</th>
                     <th className="pr-5 text-right">Preço no PedidosYa (Bs)</th>

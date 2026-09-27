@@ -33,7 +33,7 @@ Um único sistema web (painel + backend do agente), hospedado de forma barata:
 | Multiusuário | Página **Equipe**: adicionar sócios e atendentes e trocar a própria senha. Cada venda e movimentação registra quem fez. |
 | Menu lateral | Visão geral, Estoque (com **submenu por categoria do cardápio** e contador de alertas), Nova venda, Vendas e Equipe. No celular vira um menu recolhível. |
 | Dashboard | Faturamento de **hoje / 7 dias / mês**, nº de pedidos, ticket médio, **lucro estimado e margem**, gráfico dos últimos 14 dias, mais vendidos do mês, vendas por canal, "O que repor" e últimas vendas. |
-| Estoque | Lista por categoria, busca, filtro "só o que precisa repor". Entrada (+) e saída (−) rápidas por linha. **Ajuste de contagem** (informa o valor real). Histórico de movimentações por produto. Bloqueia estoque negativo. |
+| Estoque | Lista por categoria (seções recolhíveis), busca, foto clicável. Entrada (+) e saída (−) rápidas por linha, inclusive "unidades prontas" em itens sob encomenda. **Ajuste de contagem**. Histórico por produto. Pronta entrega não fica negativo; sob encomenda nunca bloqueia a venda. Alertas de reposição e custo foram retirados a pedido dos sócios (campos mantidos no banco). |
 | Produtos | Criar e editar produto, categoria, descrição (usada pelo agente) e tamanhos com **preço, custo, margem calculada e estoque mínimo**. Flags: *controla estoque* (pronta entrega × sob encomenda), *preço sob consulta* (personalizadas), *ativo*. |
 | Nova venda | O atendente toca no produto, escolhe o tamanho, e o **preço vem do cardápio** (editável: desconto ou preço combinado). Personalizadas **exigem** o preço combinado. Canal (Balcão/WhatsApp/Delivery/Instagram), pagamento (QR/Dinheiro/Cartão/Outro), cliente, telefone e observação. **Baixa automática de estoque.** |
 | Vendas | Histórico com filtro (hoje / 7 dias / mês / 30 dias / tudo), totais do período e **cancelamento com estorno** automático ao estoque (com confirmação). |
@@ -83,7 +83,7 @@ Um único sistema web (painel + backend do agente), hospedado de forma barata:
 Tirado do **cardápio oficial 2026/01** (o painel segue a identidade da marca):
 
 - **Cores:** painel claro (fundo off-white `#F7F2EB`, cartões brancos), texto e botões em chocolate (`#261811`), dourado nos destaques e coral nos alertas e ações (`#E2684C`). Só o fundo da tela de login é escuro. Cores como variáveis CSS em `app/globals.css`.
-- **Tipografia:** Montserrat em todo o painel, com pesos 500 a 800 para boa leitura.
+- **Tipografia:** Montserrat embutida no app (`@fontsource/montserrat`), texto base em 600 e títulos em 800 para leitura forte.
 - **Logo:** ilustração dos dois meninos com a torta (`public/logo.png`, extraída do cardápio).
 - Tom: acolhedor, "Pastelería con amor, para ti".
 

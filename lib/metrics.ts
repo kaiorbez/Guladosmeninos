@@ -78,20 +78,3 @@ export async function getSalesByChannel(from: Date) {
     .map((r) => ({ channel: r.channel, revenue: Number(r._sum.total ?? 0), orders: r._count }))
     .sort((a, b) => b.revenue - a.revenue);
 }
-
-/** Itens com estoque controlado zerados ou no mínimo definido (ou abaixo dele). */
-export async function getLowStock() {
-  const variants = await prisma.variant.findMany({
-    where: { active: true, product: { active: true, trackStock: true } },
-    include: { product: { select: { id: true, name: true } } },
-    orderBy: { stock: "asc" },
-  });
-  return variants.filter((v) => v.stock === 0 || v.stock <= v.minStock);
-}
-
-/** Quantos itens ainda estão sem custo cadastrado (o lucro fica superestimado). */
-export async function countMissingCosts() {
-  return prisma.variant.count({
-    where: { active: true, cost: 0, product: { active: true, priceOnRequest: false } },
-  });
-}

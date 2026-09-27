@@ -77,7 +77,7 @@ export default async function ProdutoPage({
                     <td className="font-bold">{py.name}</td>
                     <td>{v.name}</td>
                     <td className="text-right font-bold">{bs(py.price)}</td>
-                    <td className="text-right text-cacau-400">loja: {product.onStore ? bs(v.price) : "—"}</td>
+                    <td className="text-right text-cacau-400">WhatsApp: {product.onStore ? bs(v.price) : "—"}</td>
                   </tr>
                 )),
               )}

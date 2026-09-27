@@ -5,10 +5,10 @@ import { StockControl } from "@/components/StockControl";
 import { prisma, productImage } from "@/lib/db";
 import { bs, toNumber } from "@/lib/format";
 
-type Search = Promise<{ categoria?: string; alerta?: string; q?: string }>;
+type Search = Promise<{ categoria?: string; q?: string }>;
 
 export default async function EstoquePage({ searchParams }: { searchParams: Search }) {
-  const { categoria, alerta, q } = await searchParams;
+  const { categoria, q } = await searchParams;
 
   const categories = await prisma.category.findMany({
     where: categoria ? { slug: categoria } : undefined,
@@ -27,18 +27,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
     },
   });
 
-  const onlyAlerts = alerta === "1";
-  const needsAttention = (v: { stock: number; minStock: number; active: boolean }) =>
-    v.active && (v.stock === 0 || v.stock <= v.minStock);
-
-  const visible = categories
-    .map((cat) => ({
-      ...cat,
-      products: cat.products.filter(
-        (p) => !onlyAlerts || (p.active && p.trackStock && p.variants.some(needsAttention)),
-      ),
-    }))
-    .filter((cat) => cat.products.length > 0);
+  const visible = categories.filter((cat) => cat.products.length > 0);
 
   const title = categoria && categories[0] ? categories[0].name : "Estoque";
   const allTracked = categories.flatMap((c) =>
@@ -46,14 +35,6 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
   );
   const units = allTracked.reduce((s, v) => s + v.stock, 0);
   const stockValue = allTracked.reduce((s, v) => s + v.stock * toNumber(v.price), 0);
-
-  const qs = (extra: Record<string, string | undefined>) => {
-    const p = new URLSearchParams();
-    const all = { categoria, q, alerta, ...extra };
-    for (const [k, v] of Object.entries(all)) if (v) p.set(k, v);
-    const s = p.toString();
-    return s ? `/painel/estoque?${s}` : "/painel/estoque";
-  };
 
   return (
     <>
@@ -67,17 +48,10 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <form action="/painel/estoque" className="flex gap-2">
           {categoria && <input type="hidden" name="categoria" value={categoria} />}
-          {alerta && <input type="hidden" name="alerta" value={alerta} />}
           <input name="q" defaultValue={q} placeholder="Buscar produto..." className="input w-56" />
           <button className="btn-ghost">Buscar</button>
         </form>
-        <Link
-          href={qs({ alerta: onlyAlerts ? undefined : "1" })}
-          className={`btn ${onlyAlerts ? "bg-coral-500 text-white" : "btn-ghost"}`}
-        >
-          ⚠ Só o que precisa repor
-        </Link>
-        {(categoria || q || alerta) && (
+        {(categoria || q) && (
           <Link href="/painel/estoque" className="text-sm text-cacau-500 hover:underline">Limpar filtros</Link>
         )}
       </div>
@@ -107,16 +81,15 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                     <tr>
                       <th className="pl-5">Produto</th>
                       <th>Tamanho</th>
-                      <th className="text-right">Loja</th>
+                      <th className="text-right">WhatsApp</th>
                       <th className="text-right">PedidosYa</th>
-                      <th className="text-right">Custo</th>
                       <th className="text-center">Estoque</th>
                       <th className="pr-5 text-right">Movimentar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {products.map((p) => {
-                      const variants = p.variants.filter((v) => !onlyAlerts || needsAttention(v));
+                      const variants = p.variants;
                       return variants.map((v, i) => (
                         <tr key={v.id} className={!p.active || !v.active ? "opacity-50" : ""}>
                           {i === 0 && (
@@ -151,20 +124,10 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                                 ? bs(v.pedidosYa[0].price)
                                 : `${bs(v.pedidosYa[0].price)}+`}
                           </td>
-                          <td className="whitespace-nowrap text-right text-cacau-500">
-                            {toNumber(v.cost) > 0 ? bs(v.cost) : <span className="text-cacau-400">—</span>}
-                          </td>
                           <td className="text-center">
                             {p.trackStock ? (
                               <span
-                                className={`badge text-sm ${
-                                  v.stock === 0
-                                    ? "bg-coral-500 text-white"
-                                    : v.stock <= v.minStock
-                                      ? "bg-dourado-400/40 text-dourado-600"
-                                      : "bg-creme-200 text-cacau-900"
-                                }`}
-                                title={v.minStock ? `Mínimo: ${v.minStock}` : undefined}
+                                className="badge bg-creme-200 text-sm text-cacau-900"
                               >
                                 {v.stock}
                               </span>
@@ -190,7 +153,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
         })}
         {visible.length === 0 && (
           <p className="card text-sm text-cacau-500">
-            {onlyAlerts ? "Nada para repor aqui. ✓" : "Nenhum produto encontrado."}
+            Nenhum produto encontrado.
           </p>
         )}
       </div>

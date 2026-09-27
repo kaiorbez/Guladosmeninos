@@ -175,3 +175,9 @@ model PedidosYaItem {
 
   @@index([variantId])
 }
+
+// Ajustes de dados que devem rodar uma única vez em cada banco (ver prisma/seed.ts).
+model DataMigration {
+  id    String   @id
+  ranAt DateTime @default(now())
+}

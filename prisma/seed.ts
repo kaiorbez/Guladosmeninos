@@ -31,7 +31,28 @@ async function ensureAdmin() {
   console.log(`Usuário admin: ${email}`);
 }
 
-const ORDER = [...new Set([...CARDAPIO, ...EXTRAS].map((c) => c.slug))];
+// Ordem das categorias no painel (pedido dos sócios); personalizadas por último.
+const ORDER = [
+  "campeones",
+  "empadoes",
+  "cuchareables-clasicos",
+  "fatias",
+  "combos",
+  "cuchareables-premium",
+  "tortas-premium",
+  "docinhos",
+  "bebidas",
+  "velas",
+  "personalizadas",
+];
+
+/** Roda `fn` uma única vez por banco. */
+async function once(id: string, fn: () => Promise<void>) {
+  if (await prisma.dataMigration.findUnique({ where: { id } })) return;
+  await fn();
+  await prisma.dataMigration.create({ data: { id } });
+  console.log(`✓ migração ${id}`);
+}
 
 /** Garante a categoria; na migração da 1ª versão traduz o nome e define o grupo. */
 async function ensureCategory(cat: CategorySeed, migrate: boolean) {
@@ -158,9 +179,13 @@ async function main() {
       created++;
     }
     console.log(`✓ PedidosYa: ${created} anúncios`);
-  } else if (!empty && !migrate) {
-    console.log("Cardápio já carregado: nada a fazer.");
   }
+
+  await once("2026-09-ordem-categorias", async () => {
+    for (const [i, slug] of ORDER.entries()) {
+      await prisma.category.updateMany({ where: { slug }, data: { sortOrder: i } });
+    }
+  });
 }
 
 main()

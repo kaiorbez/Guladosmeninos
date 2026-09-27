@@ -49,12 +49,6 @@ export function ProductForm({
   const update = (key: string, patch: Partial<Variant>) =>
     setVariants((vs) => vs.map((v) => (v.key === key ? { ...v, ...patch } : v)));
 
-  const margin = (v: Variant) => {
-    const price = Number(v.price.replace(",", "."));
-    const cost = Number(v.cost.replace(",", "."));
-    if (!(price > 0) || !(cost > 0)) return null;
-    return Math.round(((price - cost) / price) * 100);
-  };
 
   return (
     <form action={action} className="space-y-6">
@@ -118,7 +112,7 @@ export function ProductForm({
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" name="onStore" defaultChecked={initial.onStore} />
-            Vende na loja / WhatsApp
+            Vende no WhatsApp (preço próprio)
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" name="active" defaultChecked={initial.active} />
@@ -154,35 +148,27 @@ export function ProductForm({
               <tr>
                 <th>Tamanho</th>
                 <th>Serve</th>
-                <th>Preço loja (Bs)</th>
-                <th>Custo (Bs)</th>
-                <th>Margem</th>
-                <th>Estoque mín.</th>
+                <th>Preço WhatsApp (Bs)</th>
                 <th>Ativo</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {variants.map((v, i) => {
-                const m = margin(v);
                 return (
                   <tr key={v.key}>
                     <td>
                       {v.id && <input type="hidden" name={`v${i}.id`} value={v.id} />}
+                      {/* custo e estoque mínimo não aparecem mais, mas o valor salvo é mantido */}
+                      <input type="hidden" name={`v${i}.cost`} value={v.cost} />
+                      <input type="hidden" name={`v${i}.minStock`} value={v.minStock} />
                       <input name={`v${i}.name`} value={v.name} onChange={(e) => update(v.key, { name: e.target.value })} placeholder="P, M, G, Único..." className="input min-w-[6rem]" />
                     </td>
                     <td>
-                      <input name={`v${i}.servings`} value={v.servings} onChange={(e) => update(v.key, { servings: e.target.value })} placeholder="Hasta 15 personas" className="input min-w-[9rem]" />
+                      <input name={`v${i}.servings`} value={v.servings} onChange={(e) => update(v.key, { servings: e.target.value })} placeholder="até 15 pessoas" className="input min-w-[9rem]" />
                     </td>
                     <td>
                       <input name={`v${i}.price`} value={v.price} onChange={(e) => update(v.key, { price: e.target.value })} inputMode="decimal" className="input w-24" />
-                    </td>
-                    <td>
-                      <input name={`v${i}.cost`} value={v.cost} onChange={(e) => update(v.key, { cost: e.target.value })} inputMode="decimal" placeholder="0" className="input w-24" />
-                    </td>
-                    <td className="whitespace-nowrap text-sm text-cacau-500">{m === null ? "—" : `${m}%`}</td>
-                    <td>
-                      <input name={`v${i}.minStock`} value={v.minStock} onChange={(e) => update(v.key, { minStock: e.target.value })} inputMode="numeric" className="input w-20" />
                     </td>
                     <td className="text-center">
                       <input type="checkbox" name={`v${i}.active`} checked={v.active} onChange={(e) => update(v.key, { active: e.target.checked })} />
@@ -201,8 +187,7 @@ export function ProductForm({
           </table>
         </div>
         <p className="mt-3 text-xs text-cacau-400">
-          O <b>custo</b> (ingredientes + embalagem) serve para calcular o lucro. O <b>estoque mínimo</b> dispara o alerta de reposição.
-          Tamanhos já vendidos não podem ser apagados, só desativados.
+          O preço do PedidosYa é definido na aba PedidosYa. Tamanhos já vendidos não podem ser apagados, só desativados.
         </p>
       </div>
 

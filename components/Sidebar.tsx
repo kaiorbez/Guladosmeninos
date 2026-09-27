@@ -18,17 +18,30 @@ const NAV = [
 
 export function Sidebar({
   categories,
-  alerts,
   logout,
 }: {
   categories: Category[];
-  alerts: number;
   logout: () => Promise<void>;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const activeCategory = params.get("categoria");
   const [open, setOpen] = useState(false);
+  // Tópicos recolhidos no menu (lembrados neste navegador).
+  const [closed, setClosed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setClosed(JSON.parse(localStorage.getItem("menu-recolhido") ?? "[]"));
+    } catch {}
+  }, []);
+  const toggleGroup = (g: string) =>
+    setClosed((c) => {
+      const next = c.includes(g) ? c.filter((x) => x !== g) : [...c, g];
+      try {
+        localStorage.setItem("menu-recolhido", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
   useEffect(() => setOpen(false), [pathname, activeCategory]);
 
@@ -85,17 +98,22 @@ export function Sidebar({
                 >
                   <span className={`w-4 text-center ${item.href === "/painel/pedidosya" && !active ? "text-pedidosya" : ""}`}>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
-                  {item.href === "/painel/estoque" && alerts > 0 && (
-                    <span className="badge bg-coral-500 text-white" title="Itens zerados ou abaixo do mínimo">{alerts}</span>
-                  )}
                 </Link>
 
                 {item.href === "/painel/estoque" && (
                   <div className="mb-3 ml-5 border-l border-creme-300 pl-2">
                     {Object.entries(groups).map(([group, cats]) => (
                       <div key={group} className="mt-2">
-                        <p className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-dourado-600">{group}</p>
-                        {cats.map((c) => {
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group)}
+                          className="flex w-full items-center justify-between rounded-md px-3 pb-1 pt-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-dourado-600 hover:text-cacau-900"
+                          aria-expanded={!closed.includes(group)}
+                        >
+                          <span>{group}</span>
+                          <span className={`text-[10px] transition-transform ${closed.includes(group) ? "" : "rotate-90"}`}>▶</span>
+                        </button>
+                        {!closed.includes(group) && cats.map((c) => {
                           const on = pathname === "/painel/estoque" && activeCategory === c.slug;
                           return (
                             <Link

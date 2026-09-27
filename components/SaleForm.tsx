@@ -178,7 +178,7 @@ export function SaleForm({
                           : `${fmt(Math.min(...prices))} a ${fmt(Math.max(...prices))}`}
                     </p>
                     {tracked ? (
-                      <p className={`text-[11px] font-bold ${stockTotal === 0 ? "text-coral-600" : "text-cacau-500"}`}>
+                      <p className={`text-[11px] font-bold ${"text-cacau-500"}`}>
                         {stockTotal === 0 ? "sem estoque" : `${stockTotal} em estoque`}
                       </p>
                     ) : (
