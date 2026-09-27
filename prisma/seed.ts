@@ -218,6 +218,38 @@ async function main() {
     });
   });
 
+  // Os sócios confirmaram: o que está no PedidosYa também é vendido no WhatsApp.
+  // Enquanto não definem o preço do WhatsApp, fica o do app como referência.
+  await once("2026-09-tudo-nos-dois-canais", async () => {
+    await prisma.product.updateMany({ where: { onStore: false }, data: { onStore: true } });
+    // Combo Festa P ainda sem preço: pede o valor combinado na hora da venda.
+    await prisma.product.updateMany({ where: { name: "Combo Festa P" }, data: { priceOnRequest: true } });
+  });
+
+  // Sócios: "Campeões de Venda" são os Naked Cakes.
+  await once("2026-09-naked-cake", async () => {
+    await prisma.category.updateMany({
+      where: { slug: "campeones" },
+      data: { name: "Naked Cake", description: "Naked cakes, os campeões de venda, em 4 tamanhos." },
+    });
+  });
+
+  // Sócios: o "Combo fiesta p" do PedidosYa é o Combo de Aniversário P.
+  await once("2026-09-combo-fiesta-aniversario", async () => {
+    const kitP = await prisma.variant.findFirst({ where: { name: "P", product: { name: "Combo de Aniversário" } } });
+    const festa = await prisma.product.findFirst({ where: { name: "Combo Festa P" }, include: { variants: true } });
+    if (!kitP || !festa) return;
+    const ids = festa.variants.map((v) => v.id);
+    await prisma.pedidosYaItem.updateMany({ where: { variantId: { in: ids } }, data: { variantId: kitP.id } });
+    const sold = await prisma.saleItem.count({ where: { variantId: { in: ids } } });
+    if (sold > 0) {
+      await prisma.product.update({ where: { id: festa.id }, data: { active: false } });
+    } else {
+      await prisma.stockMovement.deleteMany({ where: { variantId: { in: ids } } });
+      await prisma.product.delete({ where: { id: festa.id } });
+    }
+  });
+
   await once("2026-09-ordem-categorias", async () => {
     for (const [i, slug] of ORDER.entries()) {
       await prisma.category.updateMany({ where: { slug }, data: { sortOrder: i } });

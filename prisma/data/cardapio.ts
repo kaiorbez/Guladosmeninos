@@ -61,10 +61,10 @@ const personalizada = (name: string, legacy: string | undefined, image: string, 
 export const CARDAPIO: CategorySeed[] = [
   {
     slug: "campeones",
-    name: "Campeões de Venda",
+    name: "Naked Cake",
     legacy: "Campeones de Ventas",
     group: "Tortas",
-    description: "As tortas favoritas dos clientes, em 4 tamanhos.",
+    description: "Naked cakes, os campeões de venda, em 4 tamanhos.",
     trackStock: false,
     products: [
       { name: "Torta Ninho com Chocolate", legacy: "Brigadeiro de Nido con Brigadeiro de Chocolate", description: "Brigadeiro de Ninho com brigadeiro de chocolate, massa de chocolate.", image: img("torta-ninho"), variants: tamanhos(120, 190, 230, 400) },
@@ -147,7 +147,7 @@ export const CARDAPIO: CategorySeed[] = [
 export const EXTRAS: CategorySeed[] = [
   {
     slug: "campeones",
-    name: "Campeões de Venda",
+    name: "Naked Cake",
     group: "Tortas",
     trackStock: false,
     products: [

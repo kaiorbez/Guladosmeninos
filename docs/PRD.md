@@ -95,7 +95,7 @@ Contato: WhatsApp **+591 75577829** · Instagram **@Guladosmeninos**
 
 **Tamaños:** P (entre 8 y 10 personas) · M (hasta 15) · G (hasta 25) · GG (hasta 40) · Personalizados (consultar)
 
-### Campeones de Ventas (tortas; foto de referência: 1,300 g)
+### Naked Cake / "Campeones de Ventas" (tortas; foto de referência: 1,300 g)
 | Torta | P | M | G | GG |
 |---|---|---|---|---|
 | Brigadeiro de Nido con Brigadeiro de Chocolate | 120 | 190 | 230 | 400 |
@@ -123,12 +123,12 @@ Slogan: *"¡Tu idea, nuestra creación!"*. Para toda ocasião: aniversários, ev
 ### Combos de aniversário (informado pelos sócios, preço WhatsApp)
 | Kit | Capacidade | Preço |
 |---|---|---|
-| P | até 10 pessoas | 160 Bs |
+| P | até 10 pessoas | 160 Bs (no PedidosYa: "Combo fiesta p", preço a conferir) |
 | M | até 15 pessoas | 270 Bs |
 | G | até 25 pessoas | 400 Bs |
 
 ### 5 produtos que mais vendem (informado pelos sócios; o agente deve priorizar nas sugestões)
-1. Naked Cake (tortas "Campeões de Venda")
+1. Naked Cake (categoria "Naked Cake", antigo "Campeões de Venda")
 2. Empadão
 3. Bolo de pote
 4. Fatia
@@ -144,10 +144,10 @@ Slogan: *"¡Tu idea, nuestra creación!"*. Para toda ocasião: aniversários, ev
 ## Anexo B: Pendências de informação com o cliente
 
 - [ ] Preço de tortas montadas com massa e recheios livres (ver acima).
-- [x] Empadões, fatias, combos, bebidas e velas: cadastrados a partir do PedidosYa (marcados "Só no PedidosYa" até definirem preço de loja).
+- [x] Empadões, fatias, combos, bebidas e velas: cadastrados a partir do PedidosYa; vendidos nos dois canais (WhatsApp e app).
 - [ ] **Docinhos e kits de festa**: categoria criada, faltam itens e preços.
-- [ ] Preços de loja dos itens que hoje só existem no PedidosYa.
-- [ ] Conferir no app: Combo fiesta p, Combo porción nido con frutos rojos, Empadão m fricassê (preço cortado no print).
+- [ ] Conferir no app o preço do "Combo fiesta p" (ligado ao Combo de Aniversário P).
+- [ ] Preço de WhatsApp dos itens que vieram do PedidosYa (hoje usam o preço do app como referência).
 - [ ] **Custo** de cada produto, para o lucro ficar real (hoje o painel avisa quantos itens estão sem custo).
 - [ ] Quais itens ficam **prontos em estoque**. Padrão atual: cuchareables = estoque; tortas = sob encomenda (dá para alternar por produto).
 - [ ] Horário de funcionamento, dias de delivery (terça só delivery), taxa e área de entrega, antecedência mínima para encomendas e formas de pagamento aceitas. **Necessário para o agente.**

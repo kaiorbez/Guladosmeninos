@@ -35,16 +35,13 @@ export default async function PedidosYaPage() {
   // Diferença de preço PedidosYa × loja (só onde existe preço de loja)
   const compared = active
     .filter((i) => i.variant.product.onStore && !i.variant.product.priceOnRequest && toNumber(i.variant.price) > 0 && toNumber(i.price) > 0)
-    .map((i) => ({ item: i, diff: toNumber(i.price) / toNumber(i.variant.price) - 1 }));
+    .map((i) => ({ item: i, diff: toNumber(i.price) / toNumber(i.variant.price) - 1 }))
+    // Preço igual = preço do WhatsApp ainda não definido (usa o do app como referência)
+    .filter((c) => c.diff !== 0);
   const avgDiff = compared.length ? compared.reduce((s, c) => s + c.diff, 0) / compared.length : 0;
 
   // Análise
   const missingOnApp = storeProducts.filter((p) => p.variants.every((v) => v.pedidosYa.length === 0));
-  const onlyOnApp = [...new Map(active.filter((i) => !i.variant.product.onStore).map((i) => [i.variant.product.id, i.variant.product])).values()];
-  const byVariant = new Map<string, typeof active>();
-  for (const i of active) byVariant.set(i.variantId, [...(byVariant.get(i.variantId) ?? []), i]);
-  const duplicated = [...byVariant.values()].filter((list) => list.length > 1);
-  const review = items.filter((i) => i.needsReview);
 
   const sections = items.reduce<Record<string, typeof items>>((acc, i) => {
     (acc[i.section] ??= []).push(i);
@@ -83,33 +80,6 @@ export default async function PedidosYaPage() {
         </section>
 
         <section className="card">
-          <h3 className="text-base">📱 Só no PedidosYa</h3>
-          <p className="mb-2 text-sm text-cacau-500">Não são vendidos no WhatsApp. Para vender, defina o preço e marque “Vende no WhatsApp” no produto.</p>
-          {onlyOnApp.length === 0 ? <p className="text-sm text-cacau-500">Nenhum. ✓</p> : (
-            <ul className="space-y-1 text-sm">
-              {onlyOnApp.map((p) => (
-                <li key={p.id}><Link href={`/painel/estoque/${p.id}`} className="hover:underline">{p.name}</Link></li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
-          <h3 className="text-base">🔁 Anúncios repetidos</h3>
-          <p className="mb-2 text-sm text-cacau-500">O mesmo produto anunciado mais de uma vez, às vezes com preços diferentes.</p>
-          {duplicated.length === 0 ? <p className="text-sm text-cacau-500">Nenhum. ✓</p> : (
-            <ul className="space-y-3 text-sm">
-              {duplicated.map((list) => (
-                <li key={list[0].variantId}>
-                  <p className="font-bold">{variantLabel(list[0].variant.product.name, list[0].variant.name)}</p>
-                  <p className="text-xs text-cacau-500" data-py-name>{list.map((i) => `“${i.name}” ${bs(i.price)}`).join(" · ")}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
           <h3 className="text-base">💰 Maiores diferenças de preço</h3>
           <p className="mb-2 text-sm text-cacau-500">Quanto o app cobra a mais que o WhatsApp.</p>
           {compared.length === 0 ? <p className="text-sm text-cacau-500">Sem itens para comparar.</p> : (
@@ -124,17 +94,6 @@ export default async function PedidosYaPage() {
           )}
         </section>
 
-        <section className="card">
-          <h3 className="text-base">🔎 Preços para conferir</h3>
-          <p className="mb-2 text-sm text-cacau-500">Lidos de um print com pouca resolução. Confira no app e salve abaixo.</p>
-          {review.length === 0 ? <p className="text-sm text-cacau-500">Tudo conferido. ✓</p> : (
-            <ul className="space-y-1 text-sm">
-              {review.map((i) => (
-                <li key={i.id} className="flex justify-between gap-2"><span data-py-name>{i.name}</span><span className="font-bold">{toNumber(i.price) ? bs(i.price) : "sem preço"}</span></li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
 
       <h2 className="mb-3 mt-10 text-2xl">Cardápio no app</h2>
@@ -171,7 +130,6 @@ export default async function PedidosYaPage() {
                             <div>
                               <p className="font-bold" data-py-name>{i.name}</p>
                               <p className="text-[11px] font-bold uppercase tracking-wide text-[#C8003F]">nome no app</p>
-                              {i.needsReview && <span className="badge bg-dourado-400/20 text-dourado-600">conferir preço</span>}
                               {toNumber(i.listPrice ?? 0) > 0 && (
                                 <span className="ml-1 text-xs text-cacau-400">de <s>{bs(i.listPrice!)}</s></span>
                               )}
@@ -183,7 +141,7 @@ export default async function PedidosYaPage() {
                         </td>
                         <td className="whitespace-nowrap text-right">{store > 0 ? bs(store) : <span className="text-cacau-400">—</span>}</td>
                         <td className="whitespace-nowrap text-right font-bold text-dourado-600">
-                          {diff === null ? <span className="font-medium text-cacau-400">—</span> : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)}%`}
+                          {diff === null || diff === 0 ? <span className="text-cacau-400">—</span> : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)}%`}
                         </td>
                         <td className="text-center">
                           {p.trackStock ? (
