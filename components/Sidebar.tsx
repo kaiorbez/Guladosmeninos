@@ -19,12 +19,10 @@ const NAV = [
 export function Sidebar({
   categories,
   alerts,
-  userName,
   logout,
 }: {
   categories: Category[];
   alerts: number;
-  userName: string;
   logout: () => Promise<void>;
 }) {
   const pathname = usePathname();
@@ -103,8 +101,8 @@ export function Sidebar({
                             <Link
                               key={c.slug}
                               href={`/painel/estoque?categoria=${c.slug}`}
-                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${
-                                on ? "bg-dourado-400/20 text-cacau-900" : "text-cacau-500 hover:bg-creme-200 hover:text-cacau-900"
+                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                                on ? "bg-dourado-400/25 text-cacau-900" : "text-cacau-700 hover:bg-creme-200 hover:text-cacau-900"
                               }`}
                             >
                               <span>{c.name}</span>
@@ -121,12 +119,11 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="flex items-center justify-between border-t border-creme-300 px-5 py-3 text-sm">
-          <p className="truncate font-bold">{userName}</p>
-          <form action={logout}>
-            <button className="text-xs font-bold text-cacau-500 hover:text-coral-600">Sair</button>
-          </form>
-        </div>
+        <form action={logout} className="border-t border-creme-300 px-3 py-3">
+          <button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-cacau-700 hover:bg-creme-200 hover:text-coral-600">
+            ⎋ Sair
+          </button>
+        </form>
       </aside>
     </>
   );

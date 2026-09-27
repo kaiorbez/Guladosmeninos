@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
-import { ProductPhoto } from "@/components/ProductPhoto";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { StockControl } from "@/components/StockControl";
 import { prisma, productImage } from "@/lib/db";
 import { bs, toNumber } from "@/lib/format";
@@ -82,22 +82,25 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
         )}
       </div>
 
-      <div className="mb-5 rounded-xl border border-creme-300 bg-creme-50 px-4 py-3 text-xs text-cacau-500">
+      <div className="mb-5 rounded-xl border border-creme-300 bg-creme-50 px-4 py-3 text-sm text-cacau-700">
         <b>Como usar:</b> digite a quantidade e toque em <b className="text-cacau-900">+</b> quando produzir, ou em{" "}
-        <b className="text-coral-600">−</b> para perdas (vencido, quebrou, degustação). As vendas dão baixa sozinhas.
-        Para corrigir uma contagem, abra o produto e use <b>Ajuste de contagem</b>.
+        <b className="text-coral-600">−</b> para perdas. Nos itens <b>sob encomenda</b>, use o + para informar unidades já
+        prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar. As vendas dão baixa sozinhas.
       </div>
 
       <div className="space-y-8">
         {visible.map(({ products, ...cat }) => {
           return (
-            <section key={cat.id}>
-              {!categoria && (
-                <h2 className="mb-3 text-2xl">
-                  {cat.name}
-                  {cat.description && <span className="ml-3 font-sans text-sm font-normal text-cacau-400">{cat.description}</span>}
-                </h2>
-              )}
+            <details key={cat.id} open className="group/sec">
+              <summary className="mb-3 flex cursor-pointer list-none items-center gap-3 rounded-xl py-1 hover:text-dourado-600 [&::-webkit-details-marker]:hidden">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-creme-300 bg-white text-sm transition-transform group-open/sec:rotate-90">
+                  ▶
+                </span>
+                <span className="text-2xl font-bold">{cat.name}</span>
+                <span className="text-sm text-cacau-500">
+                  {products.length} produto(s){cat.description ? ` · ${cat.description}` : ""}
+                </span>
+              </summary>
               <div className="card overflow-x-auto p-0">
                 <table className="table-base">
                   <thead>
@@ -118,18 +121,20 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                         <tr key={v.id} className={!p.active || !v.active ? "opacity-50" : ""}>
                           {i === 0 && (
                             <td rowSpan={variants.length} className="min-w-[17rem] pl-5 align-top">
-                              <Link href={`/painel/estoque/${p.id}`} className="group flex items-start gap-3">
-                                <ProductPhoto src={productImage(p)} name={p.name} size={56} />
-                                <span>
-                                  <span className="font-bold group-hover:text-dourado-600 group-hover:underline">{p.name}</span>
+                              <div className="flex items-start gap-3">
+                                <PhotoUpload productId={p.id} src={productImage(p)} name={p.name} size={56} />
+                                <div>
+                                  <Link href={`/painel/estoque/${p.id}`} className="text-[15px] font-bold hover:text-dourado-600 hover:underline">
+                                    {p.name}
+                                  </Link>
                                   <span className="mt-1 flex flex-wrap gap-1">
                                     {!p.active && <span className="badge bg-cacau-400 text-white">Inativo</span>}
                                     {!p.onStore && <span className="badge bg-pedidosya/10 text-[#C8003F]">Só no PedidosYa</span>}
-                                    {!p.trackStock && <span className="badge bg-creme-200 text-cacau-500">Sob encomenda</span>}
+                                    {!p.trackStock && <span className="badge bg-creme-200 text-cacau-700">Sob encomenda</span>}
                                     {p.priceOnRequest && <span className="badge bg-dourado-400/20 text-dourado-600">Preço a consultar</span>}
                                   </span>
-                                </span>
-                              </Link>
+                                </div>
+                              </div>
                             </td>
                           )}
                           <td className="whitespace-nowrap">
@@ -147,7 +152,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                                 : `${bs(v.pedidosYa[0].price)}+`}
                           </td>
                           <td className="whitespace-nowrap text-right text-cacau-500">
-                            {toNumber(v.cost) > 0 ? bs(v.cost) : <span className="text-xs text-cacau-400">definir</span>}
+                            {toNumber(v.cost) > 0 ? bs(v.cost) : <span className="text-cacau-400">—</span>}
                           </td>
                           <td className="text-center">
                             {p.trackStock ? (
@@ -157,24 +162,22 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                                     ? "bg-coral-500 text-white"
                                     : v.stock <= v.minStock
                                       ? "bg-dourado-400/40 text-dourado-600"
-                                      : "bg-creme-200 text-cacau-700"
+                                      : "bg-creme-200 text-cacau-900"
                                 }`}
                                 title={v.minStock ? `Mínimo: ${v.minStock}` : undefined}
                               >
                                 {v.stock}
                               </span>
+                            ) : v.stock > 0 ? (
+                              <span className="badge bg-creme-200 text-sm text-cacau-900" title="Unidades prontas (sob encomenda)">
+                                {v.stock} prontas
+                              </span>
                             ) : (
-                              <span className="text-xs text-cacau-400">—</span>
+                              <span className="text-xs font-semibold text-cacau-500">encomenda</span>
                             )}
                           </td>
                           <td className="pr-5">
-                            {p.trackStock && p.active && v.active ? (
-                              <StockControl variantId={v.id} />
-                            ) : (
-                              <span className="block text-right text-xs text-cacau-400">
-                                {p.trackStock ? "" : "feito por pedido"}
-                              </span>
-                            )}
+                            {p.active && v.active && <StockControl variantId={v.id} />}
                           </td>
                         </tr>
                       ));
@@ -182,7 +185,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           );
         })}
         {visible.length === 0 && (

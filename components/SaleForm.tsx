@@ -66,6 +66,7 @@ export function SaleForm({
   const [picking, setPicking] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState("QR");
+  const [cartOpen, setCartOpen] = useState(true);
 
   const section = menu.find((c) => c.id === tab) ?? menu[0];
 
@@ -108,12 +109,12 @@ export function SaleForm({
   );
 
   return (
-    <form action={action} className="grid gap-6 xl:grid-cols-5">
+    <form action={action} className="flex flex-col items-start gap-6 xl:flex-row">
       <input type="hidden" name="items" value={payload} />
       <input type="hidden" name="channel" value={channel} />
       <input type="hidden" name="payment" value={payment} />
 
-      <section className="card xl:col-span-3">
+      <section className="card w-full min-w-0 flex-1">
         <span className="label">Onde foi a venda?</span>
         <div className="mb-5 flex flex-wrap gap-2">
           {CHANNELS.map(([v, l]) => (
@@ -135,7 +136,7 @@ export function SaleForm({
           </p>
         )}
 
-        <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="mb-4 flex flex-wrap gap-1.5">
           {menu.map((c) => (
             <button
               type="button"
@@ -144,14 +145,14 @@ export function SaleForm({
                 setTab(c.id);
                 setPicking(null);
               }}
-              className={`btn whitespace-nowrap py-1.5 ${section?.id === c.id ? "btn-primary" : "btn-ghost"}`}
+              className={`btn px-3 py-1.5 text-[13px] ${section?.id === c.id ? "btn-primary" : "btn-ghost"}`}
             >
               {c.name}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {section?.products.map((p) => {
             const single = p.items.length === 1;
             const open = picking === p.id;
@@ -161,25 +162,27 @@ export function SaleForm({
             return (
               <div
                 key={p.id}
-                className={`overflow-hidden rounded-2xl border bg-creme-100 transition ${
+                className={`overflow-hidden rounded-xl border bg-white transition ${
                   open ? "border-dourado-500 ring-2 ring-dourado-400/40" : "border-creme-300 hover:border-dourado-500/60"
                 }`}
               >
                 <button type="button" className="block w-full text-left" onClick={() => (single ? add(p.items[0]) : setPicking(open ? null : p.id))}>
                   <Photo src={p.image} alt={p.name} className="aspect-square w-full" />
-                  <div className="p-3">
-                    <p className="text-sm font-bold leading-snug">{p.name}</p>
-                    <p className="mt-1 text-xs font-semibold text-dourado-600">
+                  <div className="p-2">
+                    <p className="line-clamp-2 text-[13px] font-bold leading-tight">{p.name}</p>
+                    <p className="mt-0.5 text-xs font-bold text-dourado-600">
                       {p.items[0].priceOnRequest
                         ? "Preço a combinar"
                         : single
                           ? fmt(prices[0])
                           : `${fmt(Math.min(...prices))} a ${fmt(Math.max(...prices))}`}
                     </p>
-                    {tracked && (
-                      <p className={`text-[11px] font-semibold ${stockTotal === 0 ? "text-coral-600" : "text-cacau-400"}`}>
+                    {tracked ? (
+                      <p className={`text-[11px] font-bold ${stockTotal === 0 ? "text-coral-600" : "text-cacau-500"}`}>
                         {stockTotal === 0 ? "sem estoque" : `${stockTotal} em estoque`}
                       </p>
+                    ) : (
+                      <p className="text-[11px] font-bold text-cacau-500">{stockTotal > 0 ? `${stockTotal} prontas` : "sob encomenda"}</p>
                     )}
                   </div>
                 </button>
@@ -204,8 +207,23 @@ export function SaleForm({
         </div>
       </section>
 
-      <section className="card h-fit xl:sticky xl:top-6 xl:col-span-2">
-        <h2 className="text-xl">Pedido</h2>
+      {!cartOpen && (
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="btn-primary fixed bottom-5 right-5 z-20 px-5 py-3 text-base shadow-xl"
+        >
+          🛒 Pedido · {cart.reduce((n, l) => n + l.quantity, 0)} item(ns) · {fmt(total)} ▲
+        </button>
+      )}
+
+      <section className={`card h-fit w-full xl:sticky xl:top-6 xl:w-[360px] xl:shrink-0 ${cartOpen ? "" : "hidden"}`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl">Pedido</h2>
+          <button type="button" onClick={() => setCartOpen(false)} className="btn-ghost px-3 py-1 text-xs" title="Recolher o pedido">
+            Recolher ▶
+          </button>
+        </div>
         {cart.length === 0 ? (
           <p className="mt-3 text-sm text-cacau-500">Toque nos produtos para adicionar.</p>
         ) : (
@@ -235,6 +253,11 @@ export function SaleForm({
                       />
                     </div>
                     {over && <p className="mt-1 text-xs font-bold text-coral-600">Só há {l.stock} em estoque.</p>}
+                    {!l.trackStock && l.stock > 0 && (
+                      <p className="mt-1 text-xs text-cacau-500">
+                        {Math.min(l.stock, l.quantity)} pronta(s){l.quantity > l.stock ? `, ${l.quantity - l.stock} por encomenda` : ""}
+                      </p>
+                    )}
                     {!l.priceOnRequest && parsePrice(l.priceInput) !== l.price && (
                       <p className="mt-1 text-xs text-dourado-600">Preço do cardápio: {fmt(l.price)}</p>
                     )}

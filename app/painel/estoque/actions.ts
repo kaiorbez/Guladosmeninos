@@ -41,6 +41,25 @@ export async function moveStockAction(_: ActionState, form: FormData): Promise<A
   }
 }
 
+/** Foto vinda do navegador já reduzida para JPEG (data URL). null = inválida. */
+function parsePhoto(dataUrl: string) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  const bytes = Buffer.from(m[2], "base64");
+  if (bytes.length > 1_500_000) return null;
+  return { photo: new Uint8Array(bytes), photoType: m[1], photoUpdatedAt: new Date() };
+}
+
+/** Troca só a foto do produto (clique na miniatura da lista de estoque). */
+export async function setProductPhotoAction(productId: string, dataUrl: string): Promise<ActionState> {
+  await requireSession();
+  const photo = parsePhoto(dataUrl);
+  if (!photo) return { error: "Foto inválida ou grande demais." };
+  await prisma.product.update({ where: { id: productId }, data: photo });
+  revalidatePath("/painel", "layout");
+  return { ok: "Foto atualizada." };
+}
+
 type VariantRow = {
   id?: string;
   name: string;
@@ -69,16 +88,9 @@ export async function saveProductAction(_: ActionState, form: FormData): Promise
     active: form.get("active") === "on",
   };
 
-  // Foto nova: vem do navegador já reduzida para JPEG (data URL).
   const photoData = String(form.get("photoData") ?? "");
-  let photo: { photo: Uint8Array<ArrayBuffer>; photoType: string; photoUpdatedAt: Date } | undefined;
-  if (photoData) {
-    const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(photoData);
-    if (!m) return { error: "Formato de foto inválido." };
-    const bytes = Buffer.from(m[2], "base64");
-    if (bytes.length > 1_500_000) return { error: "Foto grande demais." };
-    photo = { photo: new Uint8Array(bytes), photoType: m[1], photoUpdatedAt: new Date() };
-  }
+  const photo = photoData ? parsePhoto(photoData) : undefined;
+  if (photo === null) return { error: "Foto inválida ou grande demais." };
 
   const count = toInt(form.get("variantCount"));
   const variants: VariantRow[] = [];

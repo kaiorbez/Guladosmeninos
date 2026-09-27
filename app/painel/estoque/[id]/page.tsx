@@ -86,10 +86,14 @@ export default async function ProdutoPage({
         </section>
       )}
 
-      {product.trackStock && (
+      {(
         <section className="card mt-6">
-          <h2 className="text-xl">Ajuste de contagem</h2>
-          <p className="mb-2 text-xs text-cacau-400">Contou o estoque físico? Digite quanto tem de verdade e o sistema corrige.</p>
+          <h2 className="text-xl">{product.trackStock ? "Ajuste de contagem" : "Unidades prontas"}</h2>
+          <p className="mb-2 text-sm text-cacau-500">
+            {product.trackStock
+              ? "Contou o estoque físico? Digite quanto tem de verdade e o sistema corrige."
+              : "Produto sob encomenda: informe quantas unidades já estão prontas. A venda usa essas primeiro e nunca é bloqueada."}
+          </p>
           <div className="divide-y divide-creme-200">
             {product.variants.filter((v) => v.active).map((v) => (
               <AdjustStock key={v.id} variantId={v.id} label={v.name} current={v.stock} />

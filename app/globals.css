@@ -10,9 +10,9 @@
   --creme-200: 243 235 224;  /* realces #F3EBE0 */
   --creme-300: 232 220 204;  /* bordas #E8DCCC */
   --cacau-900: 38 24 17;     /* texto principal #261811 */
-  --cacau-700: 72 50 38;
-  --cacau-500: 112 88 72;
-  --cacau-400: 146 122 104;
+  --cacau-700: 64 44 33;
+  --cacau-500: 92 70 56;
+  --cacau-400: 124 101 85;
   --dourado-400: 218 172 98;
   --dourado-500: 196 144 62;
   --dourado-600: 150 100 30;  /* dourado legível sobre branco */
@@ -24,7 +24,7 @@
 
 @layer base {
   body {
-    @apply bg-creme-100 font-sans text-[15px] font-medium text-cacau-900;
+    @apply bg-creme-100 font-sans text-base font-medium text-cacau-900;
     text-rendering: optimizeLegibility;
   }
   h1, h2, h3 {
@@ -64,7 +64,7 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold;
   }
   .table-base {
-    @apply w-full text-left text-sm;
+    @apply w-full text-left text-[15px];
   }
   .table-base th {
     @apply border-b border-creme-300 px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-cacau-500;

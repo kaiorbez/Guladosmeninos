@@ -157,8 +157,12 @@ export default async function PedidosYaPage() {
       <h2 className="mb-3 mt-10 text-2xl">Cardápio no app</h2>
       <div className="space-y-6">
         {Object.entries(sections).map(([section, list]) => (
-          <section key={section}>
-            <h3 className="mb-2 text-sm font-extrabold uppercase tracking-[0.14em] text-dourado-600">{section}</h3>
+          <details key={section} open className="group/sec">
+            <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-creme-300 bg-white text-xs transition-transform group-open/sec:rotate-90">▶</span>
+              <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-dourado-600">{section}</span>
+              <span className="text-xs text-cacau-500">{list.length} anúncio(s)</span>
+            </summary>
             <div className="card overflow-x-auto p-0">
               <table className="table-base">
                 <thead>
@@ -213,7 +217,7 @@ export default async function PedidosYaPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </details>
         ))}
       </div>
     </>

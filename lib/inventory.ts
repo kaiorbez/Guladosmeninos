@@ -135,13 +135,20 @@ export async function createSale(input: {
     });
 
     for (const l of lines) {
-      if (!l.variant.product.trackStock) continue;
-      const stockAfter = await applyDelta(tx, l.variant.id, -l.quantity, l.description);
+      // Pronta entrega: exige estoque. Sob encomenda: usa as unidades prontas que houver
+      // e o resto é produzido por pedido (nunca bloqueia a venda).
+      let take = l.quantity;
+      if (!l.variant.product.trackStock) {
+        const current = await tx.variant.findUniqueOrThrow({ where: { id: l.variant.id }, select: { stock: true } });
+        take = Math.min(current.stock, l.quantity);
+        if (take <= 0) continue;
+      }
+      const stockAfter = await applyDelta(tx, l.variant.id, -take, l.description);
       await tx.stockMovement.create({
         data: {
           variantId: l.variant.id,
           type: "VENDA",
-          quantity: -l.quantity,
+          quantity: -take,
           stockAfter,
           saleId: sale.id,
           note: `Venda #${sale.number}`,
