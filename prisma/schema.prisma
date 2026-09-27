@@ -1,0 +1,145 @@
+// Modelo de dados do sistema Gula dos Meninos.
+// Cardápio = Category > Product > Variant (tamanho/opção com preço, custo e estoque).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  name         String
+  email        String          @unique
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  movements    StockMovement[]
+  sales        Sale[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  sortOrder   Int       @default(0)
+  products    Product[]
+}
+
+model Product {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  categoryId     String
+  category       Category  @relation(fields: [categoryId], references: [id])
+  // Tortas personalizadas: preço sob consulta, o agente encaminha para um sócio.
+  priceOnRequest Boolean   @default(false)
+  // Produtos feitos por encomenda não controlam estoque.
+  trackStock     Boolean   @default(true)
+  active         Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  variants       Variant[]
+
+  @@index([categoryId])
+}
+
+model Variant {
+  id        String          @id @default(cuid())
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Ex.: "P", "M", "G", "GG" ou "Único"
+  name      String
+  // Ex.: "Entre 8 y 10 personas"
+  servings  String?
+  price     Decimal         @db.Decimal(10, 2)
+  cost      Decimal         @default(0) @db.Decimal(10, 2)
+  stock     Int             @default(0)
+  minStock  Int             @default(0)
+  sortOrder Int             @default(0)
+  active    Boolean         @default(true)
+  movements StockMovement[]
+  saleItems SaleItem[]
+
+  @@unique([productId, name])
+}
+
+enum MovementType {
+  ENTRADA // produção / reposição
+  SAIDA   // perda, degustação, vencido
+  AJUSTE  // contagem manual (define o valor absoluto)
+  VENDA   // baixa automática de uma venda
+  ESTORNO // venda cancelada
+}
+
+model StockMovement {
+  id        String       @id @default(cuid())
+  variantId String
+  variant   Variant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  type      MovementType
+  // Variação aplicada ao estoque (positiva ou negativa)
+  quantity  Int
+  stockAfter Int
+  note      String?
+  saleId    String?
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
+
+  @@index([variantId, createdAt])
+}
+
+enum SaleChannel {
+  BALCAO
+  WHATSAPP
+  DELIVERY
+  INSTAGRAM
+}
+
+enum SaleStatus {
+  CONFIRMADA
+  CANCELADA
+}
+
+enum PaymentMethod {
+  QR
+  EFECTIVO
+  TARJETA
+  OTRO
+}
+
+model Sale {
+  id            String        @id @default(cuid())
+  number        Int           @default(autoincrement()) @unique
+  channel       SaleChannel   @default(BALCAO)
+  status        SaleStatus    @default(CONFIRMADA)
+  payment       PaymentMethod @default(QR)
+  customerName  String?
+  customerPhone String?
+  notes         String?
+  total         Decimal       @db.Decimal(10, 2)
+  totalCost     Decimal       @default(0) @db.Decimal(10, 2)
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id])
+  createdAt     DateTime      @default(now())
+  items         SaleItem[]
+
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id          String  @id @default(cuid())
+  saleId      String
+  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     Variant @relation(fields: [variantId], references: [id])
+  // Nome congelado no momento da venda (o produto pode mudar depois)
+  description String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  unitCost    Decimal @db.Decimal(10, 2)
+}
