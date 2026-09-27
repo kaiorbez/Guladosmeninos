@@ -36,7 +36,7 @@ npm run dev                 # http://localhost:3000
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (referência ao banco)
    - `AUTH_SECRET` = um texto longo e aleatório (`openssl rand -base64 32`)
    - `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` = o primeiro acesso
-4. Em **Settings → Deploy → Pre-deploy command**: `npm run db:push && npm run db:seed`
+4. Nada mais a configurar: o `railway.json` já roda `npm run db:push && npm run db:seed` antes de cada deploy
    (cria/atualiza as tabelas e carrega o cardápio e o admin; seguro de rodar a cada deploy).
 5. Em **Settings → Networking → Generate Domain** para ganhar a URL pública.
 
