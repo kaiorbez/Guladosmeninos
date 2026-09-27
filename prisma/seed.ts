@@ -195,6 +195,29 @@ async function main() {
     }
   });
 
+  // Kits de aniversário informados pelos sócios (preço do WhatsApp).
+  await once("2026-09-combo-aniversario", async () => {
+    const combos = await prisma.category.findUnique({ where: { slug: "combos" } });
+    if (!combos || (await prisma.product.findFirst({ where: { name: "Combo de Aniversário" } }))) return;
+    await prisma.product.create({
+      data: {
+        name: "Combo de Aniversário",
+        description: "Kit de aniversário. P até 10 pessoas, M até 15 pessoas, G até 25 pessoas.",
+        categoryId: combos.id,
+        trackStock: false,
+        onStore: true,
+        sortOrder: -1,
+        variants: {
+          create: [
+            { name: "P", servings: "até 10 pessoas", price: 160, sortOrder: 0 },
+            { name: "M", servings: "até 15 pessoas", price: 270, sortOrder: 1 },
+            { name: "G", servings: "até 25 pessoas", price: 400, sortOrder: 2 },
+          ],
+        },
+      },
+    });
+  });
+
   await once("2026-09-ordem-categorias", async () => {
     for (const [i, slug] of ORDER.entries()) {
       await prisma.category.updateMany({ where: { slug }, data: { sortOrder: i } });

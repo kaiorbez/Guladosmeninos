@@ -120,6 +120,20 @@ Contato: WhatsApp **+591 75577829** · Instagram **@Guladosmeninos**
 Infantil · Temáticas · Elegancia Minimalista · Perlas de Elegancia · Amor en cada Detalle · Floral Azul · Romántica · Perlas Doradas · Bosque · Deportivas.
 Slogan: *"¡Tu idea, nuestra creación!"*. Para toda ocasião: aniversários, eventos e mais.
 
+### Combos de aniversário (informado pelos sócios, preço WhatsApp)
+| Kit | Capacidade | Preço |
+|---|---|---|
+| P | até 10 pessoas | 160 Bs |
+| M | até 15 pessoas | 270 Bs |
+| G | até 25 pessoas | 400 Bs |
+
+### 5 produtos que mais vendem (informado pelos sócios; o agente deve priorizar nas sugestões)
+1. Naked Cake (tortas "Campeões de Venda")
+2. Empadão
+3. Bolo de pote
+4. Fatia
+5. Bolo personalizado
+
 ### "Cómo elegir tu pedido" (regras para o agente, Fase 2)
 1. **Tamaño:** P / M / G / GG / personalizado
 2. **Sabor de la masa:** Chocolate · Vainilla · personalizado (consultar)

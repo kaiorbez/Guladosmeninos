@@ -62,11 +62,11 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
         prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar. As vendas dão baixa sozinhas.
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-2">
         {visible.map(({ products, ...cat }) => {
           return (
-            <details key={cat.id} open className="group/sec">
-              <summary className="mb-3 flex cursor-pointer list-none items-center gap-3 rounded-xl py-1 hover:text-dourado-600 [&::-webkit-details-marker]:hidden">
+            <details key={cat.id} open={Boolean(categoria || q)} className="group/sec [&[open]]:pb-6">
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl py-2 hover:text-dourado-600 group-open/sec:mb-3 [&::-webkit-details-marker]:hidden">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full border border-creme-300 bg-white text-sm transition-transform group-open/sec:rotate-90">
                   ▶
                 </span>

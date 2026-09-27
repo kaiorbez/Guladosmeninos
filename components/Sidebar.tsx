@@ -27,9 +27,14 @@ export function Sidebar({
   const params = useSearchParams();
   const activeCategory = params.get("categoria");
   const [open, setOpen] = useState(false);
-  // Tópicos do menu: sempre começam abertos; recolher vale só enquanto a página está aberta.
-  const [closed, setClosed] = useState<string[]>([]);
-  const toggleGroup = (g: string) => setClosed((c) => (c.includes(g) ? c.filter((x) => x !== g) : [...c, g]));
+  // Tópicos do menu começam recolhidos; só abre o da categoria que está sendo vista.
+  const activeGroup = categories.find((c) => c.slug === activeCategory)?.group;
+  const [openGroups, setOpenGroups] = useState<string[]>(activeGroup ? [activeGroup] : []);
+  useEffect(() => {
+    if (activeGroup) setOpenGroups((g) => (g.includes(activeGroup) ? g : [...g, activeGroup]));
+  }, [activeGroup]);
+  const toggleGroup = (g: string) => setOpenGroups((o) => (o.includes(g) ? o.filter((x) => x !== g) : [...o, g]));
+  const isOpen = (g: string) => openGroups.includes(g);
 
   useEffect(() => setOpen(false), [pathname, activeCategory]);
 
@@ -96,12 +101,12 @@ export function Sidebar({
                           type="button"
                           onClick={() => toggleGroup(group)}
                           className="flex w-full items-center justify-between rounded-md px-3 pb-1 pt-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-dourado-600 hover:text-cacau-900"
-                          aria-expanded={!closed.includes(group)}
+                          aria-expanded={isOpen(group)}
                         >
                           <span>{group}</span>
-                          <span className={`text-[10px] transition-transform ${closed.includes(group) ? "" : "rotate-90"}`}>▶</span>
+                          <span className={`text-[10px] transition-transform ${isOpen(group) ? "rotate-90" : ""}`}>▶</span>
                         </button>
-                        {!closed.includes(group) && cats.map((c) => {
+                        {isOpen(group) && cats.map((c) => {
                           const on = pathname === "/painel/estoque" && activeCategory === c.slug;
                           return (
                             <Link
