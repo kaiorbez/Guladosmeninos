@@ -201,12 +201,31 @@ model Order {
   topping       String? // cobertura
   decoration    String?
   total         Decimal     @db.Decimal(10, 2)
+  // Soma dos pagamentos (OrderPayment), guardada para listar rápido
   paid          Decimal     @default(0) @db.Decimal(10, 2)
   notes         String?
+  // Canal da venda gerada na entrega
+  channel       SaleChannel @default(WHATSAPP)
+  // Venda registrada quando a encomenda foi entregue (entra no faturamento)
+  // (sem @unique: o db push do deploy não pode pedir --accept-data-loss)
+  saleId        String?
   userId        String?
   createdAt     DateTime    @default(now())
+  payments      OrderPayment[]
 
   @@index([deliveryDate])
+}
+
+// Cada valor recebido de uma encomenda (sinal, restante...).
+model OrderPayment {
+  id      String        @id @default(cuid())
+  orderId String
+  order   Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount  Decimal       @db.Decimal(10, 2)
+  method  PaymentMethod @default(QR)
+  paidAt  DateTime      @default(now())
+
+  @@index([orderId])
 }
 
 // Ajustes de dados que devem rodar uma única vez em cada banco (ver prisma/seed.ts).

@@ -16,6 +16,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   novo: "Novo produto",
   pedidosya: "PedidosYa",
   equipe: "Equipe",
+  clientes: "Clientes",
 };
 
 function Breadcrumb() {
@@ -32,7 +33,9 @@ function Breadcrumb() {
         const href = "/painel/" + segments.slice(0, i + 1).join("/");
         const last = i === segments.length - 1;
         const inOrders = segments[i - 1] === "encomendas";
-        const label = inOrders ? (seg === "nova" ? "Nova encomenda" : "Encomenda") : (SEGMENT_LABELS[seg] ?? "Produto");
+        const label = inOrders
+          ? seg === "nova" ? "Nova encomenda" : seg === "cozinha" ? "Folha da cozinha" : "Encomenda"
+          : (SEGMENT_LABELS[seg] ?? "Produto");
         return (
           <span key={href} className={last ? "flex min-w-0 items-center gap-1.5" : "hidden shrink-0 items-center gap-1.5 sm:flex"}>
             <span aria-hidden className={last ? "hidden sm:inline" : undefined}>/</span>
@@ -89,7 +92,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh">
-      <aside className={`hidden shrink-0 border-r border-creme-300 transition-[width] lg:block ${collapsed ? "w-0 overflow-hidden border-r-0" : "w-64"}`}>
+      <aside className={`hidden shrink-0 border-r border-creme-300 transition-[width] print:hidden lg:block ${collapsed ? "w-0 overflow-hidden border-r-0" : "w-64"}`}>
         <div className="sticky top-0 h-svh w-64">
           <SidebarContent categories={categories} logout={logout} />
         </div>
@@ -98,7 +101,7 @@ export function AppShell({
       {/* Menu no celular */}
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-creme-300 shadow-xl transition-transform lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 print:hidden border-r border-creme-300 shadow-xl transition-transform lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -106,7 +109,7 @@ export function AppShell({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-creme-300 bg-creme-100/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-14 print:hidden items-center gap-2 border-b border-creme-300 bg-creme-100/95 px-4 backdrop-blur">
           <button type="button" className="btn-icon lg:hidden" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}>
             <MenuIcon className="size-4" />
           </button>
@@ -118,7 +121,7 @@ export function AppShell({
             <ThemeToggle />
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
       </div>
     </div>
   );

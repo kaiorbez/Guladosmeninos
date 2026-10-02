@@ -48,6 +48,20 @@ export const PAYMENT_LABEL: Record<string, string> = {
   OTRO: "Outro",
 };
 
+/** Opções das encomendas (canal do pedido e forma de pagamento). */
+export const ORDER_CHANNELS = [
+  ["WHATSAPP", "WhatsApp"],
+  ["BALCAO", "Balcão"],
+  ["INSTAGRAM", "Instagram"],
+  ["DELIVERY", "Delivery"],
+] as const;
+export const PAYMENT_METHODS = [
+  ["QR", "QR"],
+  ["EFECTIVO", "Dinheiro"],
+  ["TARJETA", "Cartão"],
+  ["OTRO", "Outro"],
+] as const;
+
 export const MOVEMENT_LABEL: Record<string, string> = {
   ENTRADA: "Produção / entrada",
   SAIDA: "Perda / saída",

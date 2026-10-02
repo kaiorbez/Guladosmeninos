@@ -1,20 +1,26 @@
 "use server";
 
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus, PaymentMethod, SaleChannel } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { InventoryError } from "@/lib/inventory";
+import { OrderError, addPayment, deliverOrder, refreshPaid, undoOrderSale } from "@/lib/orders";
 
 const STATUSES: OrderStatus[] = ["PENDENTE", "ENTREGUE", "CANCELADA"];
+const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
+const METHODS: PaymentMethod[] = ["QR", "EFECTIVO", "TARJETA", "OTRO"];
+
+const method = (v: FormDataEntryValue | null): PaymentMethod => (METHODS.includes(v as PaymentMethod) ? (v as PaymentMethod) : "QR");
+const money = (v: FormDataEntryValue | null) => {
+  const s = String(v ?? "").trim().replace(",", ".");
+  return s === "" ? 0 : Number(s);
+};
 
 export async function saveOrderAction(_: string | null, form: FormData): Promise<string | null> {
   const session = await requireSession();
   const text = (key: string, max = 200) => String(form.get(key) ?? "").trim().slice(0, max);
-  const money = (key: string) => {
-    const s = text(key).replace(",", ".");
-    return s === "" ? 0 : Number(s);
-  };
 
   const date = text("deliveryDate");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Informe o dia da entrega.";
@@ -22,10 +28,9 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
   if (!customerName) return "Informe o nome do cliente.";
   const product = text("product");
   if (!product) return "Informe o produto.";
-  const total = money("total");
-  const paid = money("paid");
-  if (!(total >= 0) || !(paid >= 0)) return "Valor inválido.";
-  if (paid > total) return "O valor pago não pode ser maior que o total.";
+  const total = money(form.get("total"));
+  if (!(total >= 0)) return "Valor total inválido.";
+  const channel = CHANNELS.includes(text("channel") as SaleChannel) ? (text("channel") as SaleChannel) : "WHATSAPP";
 
   const data = {
     deliveryDate: new Date(`${date}T00:00:00Z`),
@@ -38,31 +43,89 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
     topping: text("topping") || null,
     decoration: text("decoration") || null,
     total,
-    paid,
     notes: text("notes", 1000) || null,
+    channel,
   };
 
   const id = text("id");
-  if (id) await prisma.order.update({ where: { id }, data });
-  else await prisma.order.create({ data: { ...data, userId: session.userId } });
+  if (id) {
+    const current = await prisma.order.findUnique({ where: { id } });
+    if (!current) return "Encomenda não encontrada.";
+    if (total < Number(current.paid)) return "O total não pode ser menor que o valor já pago.";
+    await prisma.order.update({ where: { id }, data });
+  } else {
+    // Na criação, o valor pago vira o primeiro pagamento (o sinal).
+    const paid = money(form.get("paid"));
+    if (!(paid >= 0)) return "Valor pago inválido.";
+    if (paid > total) return "O valor pago não pode ser maior que o total.";
+    await prisma.order.create({
+      data: {
+        ...data,
+        paid,
+        userId: session.userId,
+        payments: paid > 0 ? { create: { amount: paid, method: method(form.get("paidMethod")) } } : undefined,
+      },
+    });
+  }
 
   revalidatePath("/painel", "layout");
   redirect("/painel/encomendas");
 }
 
 export async function setOrderStatusAction(form: FormData) {
-  await requireSession();
+  const session = await requireSession();
   const status = String(form.get("status")) as OrderStatus;
   if (!STATUSES.includes(status)) return;
-  await prisma.order.updateMany({ where: { id: String(form.get("orderId")) }, data: { status } });
+  const order = await prisma.order.findUnique({ where: { id: String(form.get("orderId")) } });
+  if (!order || order.status === status) return;
+
+  try {
+    if (status === "ENTREGUE") {
+      await deliverOrder(order.id, session.userId);
+    } else {
+      // Saindo de "entregue": a venda gerada na entrega é cancelada.
+      await undoOrderSale(order.saleId, session.userId);
+      await prisma.order.update({ where: { id: order.id }, data: { status, saleId: null } });
+    }
+  } catch (e) {
+    if (!(e instanceof InventoryError)) throw e;
+  }
   revalidatePath("/painel", "layout");
 }
 
-/** Marca o restante como recebido (valor pago = total). */
-export async function payOrderAction(form: FormData) {
-  await requireSession();
+/** Apaga a encomenda de vez (para registros feitos por engano). */
+export async function deleteOrderAction(form: FormData) {
+  const session = await requireSession();
   const order = await prisma.order.findUnique({ where: { id: String(form.get("orderId")) } });
   if (!order) return;
-  await prisma.order.update({ where: { id: order.id }, data: { paid: order.total } });
+  await undoOrderSale(order.saleId, session.userId);
+  await prisma.order.delete({ where: { id: order.id } });
+  revalidatePath("/painel", "layout");
+}
+
+/** Registra um valor recebido (o card manda o restante; a ficha permite valor parcial). */
+export async function addPaymentAction(_: string | null, form: FormData): Promise<string | null> {
+  await requireSession();
+  try {
+    await addPayment(String(form.get("orderId")), money(form.get("amount")), method(form.get("method")));
+  } catch (e) {
+    if (e instanceof OrderError) return e.message;
+    throw e;
+  }
+  revalidatePath("/painel", "layout");
+  return null;
+}
+
+/** Versão sem retorno, para os botões do card. */
+export async function payRestAction(form: FormData) {
+  await addPaymentAction(null, form);
+}
+
+export async function deletePaymentAction(form: FormData) {
+  await requireSession();
+  const payment = await prisma.orderPayment.findUnique({ where: { id: String(form.get("paymentId")) } });
+  if (!payment) return;
+  await prisma.orderPayment.delete({ where: { id: payment.id } });
+  await refreshPaid(payment.orderId);
   revalidatePath("/painel", "layout");
 }

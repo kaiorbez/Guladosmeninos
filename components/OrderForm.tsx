@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { saveOrderAction } from "@/app/painel/encomendas/actions";
+import { ORDER_CHANNELS, PAYMENT_METHODS } from "@/lib/format";
 
 export type OrderValues = {
   id?: string;
@@ -18,9 +19,13 @@ export type OrderValues = {
   total: string;
   paid: string;
   notes: string;
+  channel: string;
 };
 
 type Suggestions = { product: string[]; dough: string[]; filling: string[]; topping: string[] };
+
+const CHANNELS = ORDER_CHANNELS;
+const METHODS = PAYMENT_METHODS;
 
 const fmt = (n: number) => `Bs ${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`;
 const parse = (s: string) => Number(s.replace(",", ".")) || 0;
@@ -37,6 +42,7 @@ export function OrderForm({
   tomorrow: string;
   suggestions: Suggestions;
 }) {
+  const editing = Boolean(values.id);
   const [error, action, pending] = useActionState(saveOrderAction, null);
   const [date, setDate] = useState(values.deliveryDate);
   const [total, setTotal] = useState(values.total);
@@ -78,6 +84,12 @@ export function OrderForm({
           {field("deliveryTime", "Horário de entrega", { type: "time" })}
           {field("customerName", "Cliente", { required: true })}
           {field("customerPhone", "Celular", { inputMode: "tel" })}
+          <div>
+            <label className="label" htmlFor="channel">Pedido feito por</label>
+            <select id="channel" name="channel" defaultValue={values.channel} className="input">
+              {CHANNELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
         </div>
       </section>
 
@@ -103,14 +115,25 @@ export function OrderForm({
             <label className="label" htmlFor="total">Valor total (Bs)</label>
             <input id="total" name="total" value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" required className="input" />
           </div>
-          <div>
-            <label className="label" htmlFor="paid">Valor pago (Bs)</label>
-            <input id="paid" name="paid" value={paid} onChange={(e) => setPaid(e.target.value)} inputMode="decimal" className="input" />
-            <div className="mt-2 flex gap-2">
-              <button type="button" onClick={() => setPaid(String(parse(total) / 2))} className="btn-ghost px-2.5 py-1 text-xs">Metade</button>
-              <button type="button" onClick={() => setPaid(total)} className="btn-ghost px-2.5 py-1 text-xs">Tudo</button>
+          {editing ? (
+            <div>
+              <span className="label">Já pago</span>
+              <p className="py-1.5 text-xl font-semibold tabular-nums">{fmt(parse(paid))}</p>
+              <p className="text-xs text-cacau-500">Os pagamentos ficam no quadro abaixo.</p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="label" htmlFor="paid">Sinal pago (Bs)</label>
+              <input id="paid" name="paid" value={paid} onChange={(e) => setPaid(e.target.value)} inputMode="decimal" className="input" />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" onClick={() => setPaid(String(parse(total) / 2))} className="btn-ghost px-2.5 py-1 text-xs">Metade</button>
+                <button type="button" onClick={() => setPaid(total)} className="btn-ghost px-2.5 py-1 text-xs">Tudo</button>
+                <select name="paidMethod" aria-label="Forma de pagamento do sinal" className="input w-auto px-2 py-1 text-xs">
+                  {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
           <div>
             <span className="label">Falta</span>
             <p className={`py-1.5 text-xl font-semibold tabular-nums ${missing > 0 ? "text-coral-600" : ""}`}>{fmt(missing)}</p>
@@ -121,7 +144,7 @@ export function OrderForm({
       {error && <p className="text-sm font-medium text-coral-600">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn-accent">
-          {pending ? "Salvando..." : values.id ? "Salvar alterações" : "Registrar encomenda"}
+          {pending ? "Salvando..." : editing ? "Salvar alterações" : "Registrar encomenda"}
         </button>
         <Link href="/painel/encomendas" className="btn-ghost">Voltar</Link>
       </div>

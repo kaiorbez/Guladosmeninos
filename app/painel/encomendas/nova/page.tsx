@@ -22,6 +22,7 @@ export default async function NovaEncomenda() {
           total: "",
           paid: "",
           notes: "",
+          channel: "WHATSAPP",
         }}
       />
     </>

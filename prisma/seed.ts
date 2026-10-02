@@ -388,6 +388,35 @@ async function main() {
       });
     }
   });
+
+  // "Docinhos (Cento)" aparecia como "Docinhos (Cento) (Cento)": o tamanho já diz que é o cento.
+  await once("2026-10-nomes-cento", async () => {
+    await prisma.product.updateMany({ where: { name: "Docinhos (Cento)" }, data: { name: "Docinhos" } });
+    await prisma.product.updateMany({ where: { name: "Empadinhas (Cento)" }, data: { name: "Empadinhas" } });
+  });
+
+  // Venda de teste da API do agente (nº 2, 02/10/2026): cancela e devolve o estoque.
+  await once("2026-10-cancela-venda-teste", async () => {
+    await prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findFirst({ where: { externalRef: "teste-claude-2026-10-02-1", status: "CONFIRMADA" } });
+      if (!sale) return;
+      await tx.sale.update({ where: { id: sale.id }, data: { status: "CANCELADA" } });
+      for (const m of await tx.stockMovement.findMany({ where: { saleId: sale.id, type: "VENDA" } })) {
+        const v = await tx.variant.update({ where: { id: m.variantId }, data: { stock: { increment: -m.quantity } } });
+        await tx.stockMovement.create({
+          data: { variantId: m.variantId, type: "ESTORNO", quantity: -m.quantity, stockAfter: v.stock, saleId: sale.id, note: `Cancelamento da venda #${sale.number} (teste)` },
+        });
+      }
+    });
+  });
+
+  // Encomendas criadas antes do histórico de pagamentos: o valor pago vira um pagamento.
+  await once("2026-10-pagamentos-encomendas", async () => {
+    const orders = await prisma.order.findMany({ where: { paid: { gt: 0 }, payments: { none: {} } } });
+    for (const o of orders) {
+      await prisma.orderPayment.create({ data: { orderId: o.id, amount: o.paid, method: "OTRO", paidAt: o.createdAt } });
+    }
+  });
 }
 
 main()

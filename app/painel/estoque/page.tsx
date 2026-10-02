@@ -16,7 +16,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
     orderBy: { sortOrder: "asc" },
     include: {
       products: {
-        where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
+        // "Encomenda" é o item interno das vendas geradas por encomendas
+        where: { AND: [{ name: { not: "Encomenda" } }, q ? { name: { contains: q, mode: "insensitive" } } : {}] },
         orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
         include: {
           variants: {

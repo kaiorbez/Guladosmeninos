@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
-import { payOrderAction, setOrderStatusAction } from "./actions";
+import { PAYMENT_METHODS as METHODS } from "@/lib/format";
+import { deleteOrderAction, payRestAction, setOrderStatusAction } from "./actions";
 
 const TABS = {
   proximas: { label: "Próximas", status: "PENDENTE" },
@@ -83,6 +84,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Encomendas" subtitle="O que produzir, para quando e quanto falta receber">
+        <Link href="/painel/encomendas/cozinha" className="btn-ghost">Folha da cozinha</Link>
         <Link href="/painel/encomendas/nova" className="btn-accent">＋ Nova encomenda</Link>
       </PageHeader>
 
@@ -185,41 +187,62 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                         <p className="mr-auto text-sm tabular-nums text-cacau-500">
                           Total <b className="text-cacau-900">{bs(o.total)}</b> · pago {bs(o.paid)}
                         </p>
-                        {pendingTab && missing > 0 && (
-                          <form action={payOrderAction}>
+                        {o.status !== "CANCELADA" && missing > 0 && (
+                          <form action={payRestAction} className="flex items-center">
                             <input type="hidden" name="orderId" value={o.id} />
-                            <ConfirmButton message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost py-1.5">
+                            <input type="hidden" name="amount" value={missing} />
+                            <select name="method" aria-label="Forma de pagamento" className="input h-[34px] w-auto rounded-r-none border-r-0 px-2 py-1 text-xs">
+                              {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                            <ConfirmButton message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost rounded-l-none py-1.5">
                               Receber {bs(missing)}
                             </ConfirmButton>
                           </form>
+                        )}
+                        {o.status === "ENTREGUE" && o.saleId && (
+                          <span className="badge bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">No faturamento</span>
                         )}
                         {pendingTab && (
                           <form action={setOrderStatusAction}>
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="status" value="ENTREGUE" />
-                            {missing > 0 ? (
-                              <ConfirmButton message={`Ainda falta receber ${bs(missing)}. Marcar como entregue mesmo assim?`} className="btn-primary py-1.5">
-                                Entregue
-                              </ConfirmButton>
-                            ) : (
-                              <button className="btn-primary py-1.5">Entregue</button>
-                            )}
+                            <ConfirmButton
+                              message={
+                                missing > 0
+                                  ? `Ainda falta receber ${bs(missing)}. Marcar como entregue mesmo assim? A venda de ${bs(o.total)} entra no faturamento.`
+                                  : `Marcar como entregue? A venda de ${bs(o.total)} entra no faturamento.`
+                              }
+                              className="btn-primary py-1.5"
+                            >
+                              Entregue
+                            </ConfirmButton>
                           </form>
                         )}
                         <Link href={`/painel/encomendas/${o.id}`} className="btn-icon border border-creme-300" aria-label="Editar encomenda" title="Editar">
                           <PencilIcon className="size-3.5" />
                         </Link>
-                        <form action={setOrderStatusAction} className="basis-full text-right">
-                          <input type="hidden" name="orderId" value={o.id} />
-                          <input type="hidden" name="status" value={pendingTab ? "CANCELADA" : "PENDENTE"} />
-                          {pendingTab ? (
-                            <ConfirmButton message={`Cancelar a encomenda #${o.number}?`} className="text-xs text-cacau-400 hover:text-coral-600 hover:underline">
-                              cancelar encomenda
+                        <div className="flex basis-full justify-end gap-4">
+                          <form action={setOrderStatusAction}>
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <input type="hidden" name="status" value={pendingTab ? "CANCELADA" : "PENDENTE"} />
+                            {pendingTab ? (
+                              <ConfirmButton message={`Cancelar a encomenda #${o.number}?`} className="text-xs text-cacau-400 hover:text-coral-600 hover:underline">
+                                cancelar encomenda
+                              </ConfirmButton>
+                            ) : (
+                              <button className="text-xs text-cacau-400 hover:text-cacau-900 hover:underline">voltar para pendente</button>
+                            )}
+                          </form>
+                          <form action={deleteOrderAction}>
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <ConfirmButton
+                              message={`Excluir a encomenda #${o.number} de ${o.customerName}? Ela some de vez e não dá para desfazer.`}
+                              className="text-xs text-cacau-400 hover:text-coral-600 hover:underline"
+                            >
+                              excluir
                             </ConfirmButton>
-                          ) : (
-                            <button className="text-xs text-cacau-400 hover:text-cacau-900 hover:underline">voltar para pendente</button>
-                          )}
-                        </form>
+                          </form>
+                        </div>
                       </footer>
                     </article>
                   );

@@ -66,6 +66,8 @@ export type SaleItemInput = {
   quantity: number;
   /** Preço negociado (tortas personalizadas). Se omitido, usa o preço cadastrado. */
   unitPrice?: number;
+  /** Texto do item na venda. Se omitido, usa o nome do produto e tamanho. */
+  description?: string;
 };
 
 export async function createSale(input: {
@@ -107,7 +109,7 @@ export async function createSale(input: {
         quantity: i.quantity,
         unitPrice,
         unitCost: Number(v.cost),
-        description: variantLabel(v.product.name, v.name),
+        description: i.description ?? variantLabel(v.product.name, v.name),
       };
     });
 
