@@ -136,10 +136,13 @@ model Sale {
   totalCost     Decimal       @default(0) @db.Decimal(10, 2)
   userId        String?
   user          User?         @relation(fields: [userId], references: [id])
+  // Referência externa (ex.: id do aviso do agente no WhatsApp): evita registrar a mesma venda 2x.
+  externalRef   String?
   createdAt     DateTime      @default(now())
   items         SaleItem[]
 
   @@index([createdAt])
+  @@index([externalRef])
 }
 
 model SaleItem {

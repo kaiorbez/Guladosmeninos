@@ -76,6 +76,8 @@ export async function createSale(input: {
   customerPhone?: string;
   notes?: string;
   userId?: string;
+  /** Referência externa (ex.: id do aviso do agente). */
+  externalRef?: string;
 }) {
   const items = input.items.filter((i) => i.quantity > 0);
   if (items.length === 0) throw new InventoryError("Adicione pelo menos um item.");
@@ -120,6 +122,7 @@ export async function createSale(input: {
         customerPhone: input.customerPhone || null,
         notes: input.notes || null,
         userId: input.userId,
+        externalRef: input.externalRef || null,
         total,
         totalCost,
         items: {
