@@ -59,11 +59,11 @@ export function SidebarContent({
 
   return (
     <div className="flex h-full flex-col bg-creme-50 text-cacau-900">
-      <Link href="/painel" onClick={onNavigate} className="flex h-14 shrink-0 items-center gap-2.5 border-b border-creme-300 px-4">
-        <Image src="/logo.png" alt="" width={32} height={32} priority className="rounded-full" />
+      <Link href="/painel" onClick={onNavigate} className="flex shrink-0 items-center gap-3 border-b border-creme-300 px-4 py-4">
+        <Image src="/logo.png" alt="" width={64} height={64} priority className="shrink-0 rounded-full" />
         <span className="min-w-0 leading-tight">
-          <span className="block truncate text-sm font-semibold">Gula dos Meninos</span>
-          <span className="block text-[11px] text-cacau-500">Painel</span>
+          <span className="block text-[15px] font-semibold">Gula dos Meninos</span>
+          <span className="block text-xs text-cacau-500">Painel</span>
         </span>
       </Link>
 
