@@ -4,6 +4,7 @@ import type { PaymentMethod, SaleChannel } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { InventoryError, cancelSale, createSale, type SaleItemInput } from "@/lib/inventory";
 
 const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
@@ -49,6 +50,18 @@ export async function createSaleAction(_: string | null, form: FormData): Promis
 
   revalidatePath("/painel", "layout");
   redirect(`/painel/vendas?registrada=${number}`);
+}
+
+/** Apaga a venda de vez. Se ainda estava confirmada, antes devolve os itens ao estoque. */
+export async function deleteSaleAction(form: FormData) {
+  const session = await requireSession();
+  const sale = await prisma.sale.findUnique({ where: { id: String(form.get("saleId")) } });
+  if (!sale) return;
+  if (sale.status === "CONFIRMADA") await cancelSale(sale.id, session.userId);
+  // Encomenda que gerou esta venda deixa de apontar para ela.
+  await prisma.order.updateMany({ where: { saleId: sale.id }, data: { saleId: null } });
+  await prisma.sale.delete({ where: { id: sale.id } });
+  revalidatePath("/painel", "layout");
 }
 
 export async function cancelSaleAction(form: FormData) {

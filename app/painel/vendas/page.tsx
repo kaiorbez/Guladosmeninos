@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, PAYMENT_LABEL, bs, dateTime } from "@/lib/format";
 import { getOverview } from "@/lib/metrics";
 import { startOfDay, startOfMonth } from "@/lib/time";
-import { cancelSaleAction } from "./actions";
+import { cancelSaleAction, deleteSaleAction } from "./actions";
 
 const PERIODS = {
   hoje: { label: "Hoje", from: () => startOfDay(0) },
@@ -115,20 +115,36 @@ export default async function VendasPage({
                     <td>{PAYMENT_LABEL[s.payment]}</td>
                     <td className="whitespace-nowrap text-right font-medium">{bs(s.total)}</td>
                     <td className="whitespace-nowrap pr-5 text-right no-underline">
-                      {cancelled ? (
-                        <span className="badge bg-creme-200 text-cacau-500 no-underline">Cancelada</span>
-                      ) : (
-                        <form action={cancelSaleAction}>
+                      <div className="flex items-center justify-end gap-3">
+                        {cancelled ? (
+                          <span className="badge bg-creme-200 text-cacau-500 no-underline">Cancelada</span>
+                        ) : (
+                          <form action={cancelSaleAction}>
+                            <input type="hidden" name="saleId" value={s.id} />
+                            <ConfirmButton
+                              message={`Cancelar a venda #${s.number}? Os itens voltam para o estoque e ela fica na lista como cancelada.`}
+                              className="text-xs text-cacau-400 hover:text-coral-600 hover:underline"
+                              title="Cancela e devolve os itens ao estoque"
+                            >
+                              cancelar
+                            </ConfirmButton>
+                          </form>
+                        )}
+                        <form action={deleteSaleAction}>
                           <input type="hidden" name="saleId" value={s.id} />
                           <ConfirmButton
-                            message={`Cancelar a venda #${s.number}? Os itens voltam para o estoque.`}
+                            message={
+                              cancelled
+                                ? `Excluir a venda #${s.number}? Ela some da lista de vez.`
+                                : `Excluir a venda #${s.number}? Os itens voltam para o estoque e ela some da lista de vez.`
+                            }
                             className="text-xs text-cacau-400 hover:text-coral-600 hover:underline"
-                            title="Cancela e devolve os itens ao estoque"
+                            title="Apaga a venda de vez"
                           >
-                            cancelar
+                            excluir
                           </ConfirmButton>
                         </form>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );
