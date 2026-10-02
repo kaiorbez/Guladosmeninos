@@ -11,6 +11,7 @@ export const SIDEBAR_COOKIE = "gula_menu_recolhido";
 const SEGMENT_LABELS: Record<string, string> = {
   vendas: "Vendas",
   nova: "Nova venda",
+  encomendas: "Encomendas",
   estoque: "Estoque",
   novo: "Novo produto",
   pedidosya: "PedidosYa",
@@ -30,7 +31,8 @@ function Breadcrumb() {
       {segments.map((seg, i) => {
         const href = "/painel/" + segments.slice(0, i + 1).join("/");
         const last = i === segments.length - 1;
-        const label = SEGMENT_LABELS[seg] ?? "Produto";
+        const inOrders = segments[i - 1] === "encomendas";
+        const label = inOrders ? (seg === "nova" ? "Nova encomenda" : "Encomenda") : (SEGMENT_LABELS[seg] ?? "Produto");
         return (
           <span key={href} className={last ? "flex min-w-0 items-center gap-1.5" : "hidden shrink-0 items-center gap-1.5 sm:flex"}>
             <span aria-hidden className={last ? "hidden sm:inline" : undefined}>/</span>

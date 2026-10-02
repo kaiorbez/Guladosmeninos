@@ -6,11 +6,13 @@ import { RevenueChart } from "@/components/RevenueChart";
 import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
 import { getDailySeries, getOverview, getSalesByChannel, getTopProducts } from "@/lib/metrics";
-import { startOfMonth } from "@/lib/time";
+import { dayKey, startOfMonth } from "@/lib/time";
 
 export default async function VisaoGeral() {
   const month = startOfMonth();
-  const [overview, series, top, channels, recent] = await Promise.all([
+  const todayKey = dayKey(new Date());
+  const tomorrowKey = dayKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const [overview, series, top, channels, recent, orders] = await Promise.all([
     getOverview(),
     getDailySeries(14),
     getTopProducts(month),
@@ -20,6 +22,12 @@ export default async function VisaoGeral() {
       orderBy: { createdAt: "desc" },
       take: 6,
       include: { items: true },
+    }),
+    // Pendentes até amanhã (inclui as atrasadas)
+    prisma.order.findMany({
+      where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) } },
+      orderBy: [{ deliveryDate: "asc" }, { deliveryTime: "asc" }],
+      take: 12,
     }),
   ]);
 
@@ -41,6 +49,36 @@ export default async function VisaoGeral() {
         <Kpi label="No mês" value={bs(m.revenue)} hint={`${m.orders} pedido(s)`} />
         <Kpi label="Ticket médio no mês" value={bs(ticket)} hint="Valor médio por pedido" />
       </div>
+
+      <section className="card mt-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base">Encomendas para hoje e amanhã</h2>
+          <Link href="/painel/encomendas" className="text-xs font-medium text-dourado-600 hover:underline">Ver todas →</Link>
+        </div>
+        {orders.length === 0 ? (
+          <p className="mt-3 text-sm text-cacau-500">Nenhuma encomenda pendente para hoje ou amanhã.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-creme-300/60 text-sm">
+            {orders.map((o) => {
+              const k = o.deliveryDate.toISOString().slice(0, 10);
+              const missing = Number(o.total) - Number(o.paid);
+              return (
+                <li key={o.id}>
+                  <Link href={`/painel/encomendas/${o.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 hover:text-dourado-600">
+                    <span className={`badge ${k < todayKey ? "bg-coral-500 text-white" : k === todayKey ? "bg-dourado-400/25 text-dourado-600" : "bg-creme-200 text-cacau-700"}`}>
+                      {k < todayKey ? "Atrasada" : k === todayKey ? "Hoje" : "Amanhã"}
+                    </span>
+                    <span className="w-12 tabular-nums text-cacau-500">{o.deliveryTime ?? "—"}</span>
+                    <span className="font-medium">{o.customerName}</span>
+                    <span className="min-w-0 flex-1 truncate text-cacau-500">{o.product}</span>
+                    {missing > 0 && <span className="text-coral-600">falta {bs(missing)}</span>}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <section className="card xl:col-span-2">

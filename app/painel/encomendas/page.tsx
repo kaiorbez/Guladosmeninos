@@ -1,0 +1,234 @@
+import Link from "next/link";
+import { ClockIcon, MessageCircleIcon, PencilIcon } from "lucide-react";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { Kpi } from "@/components/Kpi";
+import { PageHeader } from "@/components/PageHeader";
+import { prisma } from "@/lib/db";
+import { bs } from "@/lib/format";
+import { dayKey } from "@/lib/time";
+import { payOrderAction, setOrderStatusAction } from "./actions";
+
+const TABS = {
+  proximas: { label: "Próximas", status: "PENDENTE" },
+  entregues: { label: "Entregues", status: "ENTREGUE" },
+  canceladas: { label: "Canceladas", status: "CANCELADA" },
+} as const;
+type Tab = keyof typeof TABS;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Link do WhatsApp: número boliviano de 8 dígitos ganha o código 591. */
+function whatsappUrl(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  return `https://wa.me/${digits.length === 8 ? `591${digits}` : digits}`;
+}
+
+function Detail({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-cacau-400">{label}</dt>
+      <dd className="break-words">{value}</dd>
+    </div>
+  );
+}
+
+export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string }> }) {
+  const sp = await searchParams;
+  const tab: Tab = sp.aba && sp.aba in TABS ? (sp.aba as Tab) : "proximas";
+  const pendingTab = tab === "proximas";
+  const q = sp.q?.trim();
+
+  const [orders, pending] = await Promise.all([
+    prisma.order.findMany({
+      where: {
+        status: TABS[tab].status,
+        ...(q
+          ? {
+              OR: [
+                { customerName: { contains: q, mode: "insensitive" as const } },
+                { product: { contains: q, mode: "insensitive" as const } },
+                { customerPhone: { contains: q } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ deliveryDate: pendingTab ? "asc" : "desc" }, { deliveryTime: "asc" }],
+      take: 200,
+    }),
+    prisma.order.findMany({ where: { status: "PENDENTE" }, select: { deliveryDate: true, total: true, paid: true } }),
+  ]);
+
+  const today = dayKey(new Date());
+  const tomorrow = dayKey(new Date(Date.now() + DAY_MS));
+  const weekEnd = dayKey(new Date(Date.now() + 6 * DAY_MS));
+  const key = (d: Date) => d.toISOString().slice(0, 10);
+
+  const forToday = pending.filter((o) => key(o.deliveryDate) === today).length;
+  const forWeek = pending.filter((o) => key(o.deliveryDate) >= today && key(o.deliveryDate) <= weekEnd).length;
+  const toReceive = pending.reduce((s, o) => s + Number(o.total) - Number(o.paid), 0);
+
+  // Agrupa por dia de entrega, como uma folha do bloco por dia.
+  const days = new Map<string, typeof orders>();
+  for (const o of orders) {
+    const k = key(o.deliveryDate);
+    days.set(k, [...(days.get(k) ?? []), o]);
+  }
+  const dayTitle = (k: string) => {
+    const text = new Date(`${k}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
+  return (
+    <>
+      <PageHeader title="Encomendas" subtitle="O que produzir, para quando e quanto falta receber">
+        <Link href="/painel/encomendas/nova" className="btn-accent">＋ Nova encomenda</Link>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Kpi tone="accent" label="Para hoje" value={String(forToday)} hint="encomenda(s) pendente(s)" />
+        <Kpi label="Próximos 7 dias" value={String(forWeek)} hint="contando hoje" />
+        <Kpi label="Falta receber" value={bs(toReceive)} hint={`${pending.length} encomenda(s) pendente(s)`} />
+      </div>
+
+      <div className="mb-5 mt-8 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(TABS) as Tab[]).map((t) => (
+            <Link key={t} href={`/painel/encomendas?aba=${t}`} className={`btn py-1.5 ${t === tab ? "btn-on" : "btn-ghost"}`}>
+              {TABS[t].label}
+            </Link>
+          ))}
+        </div>
+        <form action="/painel/encomendas" className="flex items-center gap-2">
+          <input type="hidden" name="aba" value={tab} />
+          <input name="q" defaultValue={q} placeholder="Buscar cliente ou produto..." className="input w-56" />
+          <button className="btn-ghost">Buscar</button>
+          {q && <Link href={`/painel/encomendas?aba=${tab}`} className="text-sm text-cacau-500 hover:underline">Limpar</Link>}
+        </form>
+      </div>
+
+      {orders.length === 0 && (
+        <div className="card flex flex-col items-center py-10 text-center">
+          <p className="font-medium">{q ? "Nada encontrado para essa busca." : pendingTab ? "Nenhuma encomenda pendente." : "Nenhuma encomenda aqui."}</p>
+          {pendingTab && !q && (
+            <>
+              <p className="mt-1 text-sm text-cacau-500">Registre a próxima para ela aparecer na agenda da cozinha.</p>
+              <Link href="/painel/encomendas/nova" className="btn-accent mt-4">＋ Nova encomenda</Link>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-8">
+        {[...days.entries()].map(([k, list]) => {
+          const late = pendingTab && k < today;
+          const dayMissing = list.reduce((s, o) => s + Number(o.total) - Number(o.paid), 0);
+          return (
+            <section key={k}>
+              <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-creme-300 pb-2">
+                <h2 className="text-base">{dayTitle(k)}</h2>
+                {pendingTab && k === today && <span className="badge bg-dourado-400/25 text-dourado-600">Hoje</span>}
+                {pendingTab && k === tomorrow && <span className="badge bg-creme-200 text-cacau-700">Amanhã</span>}
+                {late && <span className="badge bg-coral-500 text-white">Atrasada</span>}
+                <span className="ml-auto text-sm text-cacau-500">
+                  {list.length} encomenda(s)
+                  {dayMissing > 0 && <> · falta <b className="text-coral-600">{bs(dayMissing)}</b></>}
+                </span>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                {list.map((o) => {
+                  const missing = Number(o.total) - Number(o.paid);
+                  const wa = o.customerPhone ? whatsappUrl(o.customerPhone) : null;
+                  return (
+                    <article key={o.id} className={`card flex flex-col p-0 ${late ? "border-coral-500/60" : ""}`}>
+                      <header className="flex items-start gap-3 px-5 pt-4">
+                        <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-creme-200 py-2">
+                          <ClockIcon className="size-3.5 text-cacau-500" />
+                          <span className="mt-0.5 text-sm font-semibold tabular-nums">{o.deliveryTime ?? "—"}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-semibold">{o.customerName}</p>
+                          <p className="flex flex-wrap items-center gap-x-2 text-xs text-cacau-500">
+                            <span className="tabular-nums">#{o.number}</span>
+                            {o.customerPhone &&
+                              (wa ? (
+                                <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 tabular-nums hover:text-cacau-900 hover:underline">
+                                  <MessageCircleIcon className="size-3" />
+                                  {o.customerPhone}
+                                </a>
+                              ) : (
+                                <span className="tabular-nums">{o.customerPhone}</span>
+                              ))}
+                          </p>
+                        </div>
+                        {missing > 0 ? (
+                          <span className="badge shrink-0 bg-coral-500/15 text-coral-600">Falta {bs(missing)}</span>
+                        ) : (
+                          <span className="badge shrink-0 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">Pago</span>
+                        )}
+                      </header>
+
+                      <div className="px-5 py-4">
+                        <p className="text-[15px] font-medium">{o.product}</p>
+                        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                          <Detail label="Massa" value={o.dough} />
+                          <Detail label="Recheio" value={o.filling} />
+                          <Detail label="Cobertura" value={o.topping} />
+                          <Detail label="Decoração" value={o.decoration} />
+                        </dl>
+                        {o.notes && <p className="mt-3 rounded-md bg-creme-200/70 px-3 py-2 text-sm text-cacau-700">{o.notes}</p>}
+                      </div>
+
+                      <footer className="mt-auto flex flex-wrap items-center gap-2 border-t border-creme-300 px-5 py-3">
+                        <p className="mr-auto text-sm tabular-nums text-cacau-500">
+                          Total <b className="text-cacau-900">{bs(o.total)}</b> · pago {bs(o.paid)}
+                        </p>
+                        {pendingTab && missing > 0 && (
+                          <form action={payOrderAction}>
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <ConfirmButton message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost py-1.5">
+                              Receber {bs(missing)}
+                            </ConfirmButton>
+                          </form>
+                        )}
+                        {pendingTab && (
+                          <form action={setOrderStatusAction}>
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <input type="hidden" name="status" value="ENTREGUE" />
+                            {missing > 0 ? (
+                              <ConfirmButton message={`Ainda falta receber ${bs(missing)}. Marcar como entregue mesmo assim?`} className="btn-primary py-1.5">
+                                Entregue
+                              </ConfirmButton>
+                            ) : (
+                              <button className="btn-primary py-1.5">Entregue</button>
+                            )}
+                          </form>
+                        )}
+                        <Link href={`/painel/encomendas/${o.id}`} className="btn-icon border border-creme-300" aria-label="Editar encomenda" title="Editar">
+                          <PencilIcon className="size-3.5" />
+                        </Link>
+                        <form action={setOrderStatusAction} className="basis-full text-right">
+                          <input type="hidden" name="orderId" value={o.id} />
+                          <input type="hidden" name="status" value={pendingTab ? "CANCELADA" : "PENDENTE"} />
+                          {pendingTab ? (
+                            <ConfirmButton message={`Cancelar a encomenda #${o.number}?`} className="text-xs text-cacau-400 hover:text-coral-600 hover:underline">
+                              cancelar encomenda
+                            </ConfirmButton>
+                          ) : (
+                            <button className="text-xs text-cacau-400 hover:text-cacau-900 hover:underline">voltar para pendente</button>
+                          )}
+                        </form>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
