@@ -43,7 +43,7 @@ function Photo({ src, alt, className }: { src: string | null; alt: string; class
   return src ? (
     <img src={src} alt={alt} className={`object-cover ${className}`} />
   ) : (
-    <div className={`flex items-center justify-center bg-creme-200 text-2xl font-extrabold text-dourado-600 ${className}`}>
+    <div className={`flex items-center justify-center bg-creme-200 text-2xl font-semibold text-dourado-600 ${className}`}>
       {alt.replace(/^(Torta|Pote|Fatia|Combo|Vela)\s+/i, "").charAt(0)}
     </div>
   );
@@ -131,7 +131,7 @@ export function SaleForm({
           ))}
         </div>
         {isPy && (
-          <p className="mb-4 rounded-xl border border-pedidosya/40 bg-pedidosya/10 px-3 py-2 text-xs font-bold text-[#C8003F]">
+          <p className="mb-4 rounded-lg border border-pedidosya/40 bg-pedidosya/10 px-3 py-2 text-xs font-medium text-[#C8003F] dark:text-pedidosya">
             Cardápio e preços do PedidosYa (com a taxa do app).
           </p>
         )}
@@ -152,7 +152,7 @@ export function SaleForm({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
           {section?.products.map((p) => {
             const single = p.items.length === 1;
             const open = picking === p.id;
@@ -162,20 +162,20 @@ export function SaleForm({
             return (
               <div
                 key={p.id}
-                className={`overflow-hidden rounded-xl border bg-white transition ${
+                className={`overflow-hidden rounded-lg border bg-creme-50 transition ${
                   open ? "border-dourado-500 ring-2 ring-dourado-400/40" : "border-creme-300 hover:border-dourado-500/60"
                 }`}
               >
                 <button type="button" className="block w-full text-left" onClick={() => (single ? add(p.items[0]) : setPicking(open ? null : p.id))}>
-                  <Photo src={p.image} alt={p.name} className="aspect-square w-full" />
+                  <Photo src={p.image} alt={p.name} className="aspect-[4/3] w-full" />
                   <div className="p-2">
-                    <p className="line-clamp-2 text-[13px] font-bold leading-tight">{p.name}</p>
+                    <p className="line-clamp-2 text-[13px] font-medium leading-tight">{p.name}</p>
                     {p.appName && (
-                      <p className="line-clamp-1 text-[11px] font-semibold text-[#C8003F]" title="Nome do anúncio no PedidosYa" data-py-name>
+                      <p className="line-clamp-1 text-[11px] font-semibold text-[#C8003F] dark:text-pedidosya" title="Nome do anúncio no PedidosYa" data-py-name>
                         “{p.appName}”
                       </p>
                     )}
-                    <p className="mt-0.5 text-xs font-bold text-dourado-600">
+                    <p className="mt-0.5 text-xs font-medium text-dourado-600">
                       {p.items[0].priceOnRequest
                         ? "Preço a combinar"
                         : single
@@ -183,11 +183,11 @@ export function SaleForm({
                           : `${fmt(Math.min(...prices))} a ${fmt(Math.max(...prices))}`}
                     </p>
                     {tracked ? (
-                      <p className={`text-[11px] font-bold ${"text-cacau-500"}`}>
+                      <p className={`text-[11px] font-medium ${"text-cacau-500"}`}>
                         {stockTotal === 0 ? "sem estoque" : `${stockTotal} em estoque`}
                       </p>
                     ) : (
-                      <p className="text-[11px] font-bold text-cacau-500">{stockTotal > 0 ? `${stockTotal} prontas` : "sob encomenda"}</p>
+                      <p className="text-[11px] font-medium text-cacau-500">{stockTotal > 0 ? `${stockTotal} prontas` : "sob encomenda"}</p>
                     )}
                   </div>
                 </button>
@@ -200,7 +200,7 @@ export function SaleForm({
                         onClick={() => add(i)}
                         className="rounded-lg border border-creme-300 bg-creme-50 px-2 py-1.5 text-left text-xs hover:border-dourado-500"
                       >
-                        <span className="font-bold">{i.size ?? i.label}</span> · {fmt(i.price)}
+                        <span className="font-medium">{i.size ?? i.label}</span> · {fmt(i.price)}
                         {i.servings && <span className="block text-[11px] text-cacau-400">{i.servings}</span>}
                       </button>
                     ))}
@@ -222,9 +222,9 @@ export function SaleForm({
         </button>
       )}
 
-      <section className={`card h-fit w-full xl:sticky xl:top-6 xl:w-[360px] xl:shrink-0 ${cartOpen ? "" : "hidden"}`}>
+      <section className={`card h-fit w-full xl:sticky xl:top-20 xl:w-[360px] xl:shrink-0 ${cartOpen ? "" : "hidden"}`}>
         <div className="flex items-center justify-between">
-          <h2 className="text-xl">Pedido</h2>
+          <h2 className="text-base">Pedido</h2>
           <button type="button" onClick={() => setCartOpen(false)} className="btn-ghost px-3 py-1 text-xs" title="Recolher o pedido">
             Recolher ▶
           </button>
@@ -237,15 +237,15 @@ export function SaleForm({
               const over = l.trackStock && l.quantity > l.stock;
               return (
                 <li key={l.key} className="flex gap-3 py-3">
-                  <Photo src={l.image} alt={l.label} className="h-14 w-14 shrink-0 rounded-xl" />
+                  <Photo src={l.image} alt={l.label} className="h-14 w-14 shrink-0 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-bold">{l.label}</p>
+                      <p className="text-sm font-medium">{l.label}</p>
                       <button type="button" onClick={() => setQty(l.key, 0)} className="text-xs text-cacau-400 hover:text-coral-600" aria-label="Remover">✕</button>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       <button type="button" onClick={() => setQty(l.key, l.quantity - 1)} className="btn-ghost px-3 py-1">−</button>
-                      <span className="w-6 text-center font-bold">{l.quantity}</span>
+                      <span className="w-6 text-center font-medium">{l.quantity}</span>
                       <button type="button" onClick={() => setQty(l.key, l.quantity + 1)} className="btn-ghost px-3 py-1">+</button>
                       <span className="ml-auto text-xs text-cacau-400">Bs</span>
                       <input
@@ -257,7 +257,7 @@ export function SaleForm({
                         className={`input w-24 text-right ${l.priceOnRequest && !l.priceInput ? "border-coral-400" : ""}`}
                       />
                     </div>
-                    {over && <p className="mt-1 text-xs font-bold text-coral-600">Só há {l.stock} em estoque.</p>}
+                    {over && <p className="mt-1 text-xs font-medium text-coral-600">Só há {l.stock} em estoque.</p>}
                     {!l.trackStock && l.stock > 0 && (
                       <p className="mt-1 text-xs text-cacau-500">
                         {Math.min(l.stock, l.quantity)} pronta(s){l.quantity > l.stock ? `, ${l.quantity - l.stock} por encomenda` : ""}
@@ -289,10 +289,10 @@ export function SaleForm({
           <input name="notes" placeholder="Observação: entrega, retirada, decoração..." className="input" />
 
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-cacau-500">Total</span>
-            <span className="text-3xl font-extrabold">{fmt(total)}</span>
+            <span className="text-sm font-medium text-cacau-500">Total</span>
+            <span className="text-2xl font-semibold tabular-nums">{fmt(total)}</span>
           </div>
-          {error && <p className="text-sm font-bold text-coral-600">{error}</p>}
+          {error && <p className="text-sm font-medium text-coral-600">{error}</p>}
           <button type="submit" disabled={pending || cart.length === 0} className="btn-accent w-full py-3 text-base">
             {pending ? "Registrando..." : "Registrar venda"}
           </button>

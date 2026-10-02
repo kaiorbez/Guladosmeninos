@@ -9,14 +9,11 @@ export function Kpi({
   hint?: string;
   tone?: "default" | "accent";
 }) {
-  const accent = tone === "accent";
   return (
-    <div
-      className={`card ${accent ? "border-transparent bg-gradient-to-br from-dourado-400 to-dourado-500 text-[#1E140E]" : ""}`}
-    >
-      <p className={`text-xs font-bold uppercase tracking-wide ${accent ? "text-[#1E140E]/75" : "text-cacau-500"}`}>{label}</p>
-      <p className="mt-2 text-3xl font-extrabold tracking-tight">{value}</p>
-      {hint && <p className={`mt-1 text-xs font-bold ${accent ? "text-[#1E140E]/75" : "text-cacau-400"}`}>{hint}</p>}
+    <div className={`card ${tone === "accent" ? "border-dourado-500/60 bg-dourado-400/10" : ""}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-cacau-500">{label}</p>
+      <p className="mt-2 break-words text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+      {hint && <p className="mt-1 text-xs text-cacau-500">{hint}</p>}
     </div>
   );
 }

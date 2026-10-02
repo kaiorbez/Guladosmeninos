@@ -57,7 +57,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
         )}
       </div>
 
-      <div className="mb-5 rounded-xl border border-creme-300 bg-creme-50 px-4 py-3 text-sm text-cacau-700">
+      <div className="mb-5 rounded-lg border border-creme-300 bg-creme-50 px-4 py-3 text-sm text-cacau-700">
         <b>Como usar:</b> digite a quantidade e toque em <b className="text-cacau-900">+</b> quando produzir, ou em{" "}
         <b className="text-coral-600">−</b> para perdas. Nos itens <b>sob encomenda</b>, use o + para informar unidades já
         prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar e no preço (✎) para alterar. As vendas dão baixa sozinhas.
@@ -67,11 +67,11 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
         {visible.map(({ products, ...cat }) => {
           return (
             <details key={cat.id} open={Boolean(categoria || q)} className="group/sec [&[open]]:pb-6">
-              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl py-2 hover:text-dourado-600 group-open/sec:mb-3 [&::-webkit-details-marker]:hidden">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-creme-300 bg-white text-sm transition-transform group-open/sec:rotate-90">
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg py-2 hover:text-dourado-600 group-open/sec:mb-3 [&::-webkit-details-marker]:hidden">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-creme-300 bg-creme-50 text-sm transition-transform group-open/sec:rotate-90">
                   ▶
                 </span>
-                <span className="text-2xl font-bold">{cat.name}</span>
+                <span className="text-lg font-semibold">{cat.name}</span>
                 <span className="text-sm text-cacau-500">
                   {products.length} produto(s){cat.description ? ` · ${cat.description}` : ""}
                 </span>
@@ -98,12 +98,12 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                               <div className="flex items-start gap-3">
                                 <PhotoUpload productId={p.id} src={productImage(p)} name={p.name} size={56} />
                                 <div>
-                                  <Link href={`/painel/estoque/${p.id}`} className="text-[15px] font-bold hover:text-dourado-600 hover:underline">
+                                  <Link href={`/painel/estoque/${p.id}`} className="text-[15px] font-medium hover:text-dourado-600 hover:underline">
                                     {p.name}
                                   </Link>
                                   <span className="mt-1 flex flex-wrap gap-1">
                                     {!p.active && <span className="badge bg-cacau-400 text-white">Inativo</span>}
-                                    {!p.onStore && <span className="badge bg-pedidosya/10 text-[#C8003F]">Só no PedidosYa</span>}
+                                    {!p.onStore && <span className="badge bg-pedidosya/10 text-[#C8003F] dark:text-pedidosya">Só no PedidosYa</span>}
                                     {!p.trackStock && <span className="badge bg-creme-200 text-cacau-700">Sob encomenda</span>}
                                     {p.priceOnRequest && <span className="badge bg-dourado-400/20 text-dourado-600">Preço a consultar</span>}
                                   </span>
@@ -112,10 +112,10 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                             </td>
                           )}
                           <td className="whitespace-nowrap">
-                            <span className="font-bold">{v.name}</span>
+                            <span className="font-medium">{v.name}</span>
                             {v.servings && <span className="block text-xs text-cacau-400">{v.servings}</span>}
                           </td>
-                          <td className="whitespace-nowrap text-right font-bold">
+                          <td className="whitespace-nowrap text-right font-medium">
                             {p.priceOnRequest ? <span className="text-cacau-400">sob consulta</span> : <PriceEdit variantId={v.id} price={toNumber(v.price)} />}
                           </td>
                           <td className="whitespace-nowrap text-right text-cacau-500">

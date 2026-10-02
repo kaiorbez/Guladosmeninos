@@ -4,8 +4,8 @@ import { useActionState } from "react";
 import { addUserAction, changePasswordAction } from "./actions";
 
 function Feedback({ state }: { state: { error?: string; ok?: string } | null }) {
-  if (state?.error) return <p className="text-sm font-bold text-coral-600">{state.error}</p>;
-  if (state?.ok) return <p className="text-sm font-bold text-dourado-600">✓ {state.ok}</p>;
+  if (state?.error) return <p className="text-sm font-medium text-coral-600">{state.error}</p>;
+  if (state?.ok) return <p className="text-sm font-medium text-dourado-600">✓ {state.ok}</p>;
   return null;
 }
 

@@ -2,85 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tema claro do painel: fundo off-white quente, cartões brancos, texto chocolate forte.
-   Só o fundo da tela de login é escuro (ver app/login/page.tsx). */
+/* Mesmo visual dos painéis Royal (neutro, Geist, bordas finas), com a marca Gula nos
+   destaques: botão principal chocolate (dourado no tema escuro) e detalhes dourado/coral.
+   Os nomes creme/cacau são papéis: creme = superfícies, cacau = texto. */
 :root {
-  --creme-100: 247 242 235;  /* fundo #F7F2EB */
+  --creme-100: 247 247 248;  /* fundo da página */
   --creme-50: 255 255 255;   /* cartões */
-  --creme-200: 243 235 224;  /* realces #F3EBE0 */
-  --creme-300: 232 220 204;  /* bordas #E8DCCC */
-  --cacau-900: 28 17 11;     /* texto principal #1C110B */
-  --cacau-700: 50 33 24;
-  --cacau-500: 74 54 42;
-  --cacau-400: 100 79 65;
+  --creme-200: 240 240 242;  /* realces / hover */
+  --creme-300: 214 214 219;  /* bordas */
+  --cacau-900: 23 23 23;     /* texto principal */
+  --cacau-700: 64 64 68;
+  --cacau-500: 99 99 107;    /* texto de apoio */
+  --cacau-400: 130 130 138;
+  --primary: 62 39 26;       /* chocolate da marca */
+  --primary-fg: 255 255 255;
   --dourado-400: 218 172 98;
   --dourado-500: 196 144 62;
-  --dourado-600: 134 88 22;   /* dourado legível sobre branco */
+  --dourado-600: 134 88 22;  /* dourado legível sobre branco */
   --coral-400: 240 138 112;
   --coral-500: 226 104 76;
   --coral-600: 190 72 48;
   color-scheme: light;
 }
 
+.dark {
+  --creme-100: 23 23 23;
+  --creme-50: 31 31 31;
+  --creme-200: 46 46 46;
+  --creme-300: 58 58 58;
+  --cacau-900: 250 250 250;
+  --cacau-700: 212 212 216;
+  --cacau-500: 161 161 170;
+  --cacau-400: 130 130 138;
+  --primary: 218 172 98;
+  --primary-fg: 28 17 11;
+  --dourado-600: 226 186 120; /* dourado legível sobre escuro */
+  --coral-600: 244 140 115;
+  color-scheme: dark;
+}
+
 @layer base {
   body {
-    @apply bg-creme-100 font-sans text-base font-semibold text-cacau-900;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: auto;
-    -moz-osx-font-smoothing: auto;
+    @apply bg-creme-100 font-sans text-sm text-cacau-900 antialiased;
   }
   h1, h2, h3 {
-    @apply font-extrabold tracking-tight text-cacau-900;
-  }
-  input, select, textarea, button {
-    @apply font-semibold;
+    @apply font-semibold tracking-tight;
   }
   input::placeholder, textarea::placeholder {
-    color: #A8968A;
+    @apply text-cacau-400;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-creme-300/80 bg-creme-50 p-5 shadow-[0_1px_2px_rgba(60,35,20,0.05),0_8px_24px_-12px_rgba(60,35,20,0.12)];
+    @apply rounded-xl border border-creme-300 bg-creme-50 p-5 shadow-sm;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-cacau-900 text-white hover:bg-cacau-700;
+    @apply btn bg-primary text-primary-fg hover:bg-primary/90;
   }
   .btn-accent {
-    @apply btn bg-coral-500 text-white hover:bg-coral-400;
+    @apply btn bg-coral-500 text-white hover:bg-coral-500/90;
   }
   .btn-ghost {
-    @apply btn border border-creme-300 bg-white text-cacau-900 hover:border-cacau-400 hover:bg-creme-200/60;
+    @apply btn border border-creme-300 bg-creme-50 text-cacau-900 hover:bg-creme-200;
   }
   .btn-on {
-    @apply btn bg-cacau-900 text-white;
+    @apply btn bg-primary text-primary-fg;
+  }
+  .btn-icon {
+    @apply inline-flex size-8 items-center justify-center rounded-md text-cacau-700 transition-colors hover:bg-creme-200 hover:text-cacau-900;
   }
   .input {
-    @apply w-full rounded-xl border border-[#D9C7AF] bg-white px-3 py-2 text-[15px] font-semibold text-cacau-900 outline-none transition focus:border-dourado-500 focus:ring-2 focus:ring-dourado-400/30;
+    @apply w-full rounded-md border border-creme-300 bg-creme-50 px-3 py-2 text-sm text-cacau-900 outline-none transition focus:border-dourado-500 focus:ring-2 focus:ring-dourado-400/30;
   }
   .label {
-    @apply mb-1 block text-xs font-extrabold uppercase tracking-wide text-cacau-700;
+    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-cacau-500;
   }
   .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold;
+    @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums;
   }
   .table-base {
-    @apply w-full text-left text-[15px];
+    @apply w-full text-left text-sm;
   }
   .table-base th {
-    @apply border-b border-creme-300 px-3 py-2.5 text-xs font-extrabold uppercase tracking-wide text-cacau-700;
+    @apply border-b border-creme-300 px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-cacau-500;
   }
   .table-base td {
-    @apply border-b border-creme-300/60 px-3 py-2.5 align-middle;
+    @apply border-b border-creme-300/60 px-3 py-2.5 align-middle tabular-nums;
+  }
+  .table-base tbody tr:last-child td {
+    @apply border-b-0;
   }
   .table-base tbody tr {
-    @apply transition-colors hover:bg-creme-100/70;
+    @apply transition-colors hover:bg-creme-200/50;
   }
   .thumb {
-    @apply shrink-0 rounded-xl border border-creme-300 bg-creme-200 object-cover;
+    @apply shrink-0 rounded-lg border border-creme-300 bg-creme-200 object-cover;
   }
 }

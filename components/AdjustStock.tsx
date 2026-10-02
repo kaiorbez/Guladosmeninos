@@ -10,7 +10,7 @@ export function AdjustStock({ variantId, label, current }: { variantId: string; 
     <form action={action} className="flex flex-wrap items-center gap-2 py-2">
       <input type="hidden" name="variantId" value={variantId} />
       <input type="hidden" name="type" value="AJUSTE" />
-      <span className="w-36 text-sm font-bold">{label}</span>
+      <span className="w-36 text-sm font-medium">{label}</span>
       <span className="w-24 text-xs text-cacau-400">sistema: {current}</span>
       <input name="quantity" type="number" min={0} step={1} required placeholder="contei" className="input w-24" />
       <input name="note" placeholder="observação (opcional)" className="input w-48" />

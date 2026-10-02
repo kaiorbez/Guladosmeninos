@@ -17,7 +17,7 @@ export default async function EquipePage() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td className="font-bold">{u.name}</td>
+                  <td className="font-medium">{u.name}</td>
                   <td className="text-cacau-500">{u.email}</td>
                   <td className="text-right">{u._count.sales}</td>
                 </tr>
@@ -27,11 +27,11 @@ export default async function EquipePage() {
         </section>
         <div className="space-y-6">
           <section className="card">
-            <h2 className="mb-3 text-xl">Adicionar pessoa</h2>
+            <h2 className="mb-3 text-base">Adicionar pessoa</h2>
             <AddUserForm />
           </section>
           <section className="card">
-            <h2 className="mb-3 text-xl">Minha senha</h2>
+            <h2 className="mb-3 text-base">Minha senha</h2>
             <ChangePasswordForm />
           </section>
         </div>

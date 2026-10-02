@@ -61,7 +61,7 @@ export function ProductForm({
           {photo || initial.image ? (
             <img src={photo || initial.image!} alt="" className="thumb h-40 w-40" />
           ) : (
-            <div className="thumb flex h-40 w-40 items-center justify-center text-center text-xs font-bold text-cacau-400">
+            <div className="thumb flex h-40 w-40 items-center justify-center text-center text-xs font-medium text-cacau-400">
               Sem foto
             </div>
           )}
@@ -83,8 +83,8 @@ export function ProductForm({
               }}
             />
           </label>
-          {photo && <span className="text-[11px] font-bold text-dourado-600">Salve para aplicar</span>}
-          {photoError && <span className="text-[11px] font-bold text-coral-600">{photoError}</span>}
+          {photo && <span className="text-[11px] font-medium text-dourado-600">Salve para aplicar</span>}
+          {photoError && <span className="text-[11px] font-medium text-coral-600">{photoError}</span>}
         </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -128,7 +128,7 @@ export function ProductForm({
 
       <div className="card">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Tamanhos e preços</h2>
+          <h2 className="text-base">Tamanhos e preços</h2>
           <button
             type="button"
             className="btn-ghost"
@@ -195,8 +195,8 @@ export function ProductForm({
         <button type="submit" disabled={pending} className="btn-primary">
           {pending ? "Salvando..." : "Salvar produto"}
         </button>
-        {state?.error && <p className="text-sm font-bold text-coral-600">{state.error}</p>}
-        {state?.ok && <p className="text-sm font-bold text-dourado-600">{state.ok}</p>}
+        {state?.error && <p className="text-sm font-medium text-coral-600">{state.error}</p>}
+        {state?.ok && <p className="text-sm font-medium text-dourado-600">{state.ok}</p>}
       </div>
     </form>
   );

@@ -25,7 +25,7 @@ export function PyPriceForm({
         <input type="checkbox" name="active" defaultChecked={active} /> ativo
       </label>
       <button disabled={pending} className="btn-ghost px-2.5 py-1 text-xs">Salvar</button>
-      {state?.ok && <span className="text-xs font-bold text-dourado-600">✓</span>}
+      {state?.ok && <span className="text-xs font-medium text-dourado-600">✓</span>}
       {state?.error && <span className="w-full text-right text-xs text-coral-600">{state.error}</span>}
     </form>
   );

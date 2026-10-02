@@ -32,7 +32,7 @@ export function PriceEdit({ variantId, price }: { variantId: string; price: numb
           setEditing(true);
         }}
         title="Clique para alterar o preço"
-        className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-bold hover:bg-creme-200"
+        className="group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium hover:bg-creme-200"
       >
         {fmt(price)}
         <span className="text-xs text-cacau-400 group-hover:text-cacau-900">✎</span>

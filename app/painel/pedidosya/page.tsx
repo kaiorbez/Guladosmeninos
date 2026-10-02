@@ -62,7 +62,7 @@ export default async function PedidosYaPage() {
         <Kpi label="Diferença média de preço" value={`${avgDiff >= 0 ? "+" : ""}${Math.round(avgDiff * 100)}%`} hint={`PedidosYa × WhatsApp em ${compared.length} itens`} />
       </div>
 
-      <h2 className="mb-3 mt-8 text-2xl">Análise</h2>
+      <h2 className="mb-3 mt-8 text-lg">Análise</h2>
       <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <section className="card">
           <h3 className="text-base">🛒 No WhatsApp, mas fora do PedidosYa</h3>
@@ -87,7 +87,7 @@ export default async function PedidosYaPage() {
               {[...compared].sort((a, b) => b.diff - a.diff).slice(0, 8).map(({ item, diff }) => (
                 <li key={item.id} className="flex justify-between gap-2">
                   <span>{variantLabel(item.variant.product.name, item.variant.name)}</span>
-                  <span className="whitespace-nowrap font-bold text-dourado-600">{bs(item.variant.price)} → {bs(item.price)} ({diff >= 0 ? "+" : ""}{Math.round(diff * 100)}%)</span>
+                  <span className="whitespace-nowrap font-medium text-dourado-600">{bs(item.variant.price)} → {bs(item.price)} ({diff >= 0 ? "+" : ""}{Math.round(diff * 100)}%)</span>
                 </li>
               ))}
             </ul>
@@ -96,13 +96,13 @@ export default async function PedidosYaPage() {
 
       </div>
 
-      <h2 className="mb-3 mt-10 text-2xl">Cardápio no app</h2>
+      <h2 className="mb-3 mt-10 text-lg">Cardápio no app</h2>
       <div className="space-y-6">
         {Object.entries(sections).map(([section, list]) => (
           <details key={section} open className="group/sec">
             <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-creme-300 bg-white text-xs transition-transform group-open/sec:rotate-90">▶</span>
-              <span className="text-sm font-extrabold uppercase tracking-[0.14em] text-dourado-600">{section}</span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-creme-300 bg-creme-50 text-xs transition-transform group-open/sec:rotate-90">▶</span>
+              <span className="text-sm font-semibold uppercase tracking-[0.14em] text-dourado-600">{section}</span>
               <span className="text-xs text-cacau-500">{list.length} anúncio(s)</span>
             </summary>
             <div className="card overflow-x-auto p-0">
@@ -128,8 +128,8 @@ export default async function PedidosYaPage() {
                           <div className="flex items-center gap-3">
                             <ProductPhoto src={productImage(p)} name={p.name} size={44} />
                             <div>
-                              <p className="font-bold" data-py-name>{i.name}</p>
-                              <p className="text-[11px] font-bold uppercase tracking-wide text-[#C8003F]">nome no app</p>
+                              <p className="font-medium" data-py-name>{i.name}</p>
+                              <p className="text-[11px] font-medium uppercase tracking-wide text-[#C8003F] dark:text-pedidosya">nome no app</p>
                               {toNumber(i.listPrice ?? 0) > 0 && (
                                 <span className="ml-1 text-xs text-cacau-400">de <s>{bs(i.listPrice!)}</s></span>
                               )}
@@ -140,7 +140,7 @@ export default async function PedidosYaPage() {
                           <Link href={`/painel/estoque/${p.id}`} className="hover:underline">{variantLabel(p.name, i.variant.name)}</Link>
                         </td>
                         <td className="whitespace-nowrap text-right">{store > 0 ? bs(store) : <span className="text-cacau-400">—</span>}</td>
-                        <td className="whitespace-nowrap text-right font-bold text-dourado-600">
+                        <td className="whitespace-nowrap text-right font-medium text-dourado-600">
                           {diff === null || diff === 0 ? <span className="text-cacau-400">—</span> : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)}%`}
                         </td>
                         <td className="text-center">

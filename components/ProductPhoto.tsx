@@ -7,7 +7,7 @@ export function ProductPhoto({ src, name, size = 48 }: { src: string | null; nam
   }
   return (
     <span
-      className="thumb flex items-center justify-center font-extrabold text-dourado-600"
+      className="thumb flex items-center justify-center font-semibold text-dourado-600"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
       aria-hidden
     >

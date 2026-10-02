@@ -39,7 +39,7 @@ export default async function ProdutoPage({
       <PageHeader title={product.name} subtitle={product.category.name}>
         <Link href={`/painel/estoque?categoria=${product.category.slug}`} className="btn-ghost">← Voltar</Link>
       </PageHeader>
-      {salvo && <p className="mb-4 rounded-xl bg-creme-200 px-4 py-2 text-sm font-bold text-cacau-900">Produto criado.</p>}
+      {salvo && <p className="mb-4 rounded-lg bg-creme-200 px-4 py-2 text-sm font-medium text-cacau-900">Produto criado.</p>}
 
       <ProductForm
         categories={categories}
@@ -67,16 +67,16 @@ export default async function ProdutoPage({
 
       {product.variants.some((v) => v.pedidosYa.length > 0) && (
         <section className="card mt-6">
-          <h2 className="text-xl">No PedidosYa</h2>
+          <h2 className="text-base">No PedidosYa</h2>
           <p className="mb-2 text-xs text-cacau-400">Anúncios ligados a este produto. Edite os preços na aba PedidosYa.</p>
           <table className="table-base">
             <tbody>
               {product.variants.flatMap((v) =>
                 v.pedidosYa.map((py) => (
                   <tr key={py.id}>
-                    <td className="font-bold" data-py-name>{py.name} <span className="text-[11px] uppercase text-[#C8003F]">nome no app</span></td>
+                    <td className="font-medium" data-py-name>{py.name} <span className="text-[11px] uppercase text-[#C8003F] dark:text-pedidosya">nome no app</span></td>
                     <td>{v.name}</td>
-                    <td className="text-right font-bold">{bs(py.price)}</td>
+                    <td className="text-right font-medium">{bs(py.price)}</td>
                     <td className="text-right text-cacau-400">WhatsApp: {product.onStore ? bs(v.price) : "—"}</td>
                   </tr>
                 )),
@@ -88,7 +88,7 @@ export default async function ProdutoPage({
 
       {(
         <section className="card mt-6">
-          <h2 className="text-xl">{product.trackStock ? "Ajuste de contagem" : "Unidades prontas"}</h2>
+          <h2 className="text-base">{product.trackStock ? "Ajuste de contagem" : "Unidades prontas"}</h2>
           <p className="mb-2 text-sm text-cacau-500">
             {product.trackStock
               ? "Contou o estoque físico? Digite quanto tem de verdade e o sistema corrige."
@@ -103,7 +103,7 @@ export default async function ProdutoPage({
       )}
 
       <section className="card mt-6">
-        <h2 className="text-xl">Histórico de estoque</h2>
+        <h2 className="text-base">Histórico de estoque</h2>
         {movements.length === 0 ? (
           <p className="mt-3 text-sm text-cacau-500">Nenhuma movimentação ainda.</p>
         ) : (
@@ -118,7 +118,7 @@ export default async function ProdutoPage({
                     <td className="whitespace-nowrap">{dateTime(m.createdAt)}</td>
                     <td>{m.variant.name}</td>
                     <td>{MOVEMENT_LABEL[m.type]}</td>
-                    <td className={`text-right font-bold ${m.quantity > 0 ? "text-dourado-600" : "text-coral-600"}`}>
+                    <td className={`text-right font-medium ${m.quantity > 0 ? "text-dourado-600" : "text-coral-600"}`}>
                       {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
                     </td>
                     <td className="text-right">{m.stockAfter}</td>

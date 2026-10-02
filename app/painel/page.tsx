@@ -44,12 +44,12 @@ export default async function VisaoGeral() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <section className="card xl:col-span-2">
-          <h2 className="text-xl">Faturamento dos últimos 14 dias</h2>
+          <h2 className="text-base">Faturamento dos últimos 14 dias</h2>
           <RevenueChart data={series} />
         </section>
 
         <section className="card">
-          <h2 className="text-xl">Vendas por canal</h2>
+          <h2 className="text-base">Vendas por canal</h2>
           {channels.length === 0 ? (
             <p className="mt-4 text-sm text-cacau-500">Sem vendas no mês.</p>
           ) : (
@@ -57,7 +57,7 @@ export default async function VisaoGeral() {
               {channels.map((c) => (
                 <li key={c.channel}>
                   <div className="flex justify-between">
-                    <span className="font-bold">{CHANNEL_LABEL[c.channel]}</span>
+                    <span className="font-medium">{CHANNEL_LABEL[c.channel]}</span>
                     <span className="text-cacau-500">{Math.round((c.revenue / channelTotal) * 100)}% · {bs(c.revenue)}</span>
                   </div>
                   <div className="mt-1 h-2 rounded-full bg-creme-200">
@@ -72,7 +72,7 @@ export default async function VisaoGeral() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <section className="card xl:col-span-3">
-          <h2 className="text-xl">Mais vendidos no mês</h2>
+          <h2 className="text-base">Mais vendidos no mês</h2>
           {top.length === 0 ? (
             <p className="mt-4 text-sm text-cacau-500">Ainda não há vendas registradas neste mês.</p>
           ) : (
@@ -82,7 +82,7 @@ export default async function VisaoGeral() {
                   <ProductPhoto src={t.image} name={t.name} size={44} />
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between gap-3 text-sm">
-                      <span className="font-bold"><span className="text-dourado-500">{i + 1}.</span> {t.name}</span>
+                      <span className="font-medium"><span className="text-dourado-500">{i + 1}.</span> {t.name}</span>
                       <span className="whitespace-nowrap text-cacau-500">{t.quantity} un · <b className="text-cacau-900">{bs(t.revenue)}</b></span>
                     </div>
                     <div className="mt-1.5 h-2 rounded-full bg-creme-200">
@@ -100,8 +100,8 @@ export default async function VisaoGeral() {
 
       <section className="card mt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl">Últimas vendas</h2>
-          <Link href="/painel/vendas" className="text-xs font-bold text-dourado-600 hover:underline">Ver todas →</Link>
+          <h2 className="text-base">Últimas vendas</h2>
+          <Link href="/painel/vendas" className="text-xs font-medium text-dourado-600 hover:underline">Ver todas →</Link>
         </div>
         {recent.length === 0 ? (
           <p className="mt-4 text-sm text-cacau-500">Nenhuma venda ainda. Registre a primeira em “Nova venda”.</p>
@@ -115,7 +115,7 @@ export default async function VisaoGeral() {
                     <td className="whitespace-nowrap">{dateTime(s.createdAt)}</td>
                     <td className="min-w-[14rem]">{s.items.map((i) => `${i.quantity}× ${i.description}`).join(", ")}</td>
                     <td className="whitespace-nowrap">{CHANNEL_LABEL[s.channel]}</td>
-                    <td className="whitespace-nowrap text-right font-bold">{bs(s.total)}</td>
+                    <td className="whitespace-nowrap text-right font-medium">{bs(s.total)}</td>
                   </tr>
                 ))}
               </tbody>

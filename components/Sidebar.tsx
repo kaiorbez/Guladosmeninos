@@ -4,30 +4,37 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ChevronRightIcon, LogOutIcon } from "lucide-react";
 
-type Category = { slug: string; name: string; group: string; count: number };
+export type Category = { slug: string; name: string; group: string; count: number };
 
 const NAV = [
-  { href: "/painel", label: "Visão geral", icon: "◈" },
-  { href: "/painel/vendas/nova", label: "Nova venda", icon: "＋" },
-  { href: "/painel/vendas", label: "Vendas", icon: "≡" },
-  { href: "/painel/estoque", label: "Estoque", icon: "▦" },
-  { href: "/painel/pedidosya", label: "PedidosYa", icon: "◉" },
-  { href: "/painel/equipe", label: "Equipe", icon: "☺" },
+  { href: "/painel", label: "Visão geral" },
+  { href: "/painel/vendas/nova", label: "Nova venda" },
+  { href: "/painel/vendas", label: "Vendas" },
+  { href: "/painel/estoque", label: "Estoque" },
+  { href: "/painel/pedidosya", label: "PedidosYa" },
+  { href: "/painel/equipe", label: "Equipe" },
 ];
 
-export function Sidebar({
+const linkClass = (active: boolean) =>
+  `flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[13px] leading-5 transition-colors hover:bg-creme-200 ${
+    active ? "bg-creme-200 font-medium text-cacau-900" : "text-cacau-700"
+  }`;
+
+export function SidebarContent({
   categories,
   logout,
+  onNavigate,
 }: {
   categories: Category[];
   logout: () => Promise<void>;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const activeCategory = params.get("categoria");
-  const [open, setOpen] = useState(false);
-  // Tópicos do menu começam recolhidos; só abre o da categoria que está sendo vista.
+  // Grupos do estoque começam recolhidos; só abre o da categoria que está sendo vista.
   const activeGroup = categories.find((c) => c.slug === activeCategory)?.group;
   const [openGroups, setOpenGroups] = useState<string[]>(activeGroup ? [activeGroup] : []);
   useEffect(() => {
@@ -36,14 +43,14 @@ export function Sidebar({
   const toggleGroup = (g: string) => setOpenGroups((o) => (o.includes(g) ? o.filter((x) => x !== g) : [...o, g]));
   const isOpen = (g: string) => openGroups.includes(g);
 
-  useEffect(() => setOpen(false), [pathname, activeCategory]);
-
   const isActive = (href: string) =>
     href === "/painel"
       ? pathname === "/painel"
       : href === "/painel/vendas"
         ? pathname === "/painel/vendas"
-        : pathname.startsWith(href);
+        : href === "/painel/estoque"
+          ? pathname.startsWith(href) && !activeCategory
+          : pathname.startsWith(href);
 
   const groups = categories.reduce<Record<string, Category[]>>((acc, c) => {
     (acc[c.group] ??= []).push(c);
@@ -51,91 +58,60 @@ export function Sidebar({
   }, {});
 
   return (
-    <>
-      {/* Barra superior no celular */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-creme-300 bg-creme-50/95 px-4 py-2 backdrop-blur lg:hidden">
-        <Link href="/painel" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="" width={36} height={36} className="rounded-full" />
-          <span className="text-base font-extrabold">Painel Gula dos Meninos</span>
-        </Link>
-        <button onClick={() => setOpen((o) => !o)} className="btn-ghost px-3" aria-label="Abrir menu">
-          {open ? "✕" : "☰"}
-        </button>
-      </div>
+    <div className="flex h-full flex-col bg-creme-50 text-cacau-900">
+      <Link href="/painel" onClick={onNavigate} className="flex h-14 shrink-0 items-center gap-2.5 border-b border-creme-300 px-4">
+        <Image src="/logo.png" alt="" width={32} height={32} priority className="rounded-full" />
+        <span className="min-w-0 leading-tight">
+          <span className="block truncate text-sm font-semibold">Gula dos Meninos</span>
+          <span className="block text-[11px] text-cacau-500">Painel</span>
+        </span>
+      </Link>
 
-      {open && <div className="fixed inset-0 z-30 bg-cacau-900/40 lg:hidden" onClick={() => setOpen(false)} />}
+      <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-2" aria-label="Menu principal">
+        <div>
+          {NAV.map((item) => (
+            <Link key={item.href} href={item.href} onClick={onNavigate} className={linkClass(isActive(item.href))}>
+              {item.label}
+            </Link>
+          ))}
+        </div>
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-creme-300 bg-creme-50 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <Link href="/painel" className="flex items-center gap-3 border-b border-creme-300 px-5 py-4">
-          <Image src="/logo.png" alt="Gula dos Meninos" width={56} height={56} priority className="rounded-full ring-2 ring-dourado-500/60" />
-          <span className="leading-tight">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-dourado-600">Painel</span>
-            <span className="block text-lg font-extrabold">Gula dos Meninos</span>
-          </span>
-        </Link>
-
-        <nav className="flex-1 overflow-y-auto px-3 py-4 text-sm">
-          {NAV.map((item) => {
-            const active = isActive(item.href) && !(item.href === "/painel/estoque" && activeCategory);
-            return (
-              <div key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 font-bold transition ${
-                    active ? "bg-cacau-900 text-white shadow-sm" : "text-cacau-700 hover:bg-creme-200 hover:text-cacau-900"
-                  }`}
-                >
-                  <span className={`w-4 text-center ${item.href === "/painel/pedidosya" && !active ? "text-pedidosya" : ""}`}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                </Link>
-
-                {item.href === "/painel/estoque" && (
-                  <div className="mb-3 ml-5 border-l border-creme-300 pl-2">
-                    {Object.entries(groups).map(([group, cats]) => (
-                      <div key={group} className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleGroup(group)}
-                          className="flex w-full items-center justify-between rounded-md px-3 pb-1 pt-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-dourado-600 hover:text-cacau-900"
-                          aria-expanded={isOpen(group)}
-                        >
-                          <span>{group}</span>
-                          <span className={`text-[10px] transition-transform ${isOpen(group) ? "rotate-90" : ""}`}>▶</span>
-                        </button>
-                        {isOpen(group) && cats.map((c) => {
-                          const on = pathname === "/painel/estoque" && activeCategory === c.slug;
-                          return (
-                            <Link
-                              key={c.slug}
-                              href={`/painel/estoque?categoria=${c.slug}`}
-                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                                on ? "bg-dourado-400/25 text-cacau-900" : "text-cacau-700 hover:bg-creme-200 hover:text-cacau-900"
-                              }`}
-                            >
-                              <span>{c.name}</span>
-                              <span className="text-xs text-cacau-400">{c.count}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                )}
+        {Object.entries(groups).map(([group, cats]) => (
+          <div key={group}>
+            <button
+              type="button"
+              onClick={() => toggleGroup(group)}
+              className="flex w-full items-center justify-between px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-cacau-500 hover:text-cacau-900"
+              aria-expanded={isOpen(group)}
+            >
+              <span>{group}</span>
+              <ChevronRightIcon className={`size-3.5 transition-transform ${isOpen(group) ? "rotate-90" : ""}`} />
+            </button>
+            {isOpen(group) && (
+              <div className="mt-0.5 pl-2">
+                {cats.map((c) => (
+                  <Link
+                    key={c.slug}
+                    href={`/painel/estoque?categoria=${c.slug}`}
+                    onClick={onNavigate}
+                    className={linkClass(pathname === "/painel/estoque" && activeCategory === c.slug)}
+                  >
+                    <span className="truncate">{c.name}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-cacau-500">{c.count}</span>
+                  </Link>
+                ))}
               </div>
-            );
-          })}
-        </nav>
+            )}
+          </div>
+        ))}
+      </nav>
 
-        <form action={logout} className="border-t border-creme-300 px-3 py-3">
-          <button className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-cacau-700 hover:bg-creme-200 hover:text-coral-600">
-            ⎋ Sair
-          </button>
-        </form>
-      </aside>
-    </>
+      <form action={logout} className="border-t border-creme-300 p-3">
+        <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-cacau-700 transition-colors hover:bg-creme-200 hover:text-cacau-900">
+          <LogOutIcon className="size-4" />
+          Sair
+        </button>
+      </form>
+    </div>
   );
 }

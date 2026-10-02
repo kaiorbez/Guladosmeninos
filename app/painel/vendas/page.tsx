@@ -46,7 +46,7 @@ export default async function VendasPage({
       </PageHeader>
 
       {sp.registrada && (
-        <p className="mb-4 rounded-xl border border-dourado-500/50 bg-dourado-500/15 px-4 py-3 text-sm font-bold text-dourado-600">
+        <p className="mb-4 rounded-lg border border-dourado-500/50 bg-dourado-500/15 px-4 py-3 text-sm font-medium text-dourado-600">
           ✓ Venda #{sp.registrada} registrada e estoque atualizado.
         </p>
       )}
@@ -113,7 +113,7 @@ export default async function VendasPage({
                     </td>
                     <td>{CHANNEL_LABEL[s.channel]}</td>
                     <td>{PAYMENT_LABEL[s.payment]}</td>
-                    <td className="whitespace-nowrap text-right font-bold">{bs(s.total)}</td>
+                    <td className="whitespace-nowrap text-right font-medium">{bs(s.total)}</td>
                     <td className="whitespace-nowrap pr-5 text-right no-underline">
                       {cancelled ? (
                         <span className="badge bg-creme-200 text-cacau-500 no-underline">Cancelada</span>

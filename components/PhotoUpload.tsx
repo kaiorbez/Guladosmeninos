@@ -16,14 +16,14 @@ export function PhotoUpload({ productId, src, name, size = 56 }: { productId: st
     <label className="group relative block shrink-0 cursor-pointer" title={src ? "Trocar foto" : "Enviar foto"}>
       <ProductPhoto src={src} name={name} size={size} />
       <span
-        className={`absolute inset-0 flex items-center justify-center rounded-xl bg-cacau-900/55 text-[11px] font-bold text-white transition ${
+        className={`absolute inset-0 flex items-center justify-center rounded-lg bg-black/55 text-[11px] font-medium text-white transition ${
           pending ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
       >
         {pending ? "Enviando…" : src ? "📷 Trocar" : "📷 Foto"}
       </span>
       {!src && !pending && (
-        <span className="absolute -bottom-1 -right-1 rounded-full bg-cacau-900 px-1.5 text-[10px] text-white">📷</span>
+        <span className="absolute -bottom-1 -right-1 rounded-full bg-black px-1.5 text-[10px] text-white">📷</span>
       )}
       <input
         type="file"
