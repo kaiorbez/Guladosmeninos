@@ -7,7 +7,7 @@
 //  - depois disso não faz nada: quem manda são os sócios pelo painel.
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed } from "./data/cardapio";
+import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed, type VariantSeed } from "./data/cardapio";
 import { PEDIDOSYA } from "./data/pedidosya";
 
 const prisma = new PrismaClient();
@@ -253,6 +253,125 @@ async function main() {
   await once("2026-09-ordem-categorias", async () => {
     for (const [i, slug] of ORDER.entries()) {
       await prisma.category.updateMany({ where: { slug }, data: { sortOrder: i } });
+    }
+  });
+
+  // Cardápio 2026 do agente do WhatsApp: itens que faltavam no painel e preços da loja
+  // confirmados pelos sócios (o preço do PedidosYa fica no anúncio, não muda aqui).
+  await once("2026-10-cardapio-agente", async () => {
+    /** Cria o produto se não existir e garante cada tamanho com o preço informado. */
+    const ensure = async (
+      categoryId: string,
+      name: string,
+      trackStock: boolean,
+      variants: VariantSeed[],
+      description?: string,
+    ) => {
+      const product =
+        (await prisma.product.findFirst({ where: { name } })) ??
+        (await prisma.product.create({
+          data: {
+            name,
+            description: description ?? null,
+            categoryId,
+            trackStock,
+            onStore: true,
+            sortOrder: await prisma.product.count({ where: { categoryId } }),
+          },
+        }));
+      for (const [i, v] of variants.entries()) {
+        await prisma.variant.upsert({
+          where: { productId_name: { productId: product.id, name: v.name } },
+          update: { price: v.price, sortOrder: i },
+          create: { productId: product.id, name: v.name, servings: v.servings ?? null, price: v.price, sortOrder: i },
+        });
+      }
+    };
+
+    // Docinhos: unidade é pronta entrega; o cento é feito por encomenda.
+    const docinhos = await prisma.category.upsert({
+      where: { slug: "docinhos" },
+      update: {},
+      create: { slug: "docinhos", name: "Docinhos e Kits de Festa", group: "Doces", sortOrder: ORDER.indexOf("docinhos") },
+    });
+    const sabores = ["Brigadeiro", "Beijinho", "Paçoca", "Ninho", "Maracujá", "Churros", "Café", "Doce de Leite", "Bicho de Pé", "Azul Encantado"];
+    for (const sabor of sabores) {
+      await ensure(docinhos.id, `Docinho ${sabor}`, true, [{ name: "Unidade", price: 3.5 }]);
+    }
+    await ensure(docinhos.id, "Docinhos (Cento)", false, [{ name: "Cento", price: 300 }], "100 docinhos, sabores a combinar.");
+
+    // Salgados
+    const empadoes = await prisma.category.upsert({
+      where: { slug: "empadoes" },
+      update: {},
+      create: { slug: "empadoes", name: "Empadões", group: "Salgados", sortOrder: ORDER.indexOf("empadoes") },
+    });
+    await ensure(empadoes.id, "Empadão de Frango", true, [
+      { name: "P", servings: "250 g", price: 20 },
+      { name: "M", servings: "750 g", price: 65 },
+      { name: "G", servings: "1,3 kg", price: 120 },
+    ], "Frango com requeijão.");
+    await ensure(empadoes.id, "Empadão de Fricassê", true, [
+      { name: "P", servings: "250 g", price: 20 },
+      { name: "M", servings: "750 g", price: 65 },
+    ], "Fricassê de frango, massa leve.");
+    await ensure(empadoes.id, "Empadinha de Frango", true, [{ name: "Unidade", servings: "55 g", price: 6.5 }], "Frango com requeijão (55 g).");
+    await ensure(empadoes.id, "Empadinhas (Cento)", false, [{ name: "Cento", price: 600 }], "100 empadinhas de frango com requeijão.");
+    await ensure(empadoes.id, "Torta Pão", false, [
+      { name: "P", servings: "8 porções", price: 50 },
+      { name: "M", servings: "16 porções", price: 95 },
+    ]);
+
+    // Porções de torta: preço da loja nas fatias já cadastradas.
+    const fatias = await prisma.category.upsert({
+      where: { slug: "fatias" },
+      update: {},
+      create: { slug: "fatias", name: "Fatias de Torta", group: "Tortas", sortOrder: ORDER.indexOf("fatias") },
+    });
+    await ensure(fatias.id, "Fatia Prestígio", true, [{ name: "Único", price: 30 }]);
+    await ensure(fatias.id, "Fatia Maracujá", true, [{ name: "Único", price: 30 }]);
+    await ensure(fatias.id, "Fatia Cenoura com Chocolate", true, [{ name: "Único", price: 30 }]);
+    await ensure(fatias.id, "Fatia Baunilha com Frutas Vermelhas", true, [{ name: "Único", price: 35 }]);
+
+    // Tortas em acetato (encomenda), logo depois das Tortas Premium.
+    let acetato = await prisma.category.findUnique({ where: { slug: "acetato" } });
+    if (!acetato) {
+      const premium = await prisma.category.findUnique({ where: { slug: "tortas-premium" } });
+      const after = premium?.sortOrder ?? ORDER.indexOf("tortas-premium");
+      await prisma.category.updateMany({ where: { sortOrder: { gt: after } }, data: { sortOrder: { increment: 1 } } });
+      acetato = await prisma.category.create({
+        data: { slug: "acetato", name: "Tortas em Acetato", group: "Tortas", description: "Tortas em acetato, modelos 01 a 12, sob encomenda.", sortOrder: after + 1 },
+      });
+    }
+    const modelos = [
+      [135, 200, 240, 495],
+      [180, 270, 340, 650],
+      [160, 250, 300, 630],
+      [200, 285, 340, 700],
+      [160, 250, 300, 620],
+      [150, 240, 290, 580],
+      [180, 260, 320, 630],
+      [140, 230, 390, 530],
+      [165, 250, 300, 620],
+      [160, 240, 295, 565],
+      [150, 240, 300, 560],
+      [150, 220, 270, 530],
+    ];
+    for (const [i, [p, m, g, gg]] of modelos.entries()) {
+      await ensure(acetato.id, `Torta em Acetato Modelo ${String(i + 1).padStart(2, "0")}`, false, [
+        { name: "P", price: p },
+        { name: "M", price: m },
+        { name: "G", price: g },
+        { name: "GG", price: gg },
+      ]);
+    }
+
+    // Sócios: o Combo de Aniversário é o "Kit Fiesta" do cardápio.
+    if (!(await prisma.product.findFirst({ where: { name: "Kit Fiesta" } }))) {
+      await prisma.product.updateMany({
+        where: { name: "Combo de Aniversário" },
+        data: { name: "Kit Fiesta", description: "Kit de festa (combo de aniversário). P até 10 pessoas, M até 15 pessoas, G até 25 pessoas." },
+      });
     }
   });
 }
