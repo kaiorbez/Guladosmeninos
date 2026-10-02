@@ -374,6 +374,20 @@ async function main() {
       });
     }
   });
+
+  // Sócios: estoque provisório de 10 em cada item de pronta entrega, para o agente do
+  // WhatsApp não ser barrado enquanto a contagem real não é lançada.
+  await once("2026-10-estoque-provisorio", async () => {
+    const variants = await prisma.variant.findMany({
+      where: { active: true, stock: { lt: 10 }, product: { active: true, trackStock: true } },
+    });
+    for (const v of variants) {
+      await prisma.variant.update({ where: { id: v.id }, data: { stock: 10 } });
+      await prisma.stockMovement.create({
+        data: { variantId: v.id, type: "AJUSTE", quantity: 10 - v.stock, stockAfter: 10, note: "Estoque provisório (aguardando contagem real)" },
+      });
+    }
+  });
 }
 
 main()
