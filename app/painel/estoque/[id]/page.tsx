@@ -88,7 +88,7 @@ export default async function ProdutoPage({
 
       {(
         <section className="card mt-6">
-          <h2 className="text-base">{product.trackStock ? "Ajuste de contagem" : "Unidades prontas"}</h2>
+          <h2 id="ajuste-estoque" className="scroll-mt-6 text-base">{product.trackStock ? "Ajuste de contagem" : "Unidades prontas"}</h2>
           <p className="mb-2 text-sm text-cacau-500">
             {product.trackStock
               ? "Contou o estoque físico? Digite quanto tem de verdade e o sistema corrige."

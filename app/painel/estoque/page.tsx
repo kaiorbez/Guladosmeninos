@@ -59,8 +59,8 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
       </div>
 
       <div className="mb-5 rounded-lg border border-creme-300 bg-creme-50 px-4 py-3 text-sm text-cacau-700">
-        <b>Como usar:</b> digite a quantidade e toque em <b className="text-cacau-900">+</b> quando produzir, ou em{" "}
-        <b className="text-coral-600">−</b> para perdas. Nos itens <b>sob encomenda</b>, use o + para informar unidades já
+        <b>Como usar:</b> toque em <b className="text-cacau-900">+</b> para adicionar 1 unidade, ou em{" "}
+        <b className="text-coral-600">−</b> para retirar 1 unidade (perdas ou saída sem venda). Para alterar várias unidades ou corrigir a contagem, use <b>Ajustar estoque</b>. Nos itens <b>sob encomenda</b>, use o + para informar unidades já
         prontas (a venda usa essas primeiro e nunca é bloqueada). Toque na foto para trocar e no preço (✎) para alterar. As vendas dão baixa sozinhas.
       </div>
 
@@ -142,7 +142,7 @@ export default async function EstoquePage({ searchParams }: { searchParams: Sear
                             )}
                           </td>
                           <td className="pr-5">
-                            {p.active && v.active && <StockControl variantId={v.id} />}
+                            {p.active && v.active && <StockControl variantId={v.id} productId={p.id} stock={v.stock} />}
                           </td>
                         </tr>
                       ));
