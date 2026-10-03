@@ -221,29 +221,37 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                           Total <b className="text-cacau-900">{bs(o.total)}</b> · pago {bs(o.paid)}
                         </p>
                         {o.status !== "CANCELADA" && missing > 0 && (
-                          <form action={payRestAction} className="flex items-center">
+                          <form action={pendingTab ? setOrderStatusAction : payRestAction} className="flex items-center gap-2">
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="amount" value={missing} />
-                            <select name="method" aria-label="Forma de pagamento" className="input h-[34px] w-auto rounded-r-none border-r-0 px-2 py-1 text-xs">
+                            {pendingTab && <input type="hidden" name="status" value="ENTREGUE" />}
+                            <select name="method" aria-label="Forma de pagamento" className="input h-[34px] w-auto px-2 py-1 text-xs">
                               {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                             </select>
-                            <ConfirmButton message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost rounded-l-none py-1.5">
+                            <ConfirmButton formAction={payRestAction} message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost py-1.5">
                               Receber {bs(missing)}
                             </ConfirmButton>
+                            {pendingTab && (
+                              <ConfirmButton
+                                message={`Receber o restante de ${bs(missing)} na forma de pagamento selecionada e marcar como entregue?`}
+                                className="btn-primary py-1.5"
+                                title={`Receber ${bs(missing)} e entregar`}
+                              >
+                                Entregue
+                              </ConfirmButton>
+                            )}
                           </form>
                         )}
                         {o.status === "ENTREGUE" && (o.saleId || Number(o.paid) > 0) && (
                           <span className="badge bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">No faturamento</span>
                         )}
-                        {pendingTab && (
+                        {pendingTab && missing <= 0 && (
                           <form action={setOrderStatusAction}>
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="status" value="ENTREGUE" />
                             <ConfirmButton
                               message={
-                                missing > 0
-                                  ? `Ainda falta receber ${bs(missing)}. Marcar como entregue mesmo assim? A venda de ${bs(o.total)} entra no faturamento.`
-                                  : `Marcar como entregue? A venda de ${bs(o.total)} entra no faturamento.`
+                                `Marcar como entregue? O pagamento já está registrado.`
                               }
                               className="btn-primary py-1.5"
                             >
