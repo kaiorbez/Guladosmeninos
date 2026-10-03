@@ -44,9 +44,9 @@ export default async function VisaoGeral() {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <Kpi tone="accent" label="Faturamento hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} />
-        <Kpi label="Últimos 7 dias" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s)`} />
-        <Kpi label="No mês" value={bs(m.revenue)} hint={`${m.orders} pedido(s)`} />
+        <Kpi tone="accent" label="Faturamento hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-cliente" />
+        <Kpi label="Últimos 7 dias" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s)`} href="/painel/vendas?periodo=semana#por-cliente" />
+        <Kpi label="No mês" value={bs(m.revenue)} hint={`${m.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-cliente" />
         <Kpi label="Ticket médio no mês" value={bs(ticket)} hint="Valor médio por pedido" />
       </div>
 

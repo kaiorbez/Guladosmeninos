@@ -26,7 +26,7 @@ export default async function VendasPage({
   const periodo: Period = sp.periodo && sp.periodo in PERIODS ? (sp.periodo as Period) : "mes";
   const from = PERIODS[periodo].from();
 
-  const [overview, sales] = await Promise.all([
+  const [overview, sales, inPeriod] = await Promise.all([
     getOverview(),
     prisma.sale.findMany({
       where: { createdAt: { gte: from } },
@@ -34,7 +34,30 @@ export default async function VendasPage({
       take: 300,
       include: { items: true, user: { select: { name: true } } },
     }),
+    // Tudo o que entrou no faturamento do período (sem limite), para o resumo por cliente.
+    prisma.sale.findMany({
+      where: { status: "CONFIRMADA", createdAt: { gte: from } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, number: true, createdAt: true, total: true, channel: true, customerName: true, customerPhone: true, externalRef: true, items: { select: { description: true, quantity: true } } },
+    }),
   ]);
+
+  // Resumo por cliente: junta pelo celular (com ou sem 591); sem celular, pelo nome.
+  type ClientRow = { key: string; name: string; phone: string | null; total: number; sales: typeof inPeriod };
+  const byClient = new Map<string, ClientRow>();
+  for (const sale of inPeriod) {
+    const digits = (sale.customerPhone ?? "").replace(/\D/g, "");
+    const phone = digits.length === 11 && digits.startsWith("591") ? digits.slice(3) : digits;
+    const name = sale.customerName?.trim() || "";
+    const key = phone.length >= 7 ? `tel:${phone}` : name ? `nome:${name.toLowerCase()}` : "sem-cliente";
+    const row = byClient.get(key) ?? { key, name: name || (phone ? phone : "Sem cliente informado"), phone: phone.length >= 7 ? phone : null, total: 0, sales: [] };
+    if (name) row.name = name;
+    row.total += Number(sale.total);
+    row.sales.push(sale);
+    byClient.set(key, row);
+  }
+  const clientRows = [...byClient.values()].sort((a, b) => b.total - a.total);
+  const hour = (d: Date) => d.toLocaleString("pt-BR", { timeZone: "America/La_Paz", ...(periodo === "hoje" ? {} : { day: "2-digit", month: "2-digit" }), hour: "2-digit", minute: "2-digit" });
 
   const confirmed = sales.filter((s) => s.status === "CONFIRMADA");
   const periodTotal = confirmed.reduce((s, x) => s + Number(x.total), 0);
@@ -52,9 +75,9 @@ export default async function VendasPage({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Kpi tone="accent" label="Vendido hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} venda(s)`} />
-        <Kpi label="Vendido na semana" value={bs(overview.week.revenue)} hint={`${overview.week.orders} venda(s) · últimos 7 dias`} />
-        <Kpi label="Vendido no mês" value={bs(overview.month.revenue)} hint={`${overview.month.orders} venda(s)`} />
+        <Kpi tone="accent" label="Vendido hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-cliente" />
+        <Kpi label="Vendido na semana" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s) · últimos 7 dias`} href="/painel/vendas?periodo=semana#por-cliente" />
+        <Kpi label="Vendido no mês" value={bs(overview.month.revenue)} hint={`${overview.month.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-cliente" />
       </div>
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-3">
@@ -73,6 +96,45 @@ export default async function VendasPage({
           {confirmed.length} venda(s) · <b className="text-cacau-900">{bs(periodTotal)}</b>
         </p>
       </div>
+
+      <section id="por-cliente" className="card mb-6 scroll-mt-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base">O que entrou no faturamento · {PERIODS[periodo].label.toLowerCase()}, por cliente</h2>
+          <p className="text-sm text-cacau-500">
+            {clientRows.length} cliente(s) · <b className="text-cacau-900">{bs(clientRows.reduce((t, c) => t + c.total, 0))}</b>
+          </p>
+        </div>
+        {clientRows.length === 0 ? (
+          <p className="mt-3 text-sm text-cacau-500">Nada entrou no faturamento neste período.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-creme-300/70">
+            {clientRows.map((c) => (
+              <li key={c.key} className="py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-semibold">
+                    {c.name}
+                    {c.phone && <span className="ml-2 text-xs font-normal text-cacau-500">{c.phone}</span>}
+                  </p>
+                  <p className="whitespace-nowrap font-semibold tabular-nums">{bs(c.total)}</p>
+                </div>
+                <ul className="mt-1 space-y-0.5 text-sm text-cacau-700">
+                  {c.sales.map((sale) => (
+                    <li key={sale.id} className="flex items-baseline gap-3">
+                      <span className="w-24 shrink-0 tabular-nums text-cacau-500">{hour(sale.createdAt)}</span>
+                      <span className="min-w-0 flex-1">
+                        {sale.items.map((i) => (i.quantity > 1 ? `${i.quantity}× ${i.description}` : i.description)).join(", ")}
+                        {sale.externalRef?.startsWith("encomenda:") && " (restante na entrega)"}
+                        <span className="ml-2 text-xs text-cacau-400">{CHANNEL_LABEL[sale.channel] ?? sale.channel}</span>
+                      </span>
+                      <span className="whitespace-nowrap tabular-nums">{bs(sale.total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="card overflow-x-auto p-0">
         {sales.length === 0 ? (
