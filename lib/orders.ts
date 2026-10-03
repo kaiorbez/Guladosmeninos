@@ -1,23 +1,24 @@
 // Regras das encomendas: pagamentos e a venda gerada na entrega.
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { InventoryError, cancelSale, createSale } from "./inventory";
 
 export class OrderError extends Error {}
 
 const ORDER_PRODUCT = "Encomenda";
+type Tx = Prisma.TransactionClient;
 
 /**
  * Item usado nas vendas geradas por encomendas (o produto da ficha é texto livre).
  * Fica inativo: não aparece no cardápio do agente nem na tela de venda.
  */
-async function orderVariantId() {
-  const existing = await prisma.variant.findFirst({ where: { name: "Sob consulta", product: { name: ORDER_PRODUCT } } });
+async function orderVariantId(db: Tx = prisma) {
+  const existing = await db.variant.findFirst({ where: { name: "Sob consulta", product: { name: ORDER_PRODUCT } } });
   if (existing) return existing.id;
   const category =
-    (await prisma.category.findUnique({ where: { slug: "personalizadas" } })) ??
-    (await prisma.category.findFirstOrThrow({ orderBy: { sortOrder: "desc" } }));
-  const product = await prisma.product.create({
+    (await db.category.findUnique({ where: { slug: "personalizadas" } })) ??
+    (await db.category.findFirstOrThrow({ orderBy: { sortOrder: "desc" } }));
+  const product = await db.product.create({
     data: {
       name: ORDER_PRODUCT,
       description: "Usado pelas vendas geradas ao entregar uma encomenda.",
@@ -92,9 +93,9 @@ export function decorationPhotoUrl(o: { id: string; decorationPhotoAt: Date | nu
 }
 
 /** Recalcula o total pago a partir dos pagamentos. */
-export async function refreshPaid(orderId: string) {
-  const { _sum } = await prisma.orderPayment.aggregate({ where: { orderId }, _sum: { amount: true } });
-  await prisma.order.update({ where: { id: orderId }, data: { paid: _sum.amount ?? 0 } });
+export async function refreshPaid(orderId: string, db: Tx = prisma) {
+  const { _sum } = await db.orderPayment.aggregate({ where: { orderId }, _sum: { amount: true } });
+  await db.order.update({ where: { id: orderId }, data: { paid: _sum.amount ?? 0 } });
 }
 
 /** Primeira linha dos produtos, para a descrição da venda. */
@@ -104,14 +105,15 @@ const productTitle = (product: string) => product.split("\n")[0].trim().slice(0,
  * Leva um pagamento ao faturamento no dia em que foi recebido: cria uma venda com o valor
  * pago e liga ao pagamento. Na entrega entra só o que ainda faltava faturar.
  */
-export async function bookPayment(paymentId: string, userId?: string) {
-  const payment = await prisma.orderPayment.findUnique({ where: { id: paymentId }, include: { order: true } });
+export async function bookPayment(paymentId: string, userId?: string, transaction?: Tx) {
+  const db = transaction ?? prisma;
+  const payment = await db.orderPayment.findUnique({ where: { id: paymentId }, include: { order: true } });
   if (!payment || payment.saleId) return;
   const o = payment.order;
   const sale = await createSale({
     items: [
       {
-        variantId: await orderVariantId(),
+        variantId: await orderVariantId(db),
         quantity: 1,
         unitPrice: Number(payment.amount),
         description: `Encomenda #${o.number}: ${productTitle(o.product)} (pagamento)`,
@@ -124,20 +126,24 @@ export async function bookPayment(paymentId: string, userId?: string) {
     notes: `Pagamento da encomenda #${o.number}`,
     userId,
     externalRef: `encomenda-pagamento:${payment.id}`,
-  });
-  await prisma.orderPayment.update({ where: { id: payment.id }, data: { saleId: sale.id } });
+  }, transaction);
+  await db.orderPayment.update({ where: { id: payment.id }, data: { saleId: sale.id } });
 }
 
 export async function addPayment(orderId: string, amount: number, method: PaymentMethod, userId?: string) {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) throw new OrderError("Encomenda não encontrada.");
-  if (!(amount > 0)) throw new OrderError("Informe um valor maior que zero.");
-  const missing = Number(order.total) - Number(order.paid);
-  if (amount > missing + 0.001) throw new OrderError(`Falta receber só Bs ${missing.toLocaleString("pt-BR")}.`);
-  const payment = await prisma.orderPayment.create({ data: { orderId, amount, method } });
-  await refreshPaid(orderId);
-  // Encomenda já entregue: o valor já entrou no faturamento pela venda da entrega.
-  if (order.status !== "ENTREGUE") await bookPayment(payment.id, userId);
+  if (!Number.isFinite(amount) || !(amount > 0)) throw new OrderError("Informe um valor maior que zero.");
+  return prisma.$transaction(async (tx) => {
+    // A escrita bloqueia a encomenda até o fim da transação, inclusive contra uma entrega simultânea.
+    const { count } = await tx.order.updateMany({ where: { id: orderId }, data: { paid: { increment: 0 } } });
+    if (!count) throw new OrderError("Encomenda não encontrada.");
+    const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    const missing = Number(order.total) - Number(order.paid);
+    if (amount > missing + 0.001) throw new OrderError(`Falta receber só Bs ${missing.toLocaleString("pt-BR")}.`);
+    const payment = await tx.orderPayment.create({ data: { orderId, amount, method } });
+    await refreshPaid(orderId, tx);
+    // Encomenda já entregue: o valor já entrou no faturamento pela venda da entrega.
+    if (order.status !== "ENTREGUE") await bookPayment(payment.id, userId, tx);
+  });
 }
 
 /** Apaga o pagamento e tira do faturamento a venda dele (se tiver). */
@@ -150,42 +156,52 @@ export async function removePayment(paymentId: string, userId?: string) {
 }
 
 /** Valor dos pagamentos desta encomenda que já estão no faturamento. */
-async function bookedAmount(orderId: string) {
-  const booked = await prisma.orderPayment.findMany({ where: { orderId, saleId: { not: null } }, select: { amount: true, saleId: true } });
+async function bookedAmount(orderId: string, db: Tx = prisma) {
+  const booked = await db.orderPayment.findMany({ where: { orderId, saleId: { not: null } }, select: { amount: true, saleId: true } });
   // Só conta a venda do pagamento que ainda está valendo (pode ter sido cancelada/excluída em Vendas).
   const alive = new Set(
-    (await prisma.sale.findMany({ where: { id: { in: booked.map((p) => p.saleId!) }, status: "CONFIRMADA" }, select: { id: true } })).map((x) => x.id),
+    (await db.sale.findMany({ where: { id: { in: booked.map((p) => p.saleId!) }, status: "CONFIRMADA" }, select: { id: true } })).map((x) => x.id),
   );
   return booked.filter((p) => alive.has(p.saleId!)).reduce((s, p) => s + Number(p.amount), 0);
 }
 
-/** Entrega: registra a venda (entra no faturamento) e marca como entregue. */
-export async function deliverOrder(orderId: string, userId?: string) {
-  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payments: true } });
-  if (!order || order.status !== "PENDENTE") return;
-
-  let saleId: string | null = null;
-  // Só o que ainda não entrou no faturamento pelos pagamentos registrados.
-  const remaining = Math.round((Number(order.total) - (await bookedAmount(order.id))) * 100) / 100;
-  if (remaining > 0) {
-    // Forma de pagamento da venda: a que recebeu o maior valor.
-    const main = [...order.payments].sort((a, b) => Number(b.amount) - Number(a.amount))[0];
-    const details = [order.dough && `Massa: ${order.dough}`, order.filling && `Recheio: ${order.filling}`, order.decoration && `Decoração: ${order.decoration}`]
-      .filter(Boolean)
-      .join(" · ");
-    const sale = await createSale({
-      items: [{ variantId: await orderVariantId(), quantity: 1, unitPrice: remaining, description: `Encomenda #${order.number}: ${productTitle(order.product)}` }],
-      channel: order.channel,
-      payment: main?.method ?? "QR",
-      customerName: order.customerName,
-      customerPhone: order.customerPhone ?? undefined,
-      notes: [details, order.notes].filter(Boolean).join("\n") || undefined,
-      userId,
-      externalRef: `encomenda:${order.id}`,
+/** Entrega e recebimento do restante são gravados juntos, sem duplicar faturamento. */
+export async function deliverOrder(orderId: string, userId?: string, method: PaymentMethod = "QR") {
+  return prisma.$transaction(async (tx) => {
+    // Só uma entrega pode assumir a encomenda. Se qualquer gravação falhar, tudo é revertido.
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: "PENDENTE" },
+      data: { status: "ENTREGUE" },
     });
-    saleId = sale.id;
-  }
-  await prisma.order.update({ where: { id: orderId }, data: { status: "ENTREGUE", saleId } });
+    if (!count) return;
+    const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { payments: true } });
+    const missing = Math.max(0, Math.round((Number(order.total) - Number(order.paid)) * 100) / 100);
+    // Inclui pagamentos antigos ainda não faturados, sem contar novamente os sinais já faturados.
+    const remaining = Math.round((Number(order.total) - (await bookedAmount(order.id, tx))) * 100) / 100;
+    let saleId: string | null = null;
+    if (remaining > 0) {
+      const main = [...order.payments].sort((a, b) => Number(b.amount) - Number(a.amount))[0];
+      const details = [order.dough && `Massa: ${order.dough}`, order.filling && `Recheio: ${order.filling}`, order.decoration && `Decoração: ${order.decoration}`]
+        .filter(Boolean)
+        .join(" · ");
+      const sale = await createSale({
+        items: [{ variantId: await orderVariantId(tx), quantity: 1, unitPrice: remaining, description: `Encomenda #${order.number}: ${productTitle(order.product)}` }],
+        channel: order.channel,
+        payment: missing > 0 ? method : main?.method ?? method,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone ?? undefined,
+        notes: [details, order.notes].filter(Boolean).join("\n") || undefined,
+        userId,
+        externalRef: `encomenda:${order.id}`,
+      }, tx);
+      saleId = sale.id;
+    }
+    if (missing > 0) {
+      await tx.orderPayment.create({ data: { orderId, amount: missing, method, saleId } });
+      await refreshPaid(orderId, tx);
+    }
+    await tx.order.update({ where: { id: orderId }, data: { saleId } });
+  });
 }
 
 /** Exclusão: tira do faturamento a venda da entrega e as dos pagamentos. */

@@ -102,7 +102,7 @@ export async function setOrderStatusAction(form: FormData) {
 
   try {
     if (status === "ENTREGUE") {
-      await deliverOrder(order.id, session.userId);
+      await deliverOrder(order.id, session.userId, method(form.get("method")));
     } else {
       // Saindo de "entregue": a venda gerada na entrega é cancelada.
       await undoOrderSale(order.saleId, session.userId);

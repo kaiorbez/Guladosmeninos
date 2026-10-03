@@ -80,7 +80,7 @@ export async function createSale(input: {
   userId?: string;
   /** Referência externa (ex.: id do aviso do agente). */
   externalRef?: string;
-}) {
+}, transaction?: Tx) {
   const items = input.items.filter((i) => i.quantity > 0);
   if (items.length === 0) throw new InventoryError("Adicione pelo menos um item.");
   for (const i of items) {
@@ -90,7 +90,7 @@ export async function createSale(input: {
     }
   }
 
-  return prisma.$transaction(async (tx) => {
+  const run = async (tx: Tx) => {
     const variants = await tx.variant.findMany({
       where: { id: { in: items.map((i) => i.variantId) } },
       include: { product: true },
@@ -163,7 +163,8 @@ export async function createSale(input: {
     }
 
     return sale;
-  });
+  };
+  return transaction ? run(transaction) : prisma.$transaction(run);
 }
 
 /** Cancela a venda e devolve ao estoque o que foi baixado por ela. */

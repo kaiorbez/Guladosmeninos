@@ -5,14 +5,17 @@ export function ConfirmButton({
   className,
   children,
   title,
+  formAction,
 }: {
   message: string;
   className?: string;
   children: React.ReactNode;
   title?: string;
+  formAction?: React.ComponentProps<"button">["formAction"];
 }) {
   return (
     <button
+      formAction={formAction}
       className={className}
       title={title}
       onClick={(e) => {
