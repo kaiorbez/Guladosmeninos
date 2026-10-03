@@ -17,13 +17,15 @@ export async function addExpenseAction(_: string | null, form: FormData): Promis
   const amount = Number(String(form.get("amount") ?? "").trim().replace(",", "."));
   if (!(amount > 0)) return "Informe um valor maior que zero.";
   const method = String(form.get("method")) as PaymentMethod;
+  const description = String(form.get("description") ?? "").trim().slice(0, 200);
+  if (category === "OUTROS" && !description) return "Em “Outros”, dê um título ao lançamento (ex.: embalagens, gás, manutenção).";
 
   await prisma.expense.create({
     data: {
       date: new Date(`${date}T00:00:00Z`),
       category,
       amount: Math.round(amount * 100) / 100,
-      description: String(form.get("description") ?? "").trim().slice(0, 200) || null,
+      description: description || null,
       method: METHODS.includes(method) ? method : null,
       userId: session.userId,
     },
