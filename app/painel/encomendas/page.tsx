@@ -7,7 +7,9 @@ import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
 import { decorationPhotoUrl, lateLabel, minutesLate } from "@/lib/orders";
-import { PAYMENT_METHODS as METHODS } from "@/lib/format";
+import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
+import type { SaleChannel } from "@prisma/client";
+import { OrderFilters } from "./OrderFilters";
 import { deleteOrderAction, payRestAction, setOrderStatusAction } from "./actions";
 
 const TABS = {
@@ -36,16 +38,24 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string }> }) {
+export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; hora?: string; dia?: string; pgto?: string; canal?: string }> }) {
   const sp = await searchParams;
   const tab: Tab = sp.aba && sp.aba in TABS ? (sp.aba as Tab) : "proximas";
   const pendingTab = tab === "proximas";
   const q = sp.q?.trim();
+  // Filtros: hora "12" = 12:00 a 12:59; "sem" = sem horário. dia = YYYY-MM-DD.
+  const hora = sp.hora === "sem" || /^\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "";
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(sp.dia ?? "") ? sp.dia! : "";
+  const pgto = sp.pgto === "falta" || sp.pgto === "pago" ? sp.pgto : "";
+  const canal = ORDER_CHANNELS.some(([v]) => v === sp.canal) ? (sp.canal as SaleChannel) : "";
 
-  const [orders, pending] = await Promise.all([
+  const [found, pending, timeRows] = await Promise.all([
     prisma.order.findMany({
       where: {
         status: TABS[tab].status,
+        ...(hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
+        ...(dia ? { deliveryDate: new Date(`${dia}T00:00:00Z`) } : {}),
+        ...(canal ? { channel: canal } : {}),
         ...(q
           ? {
               OR: [
@@ -60,7 +70,12 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
       take: 200,
     }),
     prisma.order.findMany({ where: { status: "PENDENTE" }, select: { deliveryDate: true, total: true, paid: true } }),
+    // Horários que existem nesta aba, para as opções do filtro.
+    prisma.order.findMany({ where: { status: TABS[tab].status, deliveryTime: { not: null } }, select: { deliveryTime: true }, distinct: ["deliveryTime"] }),
   ]);
+  const orders = pgto ? found.filter((o) => (Number(o.total) - Number(o.paid) > 0) === (pgto === "falta")) : found;
+  const hours = [...new Set(timeRows.map((r) => r.deliveryTime!.slice(0, 2)).filter((h) => /^\d{2}$/.test(h)))].sort();
+  const filtering = Boolean(q || hora || dia || pgto || canal);
 
   const today = dayKey(new Date());
   const tomorrow = dayKey(new Date(Date.now() + DAY_MS));
@@ -103,18 +118,23 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
             </Link>
           ))}
         </div>
-        <form action="/painel/encomendas" className="flex items-center gap-2">
-          <input type="hidden" name="aba" value={tab} />
-          <input name="q" defaultValue={q} placeholder="Buscar cliente ou produto..." className="input w-56" />
-          <button className="btn-ghost">Buscar</button>
-          {q && <Link href={`/painel/encomendas?aba=${tab}`} className="text-sm text-cacau-500 hover:underline">Limpar</Link>}
-        </form>
       </div>
+
+      <OrderFilters
+        values={{ aba: tab, q: q ?? "", hora, dia, pgto, canal }}
+        hours={hours}
+        channels={ORDER_CHANNELS}
+        today={today}
+        tomorrow={tomorrow}
+      />
+      {filtering && orders.length > 0 && (
+        <p className="-mt-2 mb-4 text-sm text-cacau-500">{orders.length} encomenda(s) encontrada(s) com esses filtros.</p>
+      )}
 
       {orders.length === 0 && (
         <div className="card flex flex-col items-center py-10 text-center">
-          <p className="font-medium">{q ? "Nada encontrado para essa busca." : pendingTab ? "Nenhuma encomenda pendente." : "Nenhuma encomenda aqui."}</p>
-          {pendingTab && !q && (
+          <p className="font-medium">{filtering ? "Nenhuma encomenda com esses filtros." : pendingTab ? "Nenhuma encomenda pendente." : "Nenhuma encomenda aqui."}</p>
+          {pendingTab && !filtering && (
             <>
               <p className="mt-1 text-sm text-cacau-500">Registre a próxima para ela aparecer na agenda da cozinha.</p>
               <Link href="/painel/encomendas/nova" className="btn-accent mt-4">＋ Nova encomenda</Link>
