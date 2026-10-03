@@ -9,6 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed, type VariantSeed } from "./data/cardapio";
 import { PEDIDOSYA } from "./data/pedidosya";
+import { bookPayment } from "../lib/orders";
 
 const prisma = new PrismaClient();
 
@@ -416,6 +417,22 @@ async function main() {
     for (const o of orders) {
       await prisma.orderPayment.create({ data: { orderId: o.id, amount: o.paid, method: "OTRO", paidAt: o.createdAt } });
     }
+  });
+
+  // Pagamentos registrados antes de "pagamento entra no faturamento na hora": os das
+  // encomendas ainda pendentes entram agora, no dia em que foram recebidos.
+  // Encomendas entregues já estão no faturamento pela venda da entrega; canceladas ficam como estão.
+  await once("2026-10-faturar-pagamentos-antigos", async () => {
+    const payments = await prisma.orderPayment.findMany({
+      where: { saleId: null, order: { status: "PENDENTE" } },
+      orderBy: { paidAt: "asc" },
+    });
+    for (const p of payments) {
+      await bookPayment(p.id);
+      const booked = await prisma.orderPayment.findUnique({ where: { id: p.id } });
+      if (booked?.saleId) await prisma.sale.update({ where: { id: booked.saleId }, data: { createdAt: p.paidAt } });
+    }
+    console.log(`  ${payments.length} pagamento(s) antigo(s) levado(s) ao faturamento`);
   });
 }
 
