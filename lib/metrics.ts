@@ -3,15 +3,42 @@ import { dayKey, startOfDay, startOfMonth } from "./time";
 
 const confirmed = { status: "CONFIRMADA" as const };
 
+/**
+ * Quantos pedidos houve no período: cada venda comum conta 1, e cada encomenda conta 1
+ * mesmo com várias vendas (sinal, pagamentos e restante na entrega).
+ */
+async function countOrders(from: Date) {
+  const [plain, fromOrders] = await Promise.all([
+    prisma.sale.count({
+      where: { ...confirmed, createdAt: { gte: from }, OR: [{ externalRef: null }, { NOT: { externalRef: { startsWith: "encomenda" } } }] },
+    }),
+    prisma.sale.findMany({
+      where: { ...confirmed, createdAt: { gte: from }, externalRef: { startsWith: "encomenda" } },
+      select: { externalRef: true },
+    }),
+  ]);
+  const paymentIds = fromOrders.map((s) => s.externalRef!).filter((r) => r.startsWith("encomenda-pagamento:")).map((r) => r.slice(20));
+  const payments = paymentIds.length
+    ? await prisma.orderPayment.findMany({ where: { id: { in: paymentIds } }, select: { orderId: true } })
+    : [];
+  const orderIds = new Set([
+    ...fromOrders.map((s) => s.externalRef!).filter((r) => r.startsWith("encomenda:")).map((r) => r.slice(10)),
+    ...payments.map((p) => p.orderId),
+  ]);
+  return plain + orderIds.size;
+}
+
 async function totals(from: Date) {
-  const agg = await prisma.sale.aggregate({
-    where: { ...confirmed, createdAt: { gte: from } },
-    _sum: { total: true, totalCost: true },
-    _count: true,
-  });
+  const [agg, orders] = await Promise.all([
+    prisma.sale.aggregate({
+      where: { ...confirmed, createdAt: { gte: from } },
+      _sum: { total: true, totalCost: true },
+    }),
+    countOrders(from),
+  ]);
   const revenue = Number(agg._sum.total ?? 0);
   const cost = Number(agg._sum.totalCost ?? 0);
-  return { revenue, cost, profit: revenue - cost, orders: agg._count };
+  return { revenue, cost, profit: revenue - cost, orders };
 }
 
 export async function getOverview() {
