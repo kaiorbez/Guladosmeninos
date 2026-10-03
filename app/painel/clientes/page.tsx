@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { MessageCircleIcon } from "lucide-react";
+import { MessageCircleIcon, Trash2Icon } from "lucide-react";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { Kpi } from "@/components/Kpi";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { bs, shortDate } from "@/lib/format";
+import { hideClientAction, restoreClientAction } from "./actions";
 
 type Client = {
   key: string;
@@ -26,21 +28,24 @@ const waUrl = (p: string) => `https://wa.me/${p.length === 8 ? `591${p}` : p}`;
 const SORTS = { gasto: "Mais gastou", recente: "Mais recente", compras: "Mais compras" } as const;
 type Sort = keyof typeof SORTS;
 
-export default async function ClientesPage({ searchParams }: { searchParams: Promise<{ q?: string; ordem?: string }> }) {
+export default async function ClientesPage({ searchParams }: { searchParams: Promise<{ q?: string; ordem?: string; ocultos?: string }> }) {
   const sp = await searchParams;
+  const showHidden = sp.ocultos === "1";
   const q = sp.q?.trim().toLowerCase();
   const sort: Sort = sp.ordem && sp.ordem in SORTS ? (sp.ordem as Sort) : "gasto";
 
-  const [sales, orders] = await Promise.all([
+  const [sales, orders, hiddenRows] = await Promise.all([
     prisma.sale.findMany({
       where: { status: "CONFIRMADA", OR: [{ customerName: { not: null } }, { customerPhone: { not: null } }] },
-      select: { customerName: true, customerPhone: true, total: true, createdAt: true },
+      select: { customerName: true, customerPhone: true, total: true, createdAt: true, externalRef: true },
     }),
     prisma.order.findMany({
       where: { status: { not: "CANCELADA" } },
       select: { customerName: true, customerPhone: true, status: true, createdAt: true },
     }),
+    prisma.hiddenClient.findMany({ select: { key: true } }),
   ]);
+  const hidden = new Set(hiddenRows.map((h) => h.key));
 
   // Junta vendas e encomendas pelo celular; sem celular, pelo nome.
   const clients = new Map<string, Client>();
@@ -60,7 +65,8 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
   for (const s of sales) {
     const c = touch(s.customerName, s.customerPhone, s.createdAt);
     if (c) {
-      c.sales += 1;
+      // Vendas geradas por encomendas (pagamentos/entrega) somam no gasto, mas a compra já conta como encomenda.
+      if (!s.externalRef?.startsWith("encomenda")) c.sales += 1;
       c.spent += Number(s.total);
     }
   }
@@ -72,13 +78,14 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
     }
   }
 
-  let list = [...clients.values()];
+  let list = [...clients.values()].filter((c) => hidden.has(c.key) === showHidden);
   if (q) list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q.replace(/\D/g, "") || "§"));
   list.sort((a, b) =>
     sort === "recente" ? b.last.getTime() - a.last.getTime() : sort === "compras" ? b.sales + b.orders - (a.sales + a.orders) : b.spent - a.spent,
   );
 
-  const all = [...clients.values()];
+  const all = [...clients.values()].filter((c) => !hidden.has(c.key));
+  const hiddenCount = [...clients.values()].filter((c) => hidden.has(c.key)).length;
   const returning = all.filter((c) => c.sales + c.orders > 1).length;
   const totalSpent = all.reduce((s, c) => s + c.spent, 0);
 
@@ -100,6 +107,11 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
             </Link>
           ))}
         </div>
+        {(hiddenCount > 0 || showHidden) && (
+          <Link href={showHidden ? "/painel/clientes" : "/painel/clientes?ocultos=1"} className="text-sm text-cacau-500 hover:text-cacau-900 hover:underline">
+            {showHidden ? "← Voltar para a lista" : `Excluídos (${hiddenCount})`}
+          </Link>
+        )}
         <form action="/painel/clientes" className="flex items-center gap-2">
           <input type="hidden" name="ordem" value={sort} />
           <input name="q" defaultValue={sp.q} placeholder="Buscar nome ou celular..." className="input w-56" />
@@ -110,7 +122,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
       <div className="card overflow-x-auto p-0">
         {list.length === 0 ? (
           <p className="p-5 text-sm text-cacau-500">
-            {q ? "Nenhum cliente encontrado." : "Ainda não há clientes. Eles aparecem quando uma venda ou encomenda tem nome ou celular."}
+            {showHidden ? "Nenhum cliente excluído." : q ? "Nenhum cliente encontrado." : "Ainda não há clientes. Eles aparecem quando uma venda ou encomenda tem nome ou celular."}
           </p>
         ) : (
           <table className="table-base">
@@ -121,7 +133,8 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
                 <th className="text-right">Compras</th>
                 <th className="text-right">Gasto total</th>
                 <th className="text-right">Encomendas</th>
-                <th className="pr-5 text-right">Última vez</th>
+                <th className="text-right">Última vez</th>
+                <th className="pr-5" />
               </tr>
             </thead>
             <tbody>
@@ -144,7 +157,27 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
                     {c.orders}
                     {c.pendingOrders > 0 && <span className="ml-1 text-xs text-dourado-600">({c.pendingOrders} pendente)</span>}
                   </td>
-                  <td className="whitespace-nowrap pr-5 text-right text-cacau-500">{shortDate(c.last)}</td>
+                  <td className="whitespace-nowrap text-right text-cacau-500">{shortDate(c.last)}</td>
+                  <td className="pr-5 text-right">
+                    {showHidden ? (
+                      <form action={restoreClientAction}>
+                        <input type="hidden" name="key" value={c.key} />
+                        <button className="text-xs text-cacau-500 hover:text-cacau-900 hover:underline">restaurar</button>
+                      </form>
+                    ) : (
+                      <form action={hideClientAction}>
+                        <input type="hidden" name="key" value={c.key} />
+                        <input type="hidden" name="name" value={c.name} />
+                        <ConfirmButton
+                          message={`Excluir ${c.name} da lista de clientes? As vendas e encomendas dele continuam no painel.`}
+                          className="btn-icon"
+                          title="Excluir cliente"
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </ConfirmButton>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

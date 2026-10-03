@@ -3,6 +3,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { PrintButton } from "@/components/PrintButton";
 import { prisma } from "@/lib/db";
 import { dayKey } from "@/lib/time";
+import { decorationPhotoUrl } from "@/lib/orders";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const shift = (k: string, days: number) => new Date(new Date(`${k}T00:00:00Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
@@ -51,7 +52,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
               <div className="flex items-baseline gap-3">
                 <span className="w-14 shrink-0 text-xl font-semibold tabular-nums">{o.deliveryTime ?? "—"}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-lg font-semibold">{o.product}</p>
+                  <p className="whitespace-pre-line text-lg font-semibold">{o.product}</p>
                   <p className="text-sm text-cacau-500">#{o.number} · {o.customerName}</p>
                 </div>
                 <span className="size-5 shrink-0 rounded border-2 border-cacau-400" aria-hidden title="Feito" />
@@ -70,6 +71,10 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
                 ))}
               </dl>
               {o.notes && <p className="ml-[4.25rem] mt-2 text-sm">Obs.: {o.notes}</p>}
+              {decorationPhotoUrl(o) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={decorationPhotoUrl(o)!} alt="Foto da decoração" className="ml-[4.25rem] mt-2 h-40 w-40 rounded-md border border-creme-300 object-cover" />
+              )}
             </li>
           ))}
         </ol>

@@ -9,6 +9,7 @@ import {
   CakeSliceIcon,
   ChevronRightIcon,
   ContactIcon,
+  LandmarkIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   PackageIcon,
@@ -34,7 +35,13 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
     ],
   },
   { title: "Estoque", items: [{ href: "/painel/estoque", label: "Todos os produtos", icon: PackageIcon }] },
-  { title: "Administração", items: [{ href: "/painel/equipe", label: "Equipe", icon: UsersIcon }] },
+  {
+    title: "Administração",
+    items: [
+      { href: "/painel/financeiro", label: "Financeiro (DRE)", icon: LandmarkIcon },
+      { href: "/painel/equipe", label: "Equipe", icon: UsersIcon },
+    ],
+  },
 ];
 
 const linkClass = (active: boolean) =>

@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ClockIcon, MessageCircleIcon, PencilIcon } from "lucide-react";
+import { ClockIcon, MessageCircleIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Kpi } from "@/components/Kpi";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
+import { decorationPhotoUrl, lateLabel, minutesLate } from "@/lib/orders";
 import { PAYMENT_METHODS as METHODS } from "@/lib/format";
 import { deleteOrderAction, payRestAction, setOrderStatusAction } from "./actions";
 
@@ -142,13 +143,19 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
               <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                 {list.map((o) => {
                   const missing = Number(o.total) - Number(o.paid);
+                  const lateMin = minutesLate(o);
                   const wa = o.customerPhone ? whatsappUrl(o.customerPhone) : null;
                   return (
-                    <article key={o.id} className={`card flex flex-col p-0 ${late ? "border-coral-500/60" : ""}`}>
+                    <article key={o.id} className={`card flex flex-col p-0 ${late || lateMin !== null ? "border-coral-500/60" : ""}`}>
                       <header className="flex items-start gap-3 px-5 pt-4">
                         <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-creme-200 py-2">
                           <ClockIcon className="size-3.5 text-cacau-500" />
                           <span className="mt-0.5 text-sm font-semibold tabular-nums">{o.deliveryTime ?? "—"}</span>
+                          {lateMin !== null && (
+                            <span className="mt-1 rounded bg-coral-500 px-1 text-center text-[10px] font-semibold leading-tight text-white">
+                              Atrasada {lateLabel(lateMin)}
+                            </span>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base font-semibold">{o.customerName}</p>
@@ -173,13 +180,19 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                       </header>
 
                       <div className="px-5 py-4">
-                        <p className="text-[15px] font-medium">{o.product}</p>
+                        <p className="whitespace-pre-line text-[15px] font-medium">{o.product}</p>
                         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <Detail label="Massa" value={o.dough} />
                           <Detail label="Recheio" value={o.filling} />
                           <Detail label="Cobertura" value={o.topping} />
                           <Detail label="Decoração" value={o.decoration} />
                         </dl>
+                        {decorationPhotoUrl(o) && (
+                          <a href={decorationPhotoUrl(o)!} target="_blank" rel="noreferrer" className="mt-3 block w-fit" title="Abrir foto da decoração">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={decorationPhotoUrl(o)!} alt="Foto da decoração" loading="lazy" className="h-28 w-28 rounded-lg border border-creme-300 object-cover" />
+                          </a>
+                        )}
                         {o.notes && <p className="mt-3 rounded-md bg-creme-200/70 px-3 py-2 text-sm text-cacau-700">{o.notes}</p>}
                       </div>
 
@@ -199,7 +212,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             </ConfirmButton>
                           </form>
                         )}
-                        {o.status === "ENTREGUE" && o.saleId && (
+                        {o.status === "ENTREGUE" && (o.saleId || Number(o.paid) > 0) && (
                           <span className="badge bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">No faturamento</span>
                         )}
                         {pendingTab && (
@@ -218,6 +231,13 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             </ConfirmButton>
                           </form>
                         )}
+                        <Link
+                          href={`/painel/encomendas/nova?cliente=${o.id}`}
+                          className="btn-ghost px-2.5 py-1.5 text-xs"
+                          title={`Mais um pedido para ${o.customerName}`}
+                        >
+                          <PlusIcon className="size-3.5" /> Pedido p/ este cliente
+                        </Link>
                         <Link href={`/painel/encomendas/${o.id}`} className="btn-icon border border-creme-300" aria-label="Editar encomenda" title="Editar">
                           <PencilIcon className="size-3.5" />
                         </Link>

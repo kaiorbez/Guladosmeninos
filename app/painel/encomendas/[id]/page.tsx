@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderForm } from "@/components/OrderForm";
 import { OrderPayments } from "@/components/OrderPayments";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
+import { decorationPhotoUrl } from "@/lib/orders";
 import { orderFormData } from "../suggestions";
 
 export default async function EditarEncomenda({ params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +17,9 @@ export default async function EditarEncomenda({ params }: { params: Promise<{ id
 
   return (
     <>
-      <PageHeader title={`Encomenda #${order.number}`} subtitle={order.customerName} />
+      <PageHeader title={`Encomenda #${order.number}`} subtitle={order.customerName}>
+        <Link href={`/painel/encomendas/nova?cliente=${order.id}`} className="btn-ghost">＋ Pedido p/ este cliente</Link>
+      </PageHeader>
       <div className="space-y-4">
         <OrderForm
           {...data}
@@ -34,6 +38,7 @@ export default async function EditarEncomenda({ params }: { params: Promise<{ id
             paid: String(Number(order.paid)),
             notes: order.notes ?? "",
             channel: order.channel,
+            decorationPhotoUrl: decorationPhotoUrl(order),
           }}
         />
         <OrderPayments

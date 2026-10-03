@@ -17,6 +17,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   pedidosya: "PedidosYa",
   equipe: "Equipe",
   clientes: "Clientes",
+  financeiro: "Financeiro (DRE)",
 };
 
 function Breadcrumb() {

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { InventoryError } from "@/lib/inventory";
-import { OrderError, addPayment, deliverOrder, refreshPaid, undoOrderSale } from "@/lib/orders";
+import { OrderError, addPayment, bookPayment, deliverOrder, removePayment, undoAllOrderSales, undoOrderSale } from "@/lib/orders";
 
 const STATUSES: OrderStatus[] = ["PENDENTE", "ENTREGUE", "CANCELADA"];
 const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
@@ -26,8 +26,8 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Informe o dia da entrega.";
   const customerName = text("customerName");
   if (!customerName) return "Informe o nome do cliente.";
-  const product = text("product");
-  if (!product) return "Informe o produto.";
+  const product = text("product", 1000);
+  if (!product) return "Informe os produtos.";
   const total = money(form.get("total"));
   if (!(total >= 0)) return "Valor total inválido.";
   const channel = CHANNELS.includes(text("channel") as SaleChannel) ? (text("channel") as SaleChannel) : "WHATSAPP";
@@ -47,25 +47,46 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
     channel,
   };
 
+  // Foto da decoração: vem do navegador já reduzida (data URL); "remover" apaga a atual.
+  const photoData = String(form.get("decorationPhoto") ?? "");
+  let photo: { decorationPhoto: Uint8Array<ArrayBuffer> | null; decorationPhotoType: string | null; decorationPhotoAt: Date | null } | undefined;
+  if (photoData) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(photoData);
+    const bytes = m ? Buffer.from(m[2], "base64") : null;
+    if (!m || !bytes || bytes.length > 1_500_000) return "Foto da decoração inválida ou grande demais.";
+    photo = { decorationPhoto: new Uint8Array(bytes), decorationPhotoType: m[1], decorationPhotoAt: new Date() };
+  } else if (form.get("decorationPhotoRemove") === "1") {
+    photo = { decorationPhoto: null, decorationPhotoType: null, decorationPhotoAt: null };
+  }
+
   const id = text("id");
   if (id) {
     const current = await prisma.order.findUnique({ where: { id } });
     if (!current) return "Encomenda não encontrada.";
     if (total < Number(current.paid)) return "O total não pode ser menor que o valor já pago.";
-    await prisma.order.update({ where: { id }, data });
+    await prisma.order.update({ where: { id }, data: { ...data, ...photo } });
   } else {
     // Na criação, o valor pago vira o primeiro pagamento (o sinal).
     const paid = money(form.get("paid"));
     if (!(paid >= 0)) return "Valor pago inválido.";
     if (paid > total) return "O valor pago não pode ser maior que o total.";
-    await prisma.order.create({
+    const created = await prisma.order.create({
       data: {
         ...data,
+        ...photo,
         paid,
         userId: session.userId,
         payments: paid > 0 ? { create: { amount: paid, method: method(form.get("paidMethod")) } } : undefined,
       },
+      include: { payments: true },
     });
+    // O sinal entra no faturamento na hora.
+    for (const p of created.payments) await bookPayment(p.id, session.userId);
+    // "Registrar e adicionar outro": abre outra ficha já com os dados do mesmo cliente.
+    if (form.get("next") === "outro") {
+      revalidatePath("/painel", "layout");
+      redirect(`/painel/encomendas/nova?cliente=${created.id}`);
+    }
   }
 
   revalidatePath("/painel", "layout");
@@ -98,16 +119,16 @@ export async function deleteOrderAction(form: FormData) {
   const session = await requireSession();
   const order = await prisma.order.findUnique({ where: { id: String(form.get("orderId")) } });
   if (!order) return;
-  await undoOrderSale(order.saleId, session.userId);
+  await undoAllOrderSales(order.id, session.userId);
   await prisma.order.delete({ where: { id: order.id } });
   revalidatePath("/painel", "layout");
 }
 
 /** Registra um valor recebido (o card manda o restante; a ficha permite valor parcial). */
 export async function addPaymentAction(_: string | null, form: FormData): Promise<string | null> {
-  await requireSession();
+  const session = await requireSession();
   try {
-    await addPayment(String(form.get("orderId")), money(form.get("amount")), method(form.get("method")));
+    await addPayment(String(form.get("orderId")), money(form.get("amount")), method(form.get("method")), session.userId);
   } catch (e) {
     if (e instanceof OrderError) return e.message;
     throw e;
@@ -122,10 +143,7 @@ export async function payRestAction(form: FormData) {
 }
 
 export async function deletePaymentAction(form: FormData) {
-  await requireSession();
-  const payment = await prisma.orderPayment.findUnique({ where: { id: String(form.get("paymentId")) } });
-  if (!payment) return;
-  await prisma.orderPayment.delete({ where: { id: payment.id } });
-  await refreshPaid(payment.orderId);
+  const session = await requireSession();
+  await removePayment(String(form.get("paymentId")), session.userId);
   revalidatePath("/painel", "layout");
 }

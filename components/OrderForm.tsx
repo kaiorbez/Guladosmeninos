@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { saveOrderAction } from "@/app/painel/encomendas/actions";
 import { ORDER_CHANNELS, PAYMENT_METHODS } from "@/lib/format";
+import { resizeImage } from "@/lib/resize-image";
 
 export type OrderValues = {
   id?: string;
@@ -20,6 +21,8 @@ export type OrderValues = {
   paid: string;
   notes: string;
   channel: string;
+  /** URL da foto da decoração já salva (edição). */
+  decorationPhotoUrl?: string | null;
 };
 
 type Suggestions = { product: string[]; dough: string[]; filling: string[]; topping: string[] };
@@ -48,6 +51,10 @@ export function OrderForm({
   const [total, setTotal] = useState(values.total);
   const [paid, setPaid] = useState(values.paid);
   const missing = Math.max(parse(total) - parse(paid), 0);
+  const [photo, setPhoto] = useState(""); // nova foto (data URL)
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const shownPhoto = photo || (!removePhoto ? values.decorationPhotoUrl : null);
 
   const field = (
     name: keyof OrderValues,
@@ -57,7 +64,7 @@ export function OrderForm({
   ) => (
     <div>
       <label className="label" htmlFor={name}>{label}</label>
-      <input id={name} name={name} defaultValue={values[name]} className="input" list={options ? `sugestoes-${name}` : undefined} {...props} />
+      <input id={name} name={name} defaultValue={values[name] ?? ""} className="input" list={options ? `sugestoes-${name}` : undefined} {...props} />
       {options && (
         <datalist id={`sugestoes-${name}`}>
           {options.map((o) => <option key={o} value={o} />)}
@@ -96,11 +103,65 @@ export function OrderForm({
       <section className="card space-y-4">
         <h2 className="text-base">Pedido</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">{field("product", "Produto", { required: true, placeholder: "Ex.: Bolo P" }, suggestions.product)}</div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="product">Produtos</label>
+            <textarea
+              id="product"
+              name="product"
+              required
+              rows={3}
+              defaultValue={values.product}
+              className="input"
+              placeholder={"Digite os produtos, um por linha. Ex.:\n1 Naked Cake P\n50 docinhos"}
+            />
+          </div>
           {field("dough", "Massa", { placeholder: "Ex.: chocolate" }, suggestions.dough)}
           {field("filling", "Recheio", { placeholder: "Ex.: maracujá" }, suggestions.filling)}
           {field("topping", "Cobertura", {}, suggestions.topping)}
-          {field("decoration", "Decoração", { placeholder: "Ex.: modelo 10" })}
+          <div>
+            {field("decoration", "Decoração", { placeholder: "Ex.: modelo 10" })}
+            <input type="hidden" name="decorationPhoto" value={photo} />
+            <input type="hidden" name="decorationPhotoRemove" value={removePhoto ? "1" : ""} />
+            <div className="mt-2 flex items-center gap-3">
+              {shownPhoto && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shownPhoto} alt="Foto da decoração" className="h-16 w-16 rounded-lg border border-creme-300 object-cover" />
+              )}
+              <label className="btn-ghost cursor-pointer px-2.5 py-1 text-xs">
+                📷 {shownPhoto ? "Trocar foto" : "Foto da decoração"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    try {
+                      setPhotoError("");
+                      setPhoto(await resizeImage(file));
+                      setRemovePhoto(false);
+                    } catch (err) {
+                      setPhotoError((err as Error).message);
+                    }
+                  }}
+                />
+              </label>
+              {shownPhoto && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhoto("");
+                    setRemovePhoto(true);
+                  }}
+                  className="text-xs text-cacau-500 hover:text-coral-600 hover:underline"
+                >
+                  remover
+                </button>
+              )}
+            </div>
+            {photoError && <p className="mt-1 text-xs text-coral-600">{photoError}</p>}
+          </div>
           <div className="sm:col-span-2">
             <label className="label" htmlFor="notes">Observação</label>
             <textarea id="notes" name="notes" defaultValue={values.notes} rows={2} className="input" placeholder="Entrega, retirada, nome na torta..." />
@@ -146,6 +207,11 @@ export function OrderForm({
         <button type="submit" disabled={pending} className="btn-accent">
           {pending ? "Salvando..." : editing ? "Salvar alterações" : "Registrar encomenda"}
         </button>
+        {!editing && (
+          <button type="submit" name="next" value="outro" disabled={pending} className="btn-ghost" title="Registra esta e abre outra ficha com o mesmo cliente">
+            Registrar e adicionar outro
+          </button>
+        )}
         <Link href="/painel/encomendas" className="btn-ghost">Voltar</Link>
       </div>
     </form>

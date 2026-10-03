@@ -4,7 +4,7 @@ const globalForPrisma = globalThis as unknown as { prisma?: ReturnType<typeof cr
 
 // A foto enviada pelo painel fica no banco; nunca carregar junto nas listagens.
 function createClient() {
-  return new PrismaClient({ omit: { product: { photo: true } } });
+  return new PrismaClient({ omit: { product: { photo: true }, order: { decorationPhoto: true } } });
 }
 
 export const prisma = globalForPrisma.prisma ?? createClient();

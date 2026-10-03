@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { AppShell, SIDEBAR_COOKIE } from "@/components/AppShell";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { LateOrdersBanner } from "@/components/LateOrdersBanner";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logout } from "../login/actions";
@@ -22,6 +24,8 @@ export default async function PainelLayout({ children }: { children: React.React
         logout={logout}
         defaultCollapsed={collapsed}
       >
+        <AutoRefresh seconds={60} />
+        <LateOrdersBanner />
         {children}
       </AppShell>
     </Suspense>
