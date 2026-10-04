@@ -36,7 +36,7 @@ function fixture({network='ok'}={}) {
  const prisma=new Proxy({}, {get(_,k){if(k==='$transaction')return fn=>{const task=q.then(async()=>{const copy=structuredClone(state);const r=await fn(db(copy));state=copy;return r;});q=task.catch(()=>{});return task;};return db(state)[k];}});
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./transport':transport,'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>({ok:true})}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>({ok:true})}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
@@ -183,3 +183,6 @@ test('pedido imediato aparece como AGORA sem inventar hora; futuro e fora do ate
  assert.throws(()=>rules.orderInput({...b,data:'2026-10-05'},now),/agora/);
  assert.throws(()=>rules.orderInput(b,new Date('2026-10-04T13:00:00Z')),/agora/);
 });
+
+test('telefone boliviano legado recupera mesma encomenda sem mudar saldo, data ou status',async()=>{const f=fixture();const r=await f.service.saveOrder(body());const o=f.state().order[0];o.customerPhone=phone.slice(3);o.paid=65;const c=await f.service.context(phone);assert.equal(c.pedidos.length,1);assert.equal(c.pedidos[0].id,r.pedido.id);assert.equal(f.state().order.length,1);assert.equal(f.state().order[0].paid,65);assert.equal(f.state().order[0].customerPhone,phone);await f.service.context(phone);assert.equal(f.state().order.length,1);});
+test('vínculo legado nunca presume país para número brasileiro',async()=>{const f=fixture();await f.service.saveOrder(body());f.state().order[0].customerPhone='73957478';const c=await f.service.context('5573957478');assert.equal(c.pedidos.length,0);assert.equal(f.state().order[0].customerPhone,'73957478');});

@@ -2,17 +2,18 @@ import { prisma } from '@/lib/db';
 import { text } from './rules';
 
 /** Importa somente dados devolvidos pela Z-API. Falha não é confundida com histórico vazio. */
-export async function importHistory(phone: string) {
+export async function importHistory(phone: string, diagnostic = false) {
   const id = `history-v2:${phone}`;
-  if (await prisma.agentEvent.findUnique({ where: { key: id } })) return;
+  if (await prisma.agentEvent.findUnique({ where: { key: id } })) return {ok:true,importado:true};
   const instance = process.env.ZAPI_INSTANCE, token = process.env.ZAPI_TOKEN, client = process.env.ZAPI_CLIENT_TOKEN;
-  if (!instance || !token || !client) return;
+  if (!instance || !token || !client) return {ok:false,importado:false,motivo:'ZAPI_NAO_CONFIGURADA'};
   try {
     const r = await fetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/chat-messages/${phone}?amount=100`, { headers: { 'Client-Token': client }, signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return;
+    if (!r.ok) return {ok:false,importado:false,status:r.status,motivo:'PROVEDOR_NAO_RETORNOU_HISTORICO'};
     const raw = await r.json();
-    const messages = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : null;
-    if (!messages) return;
+    const messages = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : Array.isArray(raw.messages) ? raw.messages : null;
+    if (!messages) return {ok:false,importado:false,motivo:'FORMATO_HISTORICO_DESCONHECIDO'};
+    if (diagnostic) return {ok:true,importado:false,mensagensDisponiveis:messages.length};
     await prisma.$transaction(async tx => {
       for (const m of messages.slice(0, 100)) {
         if (!m || m.isGroup || !m.messageId || m.reaction) continue;
@@ -26,5 +27,6 @@ export async function importHistory(phone: string) {
       }
       await tx.agentEvent.upsert({ where: { key: id }, create: { key: id, phone, kind: 'HISTORY_LOADED', payload: { limit: 100 } }, update: {} });
     });
-  } catch { /* contexto informa explicitamente se houve importação */ }
+    return {ok:true,importado:true};
+  } catch { return {ok:false,importado:false,motivo:'FALHA_CONSULTA_HISTORICO'}; }
 }

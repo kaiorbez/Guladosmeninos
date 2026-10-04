@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { AgentError, dateOnly, dayLaPaz, key, orderInput, paymentPlan, phone, resolvedCommand, text, yangoUrl } from './rules';
 import { lockConversation, sendOnce } from './transport';
 import { importHistory } from './history';
+import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
 import { receiptReview, receiptNotice, closeMessage } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
@@ -20,6 +21,7 @@ export async function catalog() {
  return products.flatMap(p=>p.variants.map(v=>({variantId:v.id,produto:p.name,tamanho:v.name,descricao:p.description,preco:Number(v.price),estoque:v.stock,controlaEstoque:p.trackStock,precoSobConsulta:p.priceOnRequest})));
 }
 export async function context(p: string) {
+  await linkLegacyOrders(p);
   const [orders, tickets, conversation, inbox, sent, events, imported] = await Promise.all([
     prisma.order.findMany({ where: { customerPhone: p }, orderBy: [{ deliveryDate: 'desc' }, { createdAt: 'desc' }], take: 100 }),
     prisma.agentTicket.findMany({ where: { phone: p }, orderBy: { createdAt: 'desc' }, take: 20 }),
@@ -255,6 +257,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
+    case 'diagnosticoHistorico': return importHistory(phone(b.telefone), true);
     case 'diagnosticoConexao': {
       const instance=process.env.ZAPI_INSTANCE,token=process.env.ZAPI_TOKEN,client=process.env.ZAPI_CLIENT_TOKEN;
       if(!instance||!token||!client)throw new AgentError('Z-API não configurada.',503);
@@ -263,7 +266,7 @@ export async function operate(b: Body) {
       const d=await response.json();
       return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,messageFilters:d.messageFilters??null,callbackTypeFilters:d.callbackTypeFilters??null,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
     }
-    case 'diagnostico': return {ok:true,versao:'gula-diagnostico-filtros-v13',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v14',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
