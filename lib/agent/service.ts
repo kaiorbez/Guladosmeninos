@@ -5,9 +5,10 @@ import { lockConversation, sendOnce } from './transport';
 import { importHistory } from './history';
 import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
-import { receiptReview, receiptNotice, closeMessage } from './review';
+import { receiptReview, receiptNotice, closeMessage, deliveryFee } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
+import { lookupYangoFee } from './yango';
 
 type Body = Record<string, unknown>;
 const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
@@ -200,14 +201,17 @@ export async function team(b: Body) {
     });
   }
   const link = yangoUrl(message.match(/https:\/\/\S+/)?.[0]);
+  const quotedFee=deliveryFee(message);
+  const fetchedFee=await lookupYangoFee(link);
+  const fee=fetchedFee??quotedFee;
   const ctx=await context(t.phone);
   const messages=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).reverse();
   const detected=messages.find(m=>/\b(hola|quiero|gracias|buenas|mañana|puedes|quero|obrigad[oa]|amanhã|você)\b|[ãõ]/i.test(String(m.texto)));
   const lang=/\b(hola|quiero|gracias|buenas|mañana|puedes)\b/i.test(String(detected?.texto||''))?'es':'pt';
-  const sent = await sendOnce(`yango:${t.id}:${link}`, t.phone, closeMessage(lang,link), t.id);
+  const sent = await sendOnce(`yango:${t.id}:${link}`, t.phone, closeMessage(lang,link,fee), t.id);
   if (!sent.enviado) return { ok: false, telefone: t.phone, ...sent, error: 'Envio não confirmado; verificar antes de repetir.' };
-  await resolveTicket(t.id, `Link Yango enviado: ${link}`, 'grupo');
-  await prisma.agentEvent.upsert({ where: { key: `team:${id}` }, create: { key: `team:${id}`, phone: t.phone, kind: 'DELIVERY_LINK', payload: { link }, result: { enviado: true } }, update: {} });
+  await resolveTicket(t.id, `Link Yango enviado: ${link}${fee!==null?`; entrega: ${fee} Bs`:''}`, 'grupo');
+  await prisma.agentEvent.upsert({ where: { key: `team:${id}` }, create: { key: `team:${id}`, phone: t.phone, kind: 'DELIVERY_LINK', payload: { link, valorEntrega:fee, moeda:'Bs', fonteValor:fetchedFee!==null?'YANGO':quotedFee!==null?'EQUIPE':'NAO_DISPONIVEL' }, result: { enviado: true } }, update: {} });
   return { ok: true, telefone: t.phone, enviado: true, encerrado: true };
 }
 export async function reminders(testTarget?: string) {
@@ -330,6 +334,7 @@ export async function operate(b: Body) {
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
     case 'diagnosticoHistorico': return importHistory(phone(b.telefone), true);
+    case 'consultarEntregaYango': return {ok:true,valorEntrega:await lookupYangoFee(text(b.link,3000)),moeda:'Bs'};
     case 'diagnosticoConexao': {
       const instance=process.env.ZAPI_INSTANCE,token=process.env.ZAPI_TOKEN,client=process.env.ZAPI_CLIENT_TOKEN;
       if(!instance||!token||!client)throw new AgentError('Z-API não configurada.',503);

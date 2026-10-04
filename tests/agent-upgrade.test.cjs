@@ -21,7 +21,7 @@ function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  }
  if(v instanceof Date)return +x===+v;return x===v;
 });}
-function fixture({network='ok'}={}) {
+function fixture({network='ok',yangoFee=null}={}) {
  let state={product:[{id:'torta',name:'Torta maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:false,variants:[{id:'v-torta',name:'P',price:130,active:true,stock:0}]}],agentEvent:[],agentConversation:[{phone,generation:1,latestMoment:0n,pausedUntil:null}],agentInbox:[],agentTicket:[],agentDelivery:[],order:[]};let q=Promise.resolve(),calls=0,failWrite=false;
  function db(s){const out={$executeRaw:async()=>0};for(const table of Object.keys(s))out[table]={
   findUnique:async({where})=>s[table].find(o=>matches(o,where))||null,
@@ -37,11 +37,40 @@ function fixture({network='ok'}={}) {
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
  let receiptPayments=0;
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./yango':{lookupYangoFee:async()=>yangoFee},'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,receiptPayments:()=>receiptPayments,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+
+test('preço consultado na Yango acompanha o link sem tarifa digitada pela equipe',async()=>{
+ const f=fixture({yangoFee:8});const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Entrega por Yango'});
+ await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'staff',texto:'https://delivery.yango.com/route/#691c5717-0fdb-41e7-8019-c75c3bfd5ae6'});
+ assert.match(f.state().agentDelivery.at(-1).body.message,/Valor da entrega: 8 Bs/);assert.equal(f.state().agentEvent.at(-1).payload.fonteValor,'YANGO');assert.equal(f.receiptPayments(),0);
+});
+
+test('consulta pública Yango lê apenas preço de entrega e falha sem inventar tarifa',async()=>{
+ let calls=0;
+ const response={content_sections:[{items:[{type:'details',sections:[{items:[{title:'Bs8\u202f',subtitle:'Precio'},{title:'Total pedido Bs20',subtitle:'Instrucciones'}]}]},{title:{text:'Bs99'},type:'header'}]}]};
+ const y=load('yango',{'./rules':rules,fetch:async()=>{calls++;return {ok:true,json:async()=>response};}});
+ const link='https://delivery.yango.com/route/#691c5717-0fdb-41e7-8019-c75c3bfd5ae6';
+ assert.equal(await y.lookupYangoFee(link),8);assert.equal(calls,1);assert.equal(y.yangoFeeFromResponse({title:'Bs999'}),null);
+ assert.equal(await y.lookupYangoFee('https://delivery.yango.com/route/#invalid'),null);assert.equal(calls,1);
+ response.content_sections[0].items[0].sections[0].items.push({title:'Bs10',subtitle:'Precio'});assert.equal(y.yangoFeeFromResponse(response),null);
+ const fail=load('yango',{'./rules':rules,fetch:async()=>{throw Error('timeout');}});assert.equal(await fail.lookupYangoFee(link),null);
+ await assert.rejects(y.lookupYangoFee('https://delivery.yango.com.evil.test/route/#abc'),/acompanhamento/);
+});
+
+test('Yango informa tarifa explícita, preserva idioma e não contabiliza frete como pagamento',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Entrega por Yango'});
+ await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'staff',texto:'https://delivery.yango.com/route/#abc\nEntrega: 12,50 Bs'});
+ assert.match(f.state().agentDelivery.at(-1).body.message,/Valor da entrega: 12,50 Bs/);assert.equal(f.receiptPayments(),0);assert.equal(f.state().agentEvent.at(-1).payload.valorEntrega,12.5);
+ const review=load('review',{'./rules':rules});assert.match(review.closeMessage('es','https://delivery.yango.com/route/#abc',15),/Costo del envío: 15 Bs/);
+ assert.equal(review.deliveryFee('Total pedido: 130 Bs\nhttps://delivery.yango.com/route/#12345'),null);
+ assert.equal(review.deliveryFee('https://delivery.yango.com/route/#abc\n15 Bs'),15);assert.equal(review.deliveryFee('Entrega: 0 Bs'),0);
+ assert.throws(()=>review.deliveryFee('Entrega: 15 Bs\nFrete: 20 Bs'),/divergentes/);
+ assert.doesNotMatch(review.closeMessage('pt','https://delivery.yango.com/route/#abc'),/Valor da entrega/);
+});
 
 test('resposta a outra resposta vinculada resolve entrega sem alterar pedido ou pagamento',async()=>{
  const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Confirmar entrega por Yango'});
