@@ -152,3 +152,7 @@ test('aviso legado precisa telefone validado da consulta Redis autenticada',asyn
  const f=fixture();await assert.rejects(f.service.team({grupo:'test',referenceMessageId:'old',messageId:'team1',texto:'Respondido',legadoTelefone:'inválido'}),/Telefone/);
  const r=await f.service.team({grupo:'test',referenceMessageId:'old',messageId:'team1',texto:'Respondido',legadoTelefone:phone});assert.equal(r.retomado,true);assert.equal(f.state().agentTicket[0].phone,phone);
 });
+test('classificação explícita de não comprovante impede inventar recibo',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'qr',midia:'imagem',momento:Date.now(),midiaUrl:'https://example.com/qr.png'});await f.service.operate({acao:'conteudo',telefone:phone,messageId:'qr',texto:'Tipo: OUTRA_IMAGEM. QR de cobrança, não comprovante.'});
+ await assert.rejects(f.service.ticket({telefone:phone,messageId:'qr',geracao:2,mediaIds:['qr'],tipo:'COMPROVANTE',pergunta:'Inventado',comprovante:{tipo:'COMPROVANTE_BANCARIO'}}),/não é comprovante/);assert.equal(f.calls(),0);
+});

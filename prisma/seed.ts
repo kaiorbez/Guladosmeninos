@@ -145,6 +145,24 @@ async function main() {
     await prisma.variant.updateMany({ where: { name: "A consultar" }, data: { name: "Sob consulta" } });
   }
 
+  // Adicionais oficiais do prompt: SKU real para que o agente não invente preço.
+  // Acrescenta uma vez, preservando edições posteriores dos sócios.
+  await once("2026-10-adicionais-agente",async()=>{
+    const extras:[string,number[]][]=[
+      ["Morango na decoração",[20,30,40,50]],["Morango no recheio",[20,30,30,40]],
+      ["Maracujá no recheio",[10,20,30,40]],["Geleia de maracujá",[10,20,30,40]],
+      ["Geleia de morango",[10,20,30,40]],["Geleia de frutas vermelhas",[10,20,30,40]],
+      ["Suspiros",[10,20,30,40]],["Camada extra no bolo",[40,64,67,160]],
+      ["Chantilly",[60,60,80,80]],["Cereja",[10,20,30,40]],
+    ];
+    const cat:CategorySeed={slug:'adicionais-bolo',name:'Adicionais de bolo',group:'Tortas',trackStock:false,products:[]};
+    const category=await ensureCategory(cat,false);
+    for(const [i,[name,prices]] of extras.entries()) {
+      if(await prisma.product.findFirst({where:{categoryId:category.id,name}}))continue;
+      await createProduct(category.id,cat,{name,description:'Adicional por tamanho do bolo, somente mediante aceite do cliente.',trackStock:false,onStore:true,variants:prices.map((price,index)=>({name:['P','M','G','GG'][index],price}))},i);
+    }
+  });
+
   // 2. Produtos que só apareciam no PedidosYa + catálogo do app (uma vez só)
   if ((await prisma.pedidosYaItem.count()) === 0) {
     for (const cat of EXTRAS) {
@@ -442,3 +460,4 @@ main()
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
+

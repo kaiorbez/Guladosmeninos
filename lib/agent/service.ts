@@ -114,6 +114,8 @@ export async function ticket(b: Body) {
       const recent = media.some(m => { const payload = m.payload as Body; return ['imagem', 'pdf'].includes(String(payload.media)) && payload.fromMe === false && m.createdAt.getTime() > Date.now() - 10 * 60000; });
       if (!recent) throw new AgentError('Localização, texto ou mídia antiga não é comprovante atual.');
       receiptMedia=media.filter(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;}).map(m=>({id:m.key,url:text((m.payload as Body).sourceUrl,3000),kind:String((m.payload as Body).media)})).filter(m=>m.url);
+      const analyzed=await tx.agentInbox.findMany({where:{phone:p,messageId:{in:ids},ready:true}});
+      if(analyzed.some(m=>/Tipo\s*:\s*(OUTRA_IMAGEM|REFERENCIA_BOLO)|[\"']tipo[\"']\s*:\s*[\"'](OUTRA_IMAGEM|REFERENCIA_BOLO)/i.test(m.content||''))) throw new AgentError('Analisador identificou mídia que não é comprovante: não confirmar recebimento de pagamento.');
       const receipt=b.comprovante;
       if(!receipt || typeof receipt!=='object' || (receipt as Body).tipo!=='COMPROVANTE_BANCARIO') throw new AgentError('Classifique a mídia atual e informe campos visíveis do comprovante.');
       const orderId=text((receipt as Body).pedidoId,100);
@@ -196,6 +198,8 @@ export async function buffer(p: string) {
 export async function prepare(b: Body) {
   const p=phone(b.telefone), execution=key(b.execucao);
   await importHistory(p);
+  // A failed media analysis must not block all later messages forever.
+  await prisma.agentInbox.updateMany({where:{phone:p,ready:false,consumedAt:null,createdAt:{lte:new Date(Date.now()-10*60000)}},data:{ready:true,content:'[Mensagem/mídia recebida não pôde ser analisada. Não inventar conteúdo. Pedir reenvio se necessário e avisar equipe.]'}});
   const claim=await prisma.$transaction(async tx=>{
     await lockConversation(tx,p);
     const prior=await tx.agentEvent.findUnique({where:{key:`batch:${p}:${execution}`}});
@@ -232,7 +236,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-v4',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-v5',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
@@ -241,6 +245,7 @@ export async function operate(b: Body) {
     case 'catalogo': return {ok:true,itens:await catalog()};
     case 'finalizarTeste': {
       if(b.telefone!=='59175678921') throw new AgentError('Contato de teste inválido.');
+      await prisma.agentInbox.updateMany({where:{phone:b.telefone,consumedAt:null,OR:[{messageId:{startsWith:'e2e-'}},{messageId:{startsWith:'fixture-'}},{messageId:{startsWith:'loc-'}}]},data:{consumedAt:new Date()}});
       const orders=await prisma.order.findMany({where:{customerPhone:b.telefone,customerName:{startsWith:'[TESTE]'},paid:0}});
       for(const o of orders) await prisma.order.update({where:{id:o.id},data:{status:'CANCELADA'}});
       await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'}},data:{status:'RESOLVIDA',resolvedAt:new Date(),resolvedBy:'teste autorizado'}});
