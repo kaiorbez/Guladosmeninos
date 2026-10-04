@@ -228,6 +228,19 @@ export async function operate(b: Body) {
       return {ok:true,atualizado:result.count===1};
     }
     case 'contexto': return context(phone(b.telefone));
+    case 'auditoriaDia': {
+      const day=text(b.dia,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||day>dayLaPaz()) throw new AgentError('Dia de auditoria inválido.');
+      const from=new Date(day+'T04:00:00Z'), to=new Date(from.getTime()+86400000);
+      if(!Number.isFinite(from.getTime())||from.toISOString().slice(0,10)!==day) throw new AgentError('Data inválida.');
+      const [sales,orders,tickets]=await Promise.all([
+        prisma.sale.findMany({where:{createdAt:{gte:from,lt:to}},include:{items:true},orderBy:{createdAt:'asc'}}),
+        prisma.order.findMany({where:{OR:[{deliveryDate:new Date(day+'T00:00:00Z')},{createdAt:{gte:from,lt:to}},{payments:{some:{paidAt:{gte:from,lt:to}}}}]},include:{payments:true}}),
+        prisma.agentTicket.findMany({where:{OR:[{createdAt:{gte:from,lt:to}},{updatedAt:{gte:from,lt:to}}]},orderBy:{createdAt:'asc'}}),
+      ]);
+      return {ok:true,dia:day,vendas:sales,encomendas:orders,pendencias:tickets};
+    }
+
     case 'pausar': {
       const p = phone(b.telefone);
       await prisma.$transaction(async tx => { await lockConversation(tx,p); await current(tx,p,b); await tx.agentConversation.update({where:{phone:p},data:{pausedUntil:new Date(Date.now()+30*60000)}}); });
@@ -237,7 +250,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-avisos-organizados-v7',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-vendas-v8',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
