@@ -43,6 +43,39 @@ function fixture({network='ok'}={}) {
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
 
+test('resposta comum vinculada assume pendência, cancela lembrete e bloqueia resposta atrasada',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'doubt',geracao:1,pergunta:'Entrega hoje?'});
+ const b={grupo:'test',referenceMessageId:t.messageId,messageId:'staff',texto:'Vou verificar com o cliente'};
+ const r=await f.service.team(b);assert.equal(r.assumido,true);assert.equal(f.state().agentTicket[0].status,'ASSUMIDA');
+ assert.equal(f.state().agentTicket[0].resolvedAt,undefined);assert.equal(f.state().agentConversation[0].generation,2);
+ await f.service.team(b);assert.equal(f.state().agentConversation[0].generation,2);
+ f.state().agentTicket[0].nextReminderAt=new Date(0);await f.service.reminders();assert.equal(f.calls(),1);
+ const cancelled=await f.transport.sendOnce('reminder:stale:0','test','Lembrete',t.ticketId);assert.equal(cancelled.estado,'CANCELLED');assert.equal(f.calls(),1);
+ const stale=await f.transport.sendOnce('reply:stale',phone,'Resposta atrasada',undefined,1);assert.equal(stale.estado,'SUPERADA');assert.equal(f.calls(),1);
+ await f.service.team({...b,messageId:'done',texto:'Resolvido'});assert.equal(f.state().agentTicket[0].status,'RESOLVIDA');assert.equal(f.state().agentConversation[0].pausedUntil,null);
+});
+
+test('humano no privado suspende apenas pendências do cliente sem confirmar pagamento',async()=>{
+ const f=fixture();f.state().agentTicket.push({id:'a',phone,status:'ABERTA',kind:'COMPROVANTE'},{id:'b',phone:'59170000000',status:'ABERTA',kind:'DUVIDA'});
+ await f.service.inbound({telefone:phone,messageId:'human',humano:true,texto:'Já estou atendendo',momento:Date.now()});
+ assert.equal(f.state().agentTicket[0].status,'ASSUMIDA');assert.equal(f.state().agentTicket[1].status,'ABERTA');assert.equal(f.receiptPayments(),0);
+});
+
+test('resposta antiga e callback repetido não assumem uma pendência nova',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'human',humano:true,momento:Date.now()});
+ f.state().agentTicket.push({id:'new',phone,status:'ABERTA'});
+ await f.service.inbound({telefone:phone,messageId:'human',humano:true,momento:Date.now()});
+ await f.service.inbound({telefone:phone,messageId:'old-human',humano:true,momento:Date.now()-60000});
+ assert.equal(f.state().agentTicket[0].status,'ABERTA');
+});
+
+test('conversa de grupo sem vínculo e eco automático não assumem clientes',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'doubt',geracao:1,pergunta:'Entrega?'});
+ assert.equal((await f.service.team({grupo:'test',referenceMessageId:'unrelated',messageId:'staff',texto:'Estou verificando'})).ignorar,true);
+ assert.equal((await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'echo',texto:'Aviso automático',fromApi:true})).ignorar,true);
+ assert.equal(f.state().agentTicket[0].status,'ABERTA');assert.equal(f.calls(),1);
+});
+
 test('falha de mídia registra pendência, responde sem IA e deduplica callbacks concorrentes',async()=>{
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'photo',midia:'imagem',texto:'precio',momento:Date.now()});
  const b={acao:'falhaAnalise',telefone:phone,messageId:'photo',geracao:2,etapa:'imagem',idioma:'es'};

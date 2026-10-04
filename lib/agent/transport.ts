@@ -34,7 +34,9 @@ export async function sendOnce(id: string, target: string, message: string, tick
     }
     if (ticketId && id.startsWith('reminder:')) {
       const t = await tx.agentTicket.findUnique({ where: { id: ticketId } });
-      if (!t || t.status !== 'ABERTA') {
+      if (t) await lockConversation(tx, t.phone);
+      const latest = t && await tx.agentTicket.findUnique({ where: { id: ticketId } });
+      if (!latest || latest.status !== 'ABERTA') {
         await tx.agentDelivery.update({ where: { key: id }, data: { status: 'CANCELLED' } });
         return { enviado: false, estado: 'CANCELLED', messageId: null };
       }

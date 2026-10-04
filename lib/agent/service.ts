@@ -54,6 +54,7 @@ export async function inbound(b: Body) {
     await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment }) } });
     const c = await tx.agentConversation.findUnique({ where: { phone: p } });
     if (c && BigInt(moment) < c.latestMoment) return true;
+    if (b.humano === true) await tx.agentTicket.updateMany({ where: { phone: p, status: 'ABERTA' }, data: { status: 'ASSUMIDA' } });
     if (b.humano !== true) await tx.agentInbox.create({ data: { id:eventKey, phone:p, messageId:id, mediaKind:String(b.midia || 'outro'), moment:BigInt(moment) } });
     await tx.agentConversation.upsert({ where: { phone: p }, create: { phone: p, generation: 1, latestMoment: BigInt(moment), pausedUntil: b.humano === true ? new Date(Date.now() + 30 * 60000) : null }, update: { generation: { increment: 1 }, latestMoment: BigInt(moment), ...(b.humano === true ? { pausedUntil: new Date(Date.now() + 30 * 60000) } : {}) } });
     return false;
@@ -147,13 +148,14 @@ export async function resolveTicket(id: string, answer: string, who: string) {
     const t = await tx.agentTicket.findUnique({ where: { id } });
     if (!t) throw new AgentError('Aviso não encontrado.', 404);
     await lockConversation(tx, t.phone);
-    await tx.agentTicket.updateMany({ where: { id, status: 'ABERTA' }, data: { status: 'RESOLVIDA', answer: answer || null, resolvedBy: who, resolvedAt: new Date() } });
+    await tx.agentTicket.updateMany({ where: { id, status: { in: ['ABERTA', 'ASSUMIDA'] } }, data: { status: 'RESOLVIDA', answer: answer || null, resolvedBy: who, resolvedAt: new Date() } });
     await tx.agentConversation.updateMany({ where: { phone: t.phone }, data: { pausedUntil: null, generation: { increment: 1 } } });
     return { ok: true, telefone: t.phone, retomado: true };
   });
 }
 export async function team(b: Body) {
   if (String(b.grupo) !== group()) throw new AgentError('Grupo não autorizado.', 403);
+  if (b.fromApi === true) return { ok: true, ignorar: true, motivo: 'MENSAGEM_AUTOMATICA' };
   const ref = key(b.referenceMessageId), id = key(b.messageId), message = text(b.texto, 3000);
   let delivery = await prisma.agentDelivery.findUnique({ where: { messageId: ref } });
   // Legacy reference comes only from the authenticated n8n Redis lookup.
@@ -162,7 +164,10 @@ export async function team(b: Body) {
     const ticket=await prisma.agentTicket.upsert({where:{sourceKey:`legacy:${ref}`},create:{sourceKey:`legacy:${ref}`,phone:legacyPhone,customerName:legacyPhone,kind:'DUVIDA',question:'Aviso anterior à migração, vinculado pela referência Redis.',nextReminderAt:new Date(Date.now()+10*60000)},update:{}});
     delivery=await prisma.agentDelivery.upsert({where:{key:`legacy:${ref}`},create:{key:`legacy:${ref}`,phone:group(),ticketId:ticket.id,messageId:ref,status:'SENT',body:{message:'Aviso anterior à migração'}},update:{}});
   }
-  if (!delivery?.ticketId) throw new AgentError('Responda a um aviso do agente vinculado ao cliente.', 404);
+  if (!delivery?.ticketId) {
+    if (!resolvedCommand(message) && !/yango|preparando/i.test(message)) return { ok: true, ignorar: true, motivo: 'AVISO_NAO_VINCULADO' };
+    throw new AgentError('Responda a um aviso do agente vinculado ao cliente.', 404);
+  }
   const t = await prisma.agentTicket.findUniqueOrThrow({ where: { id: delivery.ticketId } });
   if (resolvedCommand(message)) return resolveTicket(t.id, '', 'grupo');
   if(/^(preparando|pedido confirmado[,; ]+preparando|pagamento confirmado[,; ]+preparando|pago confirmado[,; ]+preparando)[.!\s]*$/i.test(message)) {
@@ -170,6 +175,20 @@ export async function team(b: Body) {
     const sent=await sendOnce(`preparing:${t.id}`,t.phone,es?'¡El equipo confirmó tu pedido y ya está preparándolo! 💛🧁':'A equipe confirmou seu pedido e já está preparando! 💛🧁',t.id);
     if(sent.enviado) {await resolveTicket(t.id,'Equipe confirmou início do preparo.','grupo');await prisma.agentEvent.upsert({where:{key:`preparing:${t.id}`},create:{key:`preparing:${t.id}`,phone:t.phone,kind:'PREPARING',payload:{confirmadoPelaEquipe:true},result:{enviado:true}},update:{}});}
     return {ok:sent.enviado,preparoConfirmado:sent.enviado,...sent};
+  }
+  if (!/https?:\/\/delivery\.yango\.com\//i.test(message) && !/^\s*yango\b/i.test(message)) {
+    if (!message) return { ok: true, ignorar: true };
+    return prisma.$transaction(async tx => {
+      await lockConversation(tx, group());
+      await lockConversation(tx, t.phone);
+      const eventKey = `team-claim:${id}`;
+      if (await tx.agentEvent.findUnique({ where: { key: eventKey } })) return { ok: true, assumido: true, ignorar: true };
+      const changed = await tx.agentTicket.updateMany({ where: { id: t.id, status: { in: ['ABERTA', 'ASSUMIDA'] } }, data: { status: 'ASSUMIDA', answer: message } });
+      if (!changed.count) return { ok: true, ignorar: true, motivo: 'AVISO_JA_RESOLVIDO' };
+      await tx.agentConversation.updateMany({ where: { phone: t.phone }, data: { pausedUntil: new Date(Date.now() + 30 * 60000), generation: { increment: 1 } } });
+      await tx.agentEvent.create({ data: { key: eventKey, phone: t.phone, kind: 'TEAM_TAKEOVER', payload: { ticketId: t.id, message } } });
+      return { ok: true, assumido: true, lembretesSuspensos: true };
+    });
   }
   const link = yangoUrl(message.match(/https:\/\/\S+/)?.[0]);
   const ctx=await context(t.phone);
