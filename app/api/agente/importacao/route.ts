@@ -42,8 +42,8 @@ export async function POST(req: Request) {
         const existing=await tx.order.findFirst({where:{id:existingId,customerPhone:p,deliveryDate:new Date(delivery+'T00:00:00Z'),total}});
         if(!existing)throw new AgentError('Pedido existente não corresponde ao histórico revisado.',409);
         if(b.paraAgora===true) {
-          if(delivery!==day || existing.status!=='PENDENTE')throw new AgentError('Pedido para agora não corresponde ao histórico revisado.',409);
-          await tx.order.update({where:{id:existing.id},data:{deliveryTime:'AGORA',agentVersion:{increment:1}}});
+          if(delivery!==day || existing.status==='CANCELADA')throw new AgentError('Pedido para agora não corresponde ao histórico revisado.',409);
+          if(existing.deliveryTime!=='AGORA')await tx.order.update({where:{id:existing.id},data:{deliveryTime:'AGORA',agentVersion:{increment:1}}});
         }
         const imported=[];
         for(const r of payments) imported.push(await recordReceiptPayment(tx,existing.id,p,r.messageId,r.valor,new Date(`${day}T${r.hora}:00-04:00`)));
