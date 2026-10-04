@@ -4,7 +4,7 @@ import { AgentError, dateOnly, dayLaPaz, key, orderInput, paymentPlan, phone, re
 import { lockConversation, sendOnce } from './transport';
 import { importHistory } from './history';
 import { receiptReview, receiptNotice, closeMessage } from './review';
-import { pendingNotice, orderNotice } from './notices';
+import { pendingNotice, compatibleReceipt } from './notices';
 
 type Body = Record<string, unknown>;
 const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
@@ -92,12 +92,9 @@ export async function saveOrder(b: Body) {
     return result;
   });
   const saved = result as unknown as {ok:boolean;registrado:boolean;pedido:{id:string;numero:number;produto:string;data:string;horario:string|null;total:number;pagarAgora:number;versao:number}};
-  try {
-    const o=saved.pedido;
-    const t=await prisma.agentTicket.upsert({where:{sourceKey:`order:${o.id}`},create:{sourceKey:`order:${o.id}`,phone:p,customerName:name,kind:'PEDIDO',question:`Encomenda #${o.numero} — ${o.data} ${o.horario||''}\n${o.produto}\nTotal: ${o.total} Bs. Pagar agora: ${o.pagarAgora} Bs. Pagamento pendente de conferência.`,nextReminderAt:new Date(Date.now()+10*60000)},update:{question:`Encomenda #${o.numero} — ${o.data} ${o.horario||''}\n${o.produto}\nTotal: ${o.total} Bs. Pagar agora: ${o.pagarAgora} Bs.`}});
-    const sent=await sendOnce(`order-notice:${o.id}:${o.versao}`,destination(b),orderNotice(o,name,p,data.deliveryMode,data.deliveryAddress||'',data.notes||''),t.id);
-    return {...saved,notificacaoEnviada:sent.enviado};
-  } catch { return {...saved,notificacaoEnviada:false}; }
+  // O painel recebe a encomenda imediatamente; o grupo recebe só o comprovante.
+  // Dúvidas/orçamentos seguem pela ferramenta de pendência quando exigem equipe.
+  return {...saved,notificacaoEnviada:false,notificacaoPrevista:'APOS_COMPROVANTE'};
 
 }
 export async function ticket(b: Body) {
@@ -176,9 +173,10 @@ export async function team(b: Body) {
   return { ok: true, telefone: t.phone, enviado: true, encerrado: true };
 }
 export async function reminders(testTarget?: string) {
-  const due = await prisma.agentTicket.findMany({ where: { ...(testTarget==='59175678921'?{phone:testTarget,customerName:{startsWith:'[TESTE]'}}:{}), status: 'ABERTA', kind: { in: ['DUVIDA','COMPROVANTE'] }, reminderCount: { lt: 3 }, nextReminderAt: { lte: new Date() } }, take: 30 });
+  const due = await prisma.agentTicket.findMany({ where: { ...(testTarget==='59175678921'?{phone:testTarget,customerName:{startsWith:'[TESTE]'}}:{}), status: 'ABERTA', kind: { in: ['DUVIDA','COMPROVANTE'] }, NOT: { kind: 'COMPROVANTE', question: { startsWith: '📌 *Resumo*\n✅ CONFERE:' } }, reminderCount: { lt: 3 }, nextReminderAt: { lte: new Date() } }, take: 30 });
   const results = [];
   for (const t of due) {
+    if (compatibleReceipt(t.kind,t.question)) continue;
     const claim = await prisma.agentTicket.updateMany({ where: { id: t.id, status: 'ABERTA', reminderCount: t.reminderCount, nextReminderAt: t.nextReminderAt }, data: { nextReminderAt: new Date(Date.now() + 10 * 60000) } });
     if (!claim.count) continue;
     const latest = await prisma.agentTicket.findUniqueOrThrow({ where: { id: t.id } });
@@ -250,7 +248,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-vendas-v8',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-avisos-compativeis-v9',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});

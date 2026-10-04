@@ -14,7 +14,9 @@ const rules=load('rules');
 const today=new Date().toISOString().slice(0,10);
 const future=(()=>{const d=new Date(Date.now()+7*86400000);if(d.getUTCDay()===2)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10);})();
 function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
+ if(k==='NOT')return !matches(o,v);
  const x=o[k];if(v&&typeof v==='object'&&!(v instanceof Date)&&!Array.isArray(v)) {
+ if('startsWith' in v)return typeof x==='string'&&x.startsWith(v.startsWith);
  if('in' in v)return v.in.includes(x);if('lt'in v)return x<v.lt;if('lte'in v)return x<=v.lte;
  }
  if(v instanceof Date)return +x===+v;return x===v;
@@ -155,4 +157,21 @@ test('aviso legado precisa telefone validado da consulta Redis autenticada',asyn
 test('classificação explícita de não comprovante impede inventar recibo',async()=>{
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'qr',midia:'imagem',momento:Date.now(),midiaUrl:'https://example.com/qr.png'});await f.service.operate({acao:'conteudo',telefone:phone,messageId:'qr',texto:'Tipo: OUTRA_IMAGEM. QR de cobrança, não comprovante.'});
  await assert.rejects(f.service.ticket({telefone:phone,messageId:'qr',geracao:2,mediaIds:['qr'],tipo:'COMPROVANTE',pergunta:'Inventado',comprovante:{tipo:'COMPROVANTE_BANCARIO'}}),/não é comprovante/);assert.equal(f.calls(),0);
+});
+
+ test('comprovante compatível fica informativo e não gera lembretes; divergência continua alertando',async()=>{
+ const notices=load('notices');const question='📌 *Resumo*\n✅ CONFERE: comprovante de 105 Bs.\n\n👉 *Ação da equipe*\nConferir no banco (texto antigo)';
+ const notice=notices.pendingNotice('COMPROVANTE','Ana',phone,question);
+ assert(!notice.includes('VERIFICAR PAGAMENTO'));assert(!notice.includes('Conferir no banco'));assert(notice.includes('programação de preparo'));
+ const f=fixture();f.state().agentTicket.push({id:'compatible',kind:'COMPROVANTE',question,status:'ABERTA',phone,customerName:'Ana',reminderCount:0,nextReminderAt:new Date(0)});
+ await f.service.reminders();assert.equal(f.calls(),0);assert.equal(f.state().agentTicket[0].reminderCount,0);
+ f.state().agentTicket[0].question='📌 *Resumo*\n⚠️ CONFERIR: valor divergente';
+ await f.service.reminders();assert.equal(f.calls(),1);assert.equal(f.state().agentTicket[0].reminderCount,1);
+ assert(notices.pendingNotice('COMPROVANTE','Ana',phone,'Valor ilegível').includes('VERIFICAR PAGAMENTO'));
+ assert.equal(notices.compatibleReceipt('DUVIDA',question),false);
+ });
+
+test('registro da encomenda não duplica aviso do comprovante no grupo',async()=>{
+ const f=fixture();const r=await f.service.saveOrder(body());
+ assert.equal(f.state().order.length,1);assert.equal(f.calls(),0);assert.equal(f.state().agentTicket.length,0);assert.equal(r.notificacaoPrevista,'APOS_COMPROVANTE');
 });
