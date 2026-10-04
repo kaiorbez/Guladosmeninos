@@ -145,10 +145,22 @@ export async function resolveTicket(id: string, answer: string, who: string) {
 export async function team(b: Body) {
   if (String(b.grupo) !== group()) throw new AgentError('Grupo não autorizado.', 403);
   const ref = key(b.referenceMessageId), id = key(b.messageId), message = text(b.texto, 3000);
-  const delivery = await prisma.agentDelivery.findUnique({ where: { messageId: ref } });
+  let delivery = await prisma.agentDelivery.findUnique({ where: { messageId: ref } });
+  // Legacy reference comes only from the authenticated n8n Redis lookup.
+  if(!delivery && text(b.legadoTelefone)) {
+    const legacyPhone=phone(b.legadoTelefone);
+    const ticket=await prisma.agentTicket.upsert({where:{sourceKey:`legacy:${ref}`},create:{sourceKey:`legacy:${ref}`,phone:legacyPhone,customerName:legacyPhone,kind:'DUVIDA',question:'Aviso anterior à migração, vinculado pela referência Redis.',nextReminderAt:new Date(Date.now()+10*60000)},update:{}});
+    delivery=await prisma.agentDelivery.upsert({where:{key:`legacy:${ref}`},create:{key:`legacy:${ref}`,phone:group(),ticketId:ticket.id,messageId:ref,status:'SENT',body:{message:'Aviso anterior à migração'}},update:{}});
+  }
   if (!delivery?.ticketId) throw new AgentError('Responda a um aviso do agente vinculado ao cliente.', 404);
   const t = await prisma.agentTicket.findUniqueOrThrow({ where: { id: delivery.ticketId } });
   if (resolvedCommand(message)) return resolveTicket(t.id, '', 'grupo');
+  if(/^(preparando|pedido confirmado[,; ]+preparando|pagamento confirmado[,; ]+preparando|pago confirmado[,; ]+preparando)[.!\s]*$/i.test(message)) {
+    const ctx=await context(t.phone);const es=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).some(m=>/\b(hola|quiero|gracias|mañana)\b/i.test(String(m.texto)));
+    const sent=await sendOnce(`preparing:${t.id}`,t.phone,es?'¡El equipo confirmó tu pedido y ya está preparándolo! 💛🧁':'A equipe confirmou seu pedido e já está preparando! 💛🧁',t.id);
+    if(sent.enviado) {await resolveTicket(t.id,'Equipe confirmou início do preparo.','grupo');await prisma.agentEvent.upsert({where:{key:`preparing:${t.id}`},create:{key:`preparing:${t.id}`,phone:t.phone,kind:'PREPARING',payload:{confirmadoPelaEquipe:true},result:{enviado:true}},update:{}});}
+    return {ok:sent.enviado,preparoConfirmado:sent.enviado,...sent};
+  }
   const link = yangoUrl(message.match(/https:\/\/\S+/)?.[0]);
   const ctx=await context(t.phone);
   const messages=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).reverse();
@@ -220,7 +232,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-v3',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-v4',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
@@ -237,7 +249,7 @@ export async function operate(b: Body) {
     case 'menu': {
       const p = phone(b.telefone);
       if (!Number.isInteger(b.geracao)) throw new AgentError('Geração obrigatória.');
-      const sent = await sendOnce(`menu:${p}:${key(b.messageId)}`, p, 'Cardápio / Menú — Gula dos Meninos', undefined, Number(b.geracao), 'menu');
+      const sent = await sendOnce(`menu:${p}:${key(b.messageId)}`, p, 'Cardápio / Menú — Gula dos Meninos', undefined, Number(b.geracao), 'menu', text(b.arquivoUrl,3000)||undefined);
       return { ok: sent.enviado, ...sent };
     }
     case 'qr': {
@@ -248,7 +260,7 @@ export async function operate(b: Body) {
       const plan = paymentPlan(Number(order.total), Number(order.paid), order.deliveryDate.toISOString().slice(0, 10), order.payFull);
       if (!plan.pagarAgora) return { ok: true, enviado: false, motivo: 'Nenhum valor pendente agora.', ...plan };
       const caption = b.idioma === 'es' ? `Pago: ${plan.pagarAgora} Bs. Envíanos el comprobante para revisión.` : `Pagamento: ${plan.pagarAgora} Bs. Envie o comprovante para conferência.`;
-      const sent = await sendOnce(`qr:${p}:${key(b.messageId)}`, p, caption, undefined, Number(b.geracao), 'qr');
+      const sent = await sendOnce(`qr:${p}:${key(b.messageId)}`, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
       return { ok: sent.enviado, ...sent, ...plan };
     }
     case 'enviar': {

@@ -9,7 +9,9 @@ export async function lockConversation(tx: Prisma.TransactionClient, phone: stri
 export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string) {
   const instance = process.env.ZAPI_INSTANCE, token = process.env.ZAPI_TOKEN, client = process.env.ZAPI_CLIENT_TOKEN;
   if (!instance || !token || !client) throw new AgentError('Z-API não configurada no painel.', 503);
-  const mediaUrl = media?.startsWith('receipt-') ? sourceUrl : media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined;
+  const candidateUrl = sourceUrl || (media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined);
+  const mediaUrl = candidateUrl?.trim();
+  if(mediaUrl) {let u:URL;try{u=new URL(mediaUrl);}catch{throw new AgentError('URL do arquivo inválida.');}if(u.protocol!=='https:')throw new AgentError('Arquivo precisa URL HTTPS.');}
   if (media && !mediaUrl) throw new AgentError('Arquivo não configurado no painel.', 503);
   const claim = await prisma.$transaction(async tx => {
     await lockConversation(tx, target);

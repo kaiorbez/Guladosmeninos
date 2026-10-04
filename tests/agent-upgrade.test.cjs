@@ -12,7 +12,7 @@ function load(name,mocks={}) {
 }
 const rules=load('rules');
 const today=new Date().toISOString().slice(0,10);
-const future=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+const future=(()=>{const d=new Date(Date.now()+7*86400000);if(d.getUTCDay()===2)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10);})();
 function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  const x=o[k];if(v&&typeof v==='object'&&!(v instanceof Date)&&!Array.isArray(v)) {
  if('in' in v)return v.in.includes(x);if('lt'in v)return x<v.lt;if('lte'in v)return x<=v.lte;
@@ -136,4 +136,19 @@ test('rastreio mantém somente espanhol quando cliente escreveu espanhol anterio
  const f=fixture();f.state().agentInbox.push({phone,ready:true,messageId:'old',moment:BigInt(Date.now()-1000),content:'Hola, quiero recibir mañana'});
  const r=await f.service.ticket({telefone:phone,messageId:'m1',geracao:1,pergunta:'Pedido'});await f.service.team({grupo:'test',referenceMessageId:r.messageId,messageId:'team1',texto:'https://delivery.yango.com/route/#abc'});
  const msg=f.state().agentDelivery.at(-1).body.message;assert.match(msg,/Sigue tu entrega/);assert(!msg.includes('Acompanhe'));assert.match(msg,/instagram.com/);
+});
+
+test('terça e horários fora da janela são bloqueados sem impedir encomenda futura válida',()=>{
+ const now=new Date('2026-10-03T12:00:00Z');
+ assert.throws(()=>rules.orderInput({...order(),data:'2026-10-06'},now),/Terça-feira/);
+ assert.throws(()=>rules.orderInput({...order(),data:'2026-10-05',horario:'10:00'},now),/fora do atendimento/);
+ assert.equal(rules.orderInput({...order(),data:'2026-10-05',horario:'14:00'},now).deliveryTime,'14:00');
+});
+test('preparo depende de comando da equipe, não de imagem de comprovante',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m1',geracao:1,pergunta:'Pedido'});
+ const r=await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'team1',texto:'Preparando'});assert.equal(r.preparoConfirmado,true);assert(f.state().agentEvent.some(x=>x.kind==='PREPARING'));assert.match(f.state().agentDelivery.at(-1).body.message,/já está preparando/);
+});
+test('aviso legado precisa telefone validado da consulta Redis autenticada',async()=>{
+ const f=fixture();await assert.rejects(f.service.team({grupo:'test',referenceMessageId:'old',messageId:'team1',texto:'Respondido',legadoTelefone:'inválido'}),/Telefone/);
+ const r=await f.service.team({grupo:'test',referenceMessageId:'old',messageId:'team1',texto:'Respondido',legadoTelefone:phone});assert.equal(r.retomado,true);assert.equal(f.state().agentTicket[0].phone,phone);
 });
