@@ -32,6 +32,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { href: "/painel/encomendas", label: "Encomendas", icon: CakeSliceIcon },
       { href: "/painel/pedidosya", label: "PedidosYa", icon: BikeIcon },
       { href: "/painel/clientes", label: "Clientes", icon: ContactIcon },
+      { href: "/painel/pendencias", label: "Pendências da IA", icon: ContactIcon },
     ],
   },
   { title: "Estoque", items: [{ href: "/painel/estoque", label: "Todos os produtos", icon: PackageIcon }] },
@@ -148,3 +149,4 @@ export function SidebarContent({
     </div>
   );
 }
+

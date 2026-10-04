@@ -1,0 +1,65 @@
+{
+  "name": "[GULA DOS MENINOS] Lembretes do painel (10 min)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "0c507acd-a7a7-475b-ab5c-73fac6c47f96",
+      "name": "A cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "461c6f81-b490-4d55-8b9d-d7f1e723f61b",
+      "name": "Verificar lembretes no painel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://guladosmeninos-production.up.railway.app/api/agente/operacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"acao\": \"lembretes\"}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "A cada 2 minutos": {
+      "main": [
+        [
+          {
+            "node": "Verificar lembretes no painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "America/La_Paz",
+    "executionOrder": "v1"
+  }
+}
