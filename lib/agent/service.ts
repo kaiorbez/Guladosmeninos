@@ -266,7 +266,7 @@ export async function operate(b: Body) {
       const d=await response.json();
       return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,messageFilters:d.messageFilters??null,callbackTypeFilters:d.callbackTypeFilters??null,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
     }
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v14',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v15',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
@@ -294,6 +294,13 @@ export async function operate(b: Body) {
       if (!order) throw new AgentError('Consulte ou registre a encomenda antes de cobrar.');
       const plan = paymentPlan(Number(order.total), Number(order.paid), order.deliveryDate.toISOString().slice(0, 10), order.payFull);
       if (!plan.pagarAgora) return { ok: true, enviado: false, motivo: 'Nenhum valor pendente agora.', ...plan };
+      const batch = (await prisma.agentEvent.findMany({where:{phone:p,kind:'BATCH'},orderBy:{createdAt:'desc'},take:1}))[0];
+      const batchResult=batch?.result as Body | undefined;
+      const complaint=text(batchResult?.message,24000);
+      if(batchResult?.messageId===b.messageId && /qr[\s\S]{0,100}(inv[aá]lid|error|erro|no (?:funciona|se puede)|n[aã]o funciona)|(?:error|erro|problema|inv[aá]lid)[\s\S]{0,100}qr/i.test(complaint)) {
+        const alert=await ticket({...b,tipo:'DUVIDA',cliente:order.customerName,pergunta:'📌 *Resumo*\nCliente relatou falha no QR de pagamento.\n\n🛒 *Pedido*\nPedido #'+order.number+'\n'+order.product+'\n\n📝 *Observações / pendências*\n'+complaint+'\nVerificar o QR e orientar uma alternativa de pagamento autorizada.'});
+        return {...alert,ok:false,enviado:false,motivo:'FALHA_QR_ENCAMINHADA',orientacao:'Informe que a equipe verificará o QR. Não diga QR novo, não reenvie o mesmo arquivo nem invente dados bancários.'};
+      }
       const caption = b.idioma === 'es' ? `Pago: ${plan.pagarAgora} Bs. Envíanos el comprobante para revisión.` : `Pagamento: ${plan.pagarAgora} Bs. Envie o comprovante para conferência.`;
       const sent = await sendOnce(`qr:${p}:${key(b.messageId)}`, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
       return { ok: sent.enviado, ...sent, ...plan };
