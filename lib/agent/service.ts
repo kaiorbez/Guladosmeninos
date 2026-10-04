@@ -266,7 +266,7 @@ export async function operate(b: Body) {
       const d=await response.json();
       return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,messageFilters:d.messageFilters??null,callbackTypeFilters:d.callbackTypeFilters??null,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
     }
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v15',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v16',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
@@ -306,8 +306,16 @@ export async function operate(b: Body) {
       return { ok: sent.enviado, ...sent, ...plan };
     }
     case 'enviar': {
-      const p = phone(b.telefone), message = text(b.texto, 6000);
+      const p = phone(b.telefone); let message = text(b.texto, 6000);
       if (!message || !Number.isInteger(b.geracao)) throw new AgentError('Texto e geração obrigatórios.');
+      // A conversational promise is not a persisted scheduling operation.
+      if (/\b(te agendo|te he agendado|queda agendad[oa]|agendei|est[aá] agendad[oa]|ficou agendad[oa]|entrega confirmada|entrega est[aá] confirmada)\b/i.test(message)) {
+        const registered=await prisma.agentEvent.findUnique({where:{key:`order:${p}:${key(b.messageId)}`}});
+        if(!registered?.result) {
+          await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nSolicitação de agendamento precisa de confirmação da equipe: não houve registro da alteração neste atendimento.\n\n📝 *Observações / pendências*\nConsultar a conversa e a ficha do cliente antes de confirmar horário ou entrega.'});
+          message=/\b(te agendo|te he agendado|queda agendad[oa])\b/i.test(message)?'La solicitud de horario está pendiente de confirmación por el equipo 😊':'A solicitação de horário está pendente de confirmação pela equipe 😊';
+        }
+      }
       const sent = await sendOnce(`reply:${p}:${key(b.messageId)}:${key(b.parte)}`, p, message, undefined, Number(b.geracao));
       return { ok: sent.enviado, ...sent };
     }
