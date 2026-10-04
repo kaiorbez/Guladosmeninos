@@ -22,7 +22,7 @@ export async function catalog() {
 }
 export async function context(p: string) {
   await linkLegacyOrders(p);
-  const [orders, tickets, conversation, inbox, sent, events, imported] = await Promise.all([
+  const [orders, tickets, conversation, inbox, sent, events, imported, recovered] = await Promise.all([
     prisma.order.findMany({ where: { customerPhone: p }, orderBy: [{ deliveryDate: 'desc' }, { createdAt: 'desc' }], take: 100 }),
     prisma.agentTicket.findMany({ where: { phone: p }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.agentConversation.findUnique({ where: { phone: p } }),
@@ -30,10 +30,11 @@ export async function context(p: string) {
     prisma.agentDelivery.findMany({ where:{phone:p,status:'SENT'},orderBy:{createdAt:'desc'},take:80 }),
     prisma.agentEvent.findMany({ where:{phone:p,kind:{in:['HISTORY','INBOUND']}},orderBy:{createdAt:'desc'},take:100 }),
     prisma.agentEvent.findUnique({where:{key:`history-v2:${p}`}}),
+    prisma.agentEvent.findUnique({where:{key:`history-n8n:${p}`}}),
   ]);
-  const liveIds=new Set(inbox.map(m=>m.messageId));
+  const liveIds=new Set([...inbox.map(m=>m.messageId),...sent.map(m=>m.messageId).filter(Boolean),...events.filter(m=>m.kind==='INBOUND').map(m=>m.key.slice(`in:${p}:`.length))]);
   const history=[...inbox.map(m=>({papel:'cliente',texto:m.content,data:new Date(Number(m.moment)).toISOString()})),...sent.map(m=>({papel:'atendente',texto:(m.body as Body).message,data:m.createdAt.toISOString()})),...events.filter(m=>{const v=m.payload as Body;return (m.kind==='HISTORY'&&!liveIds.has(String(v.messageId))) || (m.kind==='INBOUND'&&v.fromMe===true);}).map(m=>({papel:(m.payload as Body).fromMe?'atendente':'cliente',texto:(m.payload as Body).text,data:m.createdAt.toISOString()}))].sort((a,b)=>a.data.localeCompare(b.data)).slice(-100);
-  return { ok: true, catalogo:await catalog(), historico:history, historicoWhatsappImportado:!!imported, hoje: dayLaPaz(), pedidos: orders.map(presentOrder), pendencias: tickets, geracao: conversation?.generation ?? 0, pausado: !!(conversation?.pausedUntil && conversation.pausedUntil > new Date()), limiteConsulta: 100 };
+  return { ok: true, catalogo:await catalog(), historico:history, historicoWhatsappImportado:!!imported||!!recovered,historicoRecuperadoN8n:!!recovered,historicoParcial:true, hoje: dayLaPaz(), pedidos: orders.map(presentOrder), pendencias: tickets, geracao: conversation?.generation ?? 0, pausado: !!(conversation?.pausedUntil && conversation.pausedUntil > new Date()), limiteConsulta: 100 };
 }
 async function current(tx: Prisma.TransactionClient, p: string, b: Body) {
   const c = await tx.agentConversation.findUnique({ where: { phone: p } });
@@ -266,7 +267,7 @@ export async function operate(b: Body) {
       const d=await response.json();
       return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,messageFilters:d.messageFilters??null,callbackTypeFilters:d.callbackTypeFilters??null,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
     }
-    case 'diagnostico': return {ok:true,versao:'gula-auditoria-correcoes-v16',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-historico-recuperado-v17',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
