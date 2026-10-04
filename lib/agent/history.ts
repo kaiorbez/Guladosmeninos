@@ -23,7 +23,7 @@ export async function importHistory(phone: string, diagnostic = false) {
         const n = Number(m.moment || m.momment);
         if (!Number.isFinite(n) || n <= 0) continue;
         const at = new Date(n < 1e12 ? n * 1000 : n);
-        await tx.agentEvent.upsert({ where: { key: `history-msg:${phone}:${id}` }, create: { key: `history-msg:${phone}:${id}`, phone, kind: 'HISTORY', payload: { text: content, fromMe: m.fromMe === true || m.fromMe === 'true', messageId: id }, createdAt: at }, update: {payload:{text:content,fromMe:m.fromMe===true||m.fromMe==='true',messageId:id}} });
+        await tx.agentEvent.upsert({ where: { key: `history-msg:${phone}:${id}` }, create: { key: `history-msg:${phone}:${id}`, phone, kind: 'HISTORY', payload: { text: content, fromMe: m.fromMe === true || m.fromMe === 'true', fromApi:m.fromApi===true, messageId: id }, createdAt: at }, update: {payload:{text:content,fromMe:m.fromMe===true||m.fromMe==='true',fromApi:m.fromApi===true,messageId:id}} });
       }
       await tx.agentEvent.upsert({ where: { key: id }, create: { key: id, phone, kind: 'HISTORY_LOADED', payload: { limit: 100 } }, update: {} });
     });

@@ -7,6 +7,7 @@ import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
 import { receiptReview, receiptNotice, closeMessage } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
+import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
 
 type Body = Record<string, unknown>;
 const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
@@ -33,8 +34,9 @@ export async function context(p: string) {
     prisma.agentEvent.findUnique({where:{key:`history-n8n:${p}`}}),
   ]);
   const liveIds=new Set([...inbox.map(m=>m.messageId),...sent.map(m=>m.messageId).filter(Boolean),...events.filter(m=>m.kind==='INBOUND').map(m=>m.key.slice(`in:${p}:`.length))]);
-  const history=[...inbox.map(m=>({papel:'cliente',texto:m.content,data:new Date(Number(m.moment)).toISOString()})),...sent.map(m=>({papel:'atendente',texto:(m.body as Body).message,data:m.createdAt.toISOString()})),...events.filter(m=>{const v=m.payload as Body;return (m.kind==='HISTORY'&&!liveIds.has(String(v.messageId))) || (m.kind==='INBOUND'&&v.fromMe===true);}).map(m=>({papel:(m.payload as Body).fromMe?'atendente':'cliente',texto:(m.payload as Body).text,data:m.createdAt.toISOString()}))].sort((a,b)=>a.data.localeCompare(b.data)).slice(-100);
-  return { ok: true, catalogo:await catalog(), historico:history, historicoWhatsappImportado:!!imported||!!recovered,historicoRecuperadoN8n:!!recovered,historicoParcial:true, hoje: dayLaPaz(), pedidos: orders.map(presentOrder), pendencias: tickets, geracao: conversation?.generation ?? 0, pausado: !!(conversation?.pausedUntil && conversation.pausedUntil > new Date()), limiteConsulta: 100 };
+  const history=[...inbox.map(m=>({papel:'cliente',origem:'cliente',texto:recoveredText(m.content,(events.find(e=>e.key===`in:${p}:${m.messageId}`)?.payload as Body)?.text),data:new Date(Number(m.moment)).toISOString()})),...sent.map(m=>({papel:'atendente',origem:'agente',texto:(m.body as Body).message,data:m.createdAt.toISOString()})),...events.filter(m=>{const v=m.payload as Body;return (m.kind==='HISTORY'&&!liveIds.has(String(v.messageId))) || (m.kind==='INBOUND'&&v.fromMe===true);}).map(m=>({papel:(m.payload as Body).fromMe?'atendente':'cliente',origem:m.kind==='INBOUND'?'humano':(m.payload as Body).fromApi===true?'agente':'historico_anterior',texto:(m.payload as Body).text,data:m.kind==='INBOUND'&&Number((m.payload as Body).moment)>0?new Date(Number((m.payload as Body).moment)).toISOString():m.createdAt.toISOString()}))].sort((a,b)=>a.data.localeCompare(b.data)).slice(-100);
+  const failures=inbox.filter(m=>/não pôde ser analisada|Falha anterior de análise/i.test(m.content||'')).map(m=>{const raw=events.find(e=>e.key===`in:${p}:${m.messageId}`)?.payload as Body|undefined;return {data:new Date(Number(m.moment)).toISOString(),tipo:raw?.media||m.mediaKind,textoOriginal:raw?.text||null,textoRecuperado:recoveredText(m.content,raw?.text)!==m.content};});
+  return { ok: true, catalogo:await catalog(), historico:history, contextoConversa:{...conversationFacts(history),marcadoresAnteriores:failures}, historicoWhatsappImportado:!!imported||!!recovered,historicoRecuperadoN8n:!!recovered,historicoParcial:true, hoje: dayLaPaz(), pedidos: orders.map(presentOrder), pendencias: tickets, geracao: conversation?.generation ?? 0, pausado: !!(conversation?.pausedUntil && conversation.pausedUntil > new Date()), limiteConsulta: 100 };
 }
 async function current(tx: Prisma.TransactionClient, p: string, b: Body) {
   const c = await tx.agentConversation.findUnique({ where: { phone: p } });
@@ -211,7 +213,9 @@ export async function reminders(testTarget?: string) {
     const latest = await prisma.agentTicket.findUniqueOrThrow({ where: { id: t.id } });
     if (latest.status !== 'ABERTA') continue;
     try {
-      const sent = await sendOnce(`reminder:${t.id}:${t.reminderCount}`, testTarget==='59175678921'?testTarget:group(), pendingNotice(t.kind,t.customerName,t.phone,t.question,true), t.id);
+      const ctx=await context(t.phone);
+      const details=t.kind==='DUVIDA'?currentReminderDetails(t.question,ctx.contextoConversa,ctx.pedidos):t.question;
+      const sent = await sendOnce(`reminder:${t.id}:${t.reminderCount}`, testTarget==='59175678921'?testTarget:group(), pendingNotice(t.kind,t.customerName,t.phone,details,true), t.id);
       if (sent.enviado) await prisma.agentTicket.updateMany({ where: { id: t.id, status: 'ABERTA', reminderCount: t.reminderCount }, data: { reminderCount: { increment: 1 } } });
       results.push({ id: t.id, ...sent });
     } catch { results.push({ id: t.id, enviado: false }); }
@@ -227,7 +231,14 @@ export async function prepare(b: Body) {
   const p=phone(b.telefone), execution=key(b.execucao);
   await importHistory(p);
   // A failed media analysis must not block all later messages forever.
-  await prisma.agentInbox.updateMany({where:{phone:p,ready:false,consumedAt:null,createdAt:{lte:new Date(Date.now()-10*60000)}},data:{ready:true,content:'[Mensagem/mídia recebida não pôde ser analisada. Não inventar conteúdo. Pedir reenvio se necessário e avisar equipe.]'}});
+  const waiting=await prisma.agentInbox.findMany({where:{phone:p,ready:false,consumedAt:null,createdAt:{lte:new Date(Date.now()-10*60000)}},take:100});
+  for(const m of waiting) {
+    const event=await prisma.agentEvent.findUnique({where:{key:`in:${p}:${m.messageId}`}});
+    const fallback='[Falha anterior de análise: conteúdo indisponível. Não inventar conteúdo nem criar nova dúvida apenas por este marcador. Usar conversa e pedido atuais; pedir reenvio somente se indispensável à solicitação atual.]';
+    // Text stopped by human pause is readable; an image caption is not an image analysis.
+    const content=m.mediaKind==='texto'?recoveredText(fallback,(event?.payload as Body|undefined)?.text):fallback;
+    await prisma.agentInbox.updateMany({where:{id:m.id,ready:false,consumedAt:null},data:{ready:true,content:String(content)}});
+  }
   const claim=await prisma.$transaction(async tx=>{
     await lockConversation(tx,p);
     const prior=await tx.agentEvent.findUnique({where:{key:`batch:${p}:${execution}`}});

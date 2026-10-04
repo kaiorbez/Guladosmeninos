@@ -37,11 +37,38 @@ function fixture({network='ok'}={}) {
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
  let receiptPayments=0;
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,receiptPayments:()=>receiptPayments,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+
+test('texto retido durante pausa recupera localização original sem inventar análise de imagem',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'location-text',midia:'texto',texto:'Ubicación: https://maps.google.com/?q=-17,-63',momento:Date.now()-20*60000});
+ f.state().agentInbox[0].createdAt=new Date(Date.now()-20*60000);
+ const p=await f.service.prepare({telefone:phone,execucao:'resume'});assert.match(p.message,/Ubicación/);assert.doesNotMatch(p.message,/Falha anterior/);assert.match(p.contextoConversa.localizacaoRecebida,/maps.google.com/);assert.equal(f.calls(),0);
+ const g=fixture();await g.service.inbound({telefone:phone,messageId:'image',midia:'imagem',texto:'Comprovante',momento:Date.now()-20*60000});g.state().agentInbox[0].createdAt=new Date(Date.now()-20*60000);
+ const image=await g.service.prepare({telefone:phone,execucao:'resume'});assert.match(image.message,/conteúdo indisponível/);assert.equal(g.receiptPayments(),0);
+});
+
+test('lembrete de entrega usa painel atual, resposta anterior e localização em vez de falha antiga',async()=>{
+ const f=fixture();
+ f.state().order.push({id:'existing-order-15',number:15,customerPhone:phone,customerName:'Yoselin',product:'Bolo P',total:130,paid:130,deliveryDate:new Date(today+'T00:00:00Z'),deliveryTime:'15:00',status:'ENTREGUE',payFull:false});
+ f.state().agentEvent.push({key:'history:human',phone,kind:'HISTORY',createdAt:new Date(Date.now()-60000),payload:{fromMe:true,text:'Claroo, el próximo envio.',messageId:'h'}});
+ f.state().agentInbox.push({id:'loc',phone,messageId:'loc',ready:true,moment:BigInt(Date.now()-30000),content:'Localização https://maps.google.com/?q=-17,-63'});
+ f.state().agentTicket.push({id:'old-ticket',phone,customerName:'Yoselin',status:'ABERTA',kind:'DUVIDA',question:'Pedido nº15: Cliente enviou 3 mídias não analisadas. Entrega por Yango. Saldo no painel: 10 Bs.',reminderCount:0,nextReminderAt:new Date(0)});
+ await f.service.reminders();const notice=f.state().agentDelivery[0].body.message;
+ assert.match(notice,/ENTREGUE/);assert.match(notice,/Pago confirmado: 130 Bs/);assert.match(notice,/Saldo: 0 Bs/);assert.match(notice,/Claroo, el próximo envio/);assert.match(notice,/maps.google.com/);
+ assert.doesNotMatch(notice,/Saldo no painel: 10|3 mídias|existing-order-15/);assert.equal(f.receiptPayments(),0);assert.equal(f.state().order[0].status,'ENTREGUE');
+});
+
+test('fatos de contexto distinguem resposta humana, IA e falha anterior, mantendo histórico completo',async()=>{
+ const f=fixture();f.state().agentEvent.push({key:'in:'+phone+':human',phone,kind:'INBOUND',createdAt:new Date(),payload:{fromMe:true,text:'No próximo envio',moment:Date.now()-60000}});
+ f.state().agentInbox.push({id:'old',phone,messageId:'old',ready:true,moment:BigInt(Date.now()-20000),content:'[Mensagem/mídia recebida não pôde ser analisada.]'},{id:'thanks',phone,messageId:'thanks',ready:true,moment:BigInt(Date.now()),content:'Muchas gracias'});
+ f.state().agentDelivery.push({key:'reply',phone,status:'SENT',messageId:'bot',createdAt:new Date(),body:{message:'Preciso ver com a equipe'}});
+ const c=await f.service.context(phone);assert.equal(c.contextoConversa.ultimaRespostaAnterior.texto,'No próximo envio');assert.equal(c.contextoConversa.ultimaMensagemCliente.texto,'Muchas gracias');assert.equal(c.contextoConversa.falhasAnterioresDeAnalise,1);assert.equal(c.historico.length,4);
+ assert.equal(c.historico.find(m=>m.origem==='humano').data,new Date(f.state().agentEvent[0].payload.moment).toISOString());
+});
 
 test('resposta comum vinculada assume pendência, cancela lembrete e bloqueia resposta atrasada',async()=>{
  const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'doubt',geracao:1,pergunta:'Entrega hoje?'});
