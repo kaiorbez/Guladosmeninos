@@ -36,8 +36,9 @@ function fixture({network='ok'}={}) {
  const prisma=new Proxy({}, {get(_,k){if(k==='$transaction')return fn=>{const task=q.then(async()=>{const copy=structuredClone(state);const r=await fn(db(copy));state=copy;return r;});q=task.catch(()=>{});return task;};return db(state)[k];}});
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>({ok:true})}});
- return {prisma,service,transport,state:()=>state,calls:()=>calls,failWrite:()=>{failWrite=true;}};
+ let receiptPayments=0;
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
+ return {prisma,service,transport,state:()=>state,calls:()=>calls,receiptPayments:()=>receiptPayments,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
@@ -169,6 +170,32 @@ test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
  const review=load('review',{'./rules':rules});const r=review.receiptReview({valor:10,moeda:'Bs',beneficiario:'Outra pessoa',bancoDestino:'Outro banco',data:today},20,today);
  assert(r.alertas.length>=3);assert.equal(r.pagamentoConfirmado,false);
  const msg=review.receiptNotice({valor:10,moeda:'Bs'},null,r);assert(!msg.includes('✅ CONFERE'));assert.match(msg,/Pedido não identificado/);
+});
+
+test('data de comprovante exige dia real em ISO; data ausente, ilegível ou impossível não é compatível',()=>{
+ const review=load('review',{'./rules':rules});
+ const receipt={valor:50,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero'};
+ for(const data of [null,'','ilegível','04/10/2026','2026-02-30','2026-13-01','2026-00-10','2026-10-00','2026-10-04T12:00:00Z']) {
+  const r=review.receiptReview({...receipt,data},50,'2026-10-04');
+  assert(r.alertas.some(a=>a.startsWith('Data')),String(data));
+  const notice=review.receiptNotice({...receipt,data},null,r);
+  assert(!notice.includes('✅ CONFERE'));assert.match(notice,/CONFERIR/);
+ }
+ assert.equal(review.receiptReview({...receipt,data:'2026-10-04'},50,'2026-10-04').alertas.length,0);
+ assert.equal(review.receiptReview({...receipt,data:'2024-02-29'},50,'2024-02-29').alertas.length,0);
+ assert(review.receiptReview({...receipt,data:'2026-10-03'},50,'2026-10-04').alertas.some(a=>a.startsWith('Data diferente')));
+});
+
+test('data inválida encaminha comprovante à equipe sem acionar registro de pagamento',async()=>{
+ for(const data of ['ilegível','2026-13-01',rules.dayLaPaz()]) {
+  const f=fixture();const o=await f.service.saveOrder(body());
+  await f.service.inbound({telefone:phone,messageId:'receipt-date',momento:Date.now(),midia:'imagem',midiaUrl:'https://example.com/receipt.png'});
+  const r=await f.service.ticket({telefone:phone,messageId:'receipt-date',geracao:2,mediaIds:['receipt-date'],tipo:'COMPROVANTE',pergunta:'Dados visíveis',cliente:'Cliente',comprovante:{tipo:'COMPROVANTE_BANCARIO',pedidoId:o.pedido.id,valor:65,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data}});
+  assert.equal(r.registrado,true);assert.equal(r.notificacaoEnviada,true);
+  const valid=data===rules.dayLaPaz();assert.equal(f.receiptPayments(),valid?1:0);
+  assert.equal(f.state().agentTicket[0].question.includes('✅ CONFERE'),valid);
+  if(!valid) assert.match(f.state().agentTicket[0].question,/Data inválida/);
+ }
 });
 test('catálogo impede preço alterado e permite nova intenção explícita sem duplicar callback',async()=>{
  const f=fixture();await assert.rejects(f.service.saveOrder({...body(),pedido:{...order(),itens:[{variantId:'v-torta',descricao:'Torta',quantidade:1,precoUnitario:1}]}}),/Preço mudou/);
