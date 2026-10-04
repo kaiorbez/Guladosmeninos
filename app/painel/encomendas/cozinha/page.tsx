@@ -50,7 +50,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
           {orders.map((o) => (
             <li key={o.id} className="break-inside-avoid rounded-lg border border-creme-300 bg-creme-50 p-4 print:rounded-none print:border-x-0 print:border-t-0 print:bg-transparent">
               <div className="flex items-baseline gap-3">
-                <span className="w-14 shrink-0 text-xl font-semibold tabular-nums">{o.deliveryTime ?? "—"}</span>
+                <span className="w-14 shrink-0 text-xl font-semibold tabular-nums">{o.deliveryTime === "AGORA" ? "Agora" : o.deliveryTime ?? "—"}</span>
                 <div className="min-w-0 flex-1">
                   <p className="whitespace-pre-line text-lg font-semibold">{o.product}</p>
                   <p className="text-sm text-cacau-500">#{o.number} · {o.customerName}</p>
@@ -82,3 +82,4 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
     </div>
   );
 }
+

@@ -175,3 +175,11 @@ test('registro da encomenda não duplica aviso do comprovante no grupo',async()=
  const f=fixture();const r=await f.service.saveOrder(body());
  assert.equal(f.state().order.length,1);assert.equal(f.calls(),0);assert.equal(f.state().agentTicket.length,0);assert.equal(r.notificacaoPrevista,'APOS_COMPROVANTE');
 });
+
+test('pedido imediato aparece como AGORA sem inventar hora; futuro e fora do atendimento são rejeitados',()=>{
+ const now=new Date('2026-10-04T15:02:00Z');const b={...order(),data:'2026-10-04',horario:'',paraAgora:true};
+ assert.equal(rules.orderInput(b,now).deliveryTime,'AGORA');
+ assert.equal(rules.orderInput({...b,paraAgora:false},now).deliveryTime,null);
+ assert.throws(()=>rules.orderInput({...b,data:'2026-10-05'},now),/agora/);
+ assert.throws(()=>rules.orderInput(b,new Date('2026-10-04T13:00:00Z')),/agora/);
+});

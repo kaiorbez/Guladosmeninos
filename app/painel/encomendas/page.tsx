@@ -170,7 +170,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                       <header className="flex items-start gap-3 px-5 pt-4">
                         <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-creme-200 py-2">
                           <ClockIcon className="size-3.5 text-cacau-500" />
-                          <span className="mt-0.5 text-sm font-semibold tabular-nums">{o.deliveryTime ?? "—"}</span>
+                          <span className="mt-0.5 text-sm font-semibold tabular-nums">{o.deliveryTime === "AGORA" ? "Agora" : o.deliveryTime ?? "—"}</span>
                           {lateMin !== null && (
                             <span className="mt-1 rounded bg-coral-500 px-1 text-center text-[10px] font-semibold leading-tight text-white">
                               Atrasada {lateLabel(lateMin)}

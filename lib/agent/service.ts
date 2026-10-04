@@ -255,7 +255,15 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-comprovante-financeiro-v10',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnosticoConexao': {
+      const instance=process.env.ZAPI_INSTANCE,token=process.env.ZAPI_TOKEN,client=process.env.ZAPI_CLIENT_TOKEN;
+      if(!instance||!token||!client)throw new AgentError('Z-API não configurada.',503);
+      const response=await fetch(`https://api.z-api.io/instances/${instance}/token/${token}/me`,{headers:{'Client-Token':client},signal:AbortSignal.timeout(15000)});
+      if(!response.ok)return {ok:false,status:response.status};
+      const d=await response.json();
+      return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
+    }
+    case 'diagnostico': return {ok:true,versao:'gula-pedido-agora-v11',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});

@@ -34,7 +34,7 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
 
   const data = {
     deliveryDate: new Date(`${date}T00:00:00Z`),
-    deliveryTime: text("deliveryTime", 5) || null,
+    deliveryTime: form.get("paraAgora") === "1" ? "AGORA" : text("deliveryTime", 5) || null,
     customerName,
     customerPhone: text("customerPhone", 30) || null,
     product,

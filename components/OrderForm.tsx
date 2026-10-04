@@ -47,6 +47,7 @@ export function OrderForm({
 }) {
   const editing = Boolean(values.id);
   const [error, action, pending] = useActionState(saveOrderAction, null);
+  const [immediate, setImmediate] = useState(values.deliveryTime === "AGORA");
   const [date, setDate] = useState(values.deliveryDate);
   const [total, setTotal] = useState(values.total);
   const [paid, setPaid] = useState(values.paid);
@@ -88,7 +89,11 @@ export function OrderForm({
               <button type="button" onClick={() => setDate(tomorrow)} className={`btn px-2.5 py-1 text-xs ${date === tomorrow ? "btn-on" : "btn-ghost"}`}>Amanhã</button>
             </div>
           </div>
-          {field("deliveryTime", "Horário de entrega", { type: "time" })}
+          <div>
+            <label className="label" htmlFor="deliveryTime">Horário de entrega</label>
+            <input id="deliveryTime" name="deliveryTime" type="time" defaultValue={values.deliveryTime === "AGORA" ? "" : values.deliveryTime} disabled={immediate} className="input" />
+            <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" name="paraAgora" value="1" checked={immediate} onChange={e=>setImmediate(e.target.checked)} />Para agora</label>
+          </div>
           {field("customerName", "Cliente", { required: true })}
           {field("customerPhone", "Celular", { inputMode: "tel" })}
           <div>
@@ -217,3 +222,4 @@ export function OrderForm({
     </form>
   );
 }
+
