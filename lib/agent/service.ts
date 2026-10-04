@@ -101,7 +101,7 @@ export async function ticket(b: Body) {
     return tx.agentTicket.upsert({ where: { sourceKey }, create: { sourceKey, phone: p, customerName: text(b.cliente, 120) || p, question, kind, nextReminderAt: new Date(Date.now() + 10 * 60000) }, update: {} });
   });
   let sent: { enviado: boolean; estado: string; messageId: string | null };
-  try { sent = await sendOnce(`ticket:${t.id}`, group(), `🔔 GULA — ${t.kind}\nCliente: ${t.customerName}\nwa.me/${t.phone}\n\n${t.question}\n\nResponda este aviso com “Respondido”, “Resolvido” ou com o link da Yango.`, t.id); }
+  try { sent = await sendOnce(`ticket:${t.id}`, group(), (t.kind === 'COMPROVANTE' ? `🔔 *GULA — AVISO DO AGENTE*\n━━━━━━━━━━━━━━━\n*💰 COMPROVANTE RECEBIDO — VERIFICAR PAGAMENTO*\n\n👤 *Cliente:* ${t.customerName}\n📱 wa.me/${t.phone}\n\n${t.question}` : `🔔 GULA — ${t.kind}\nCliente: ${t.customerName}\nwa.me/${t.phone}\n\n${t.question}\n\nResponda este aviso com “Respondido”, “Resolvido” ou com o link da Yango.`), t.id); }
   catch { sent = { enviado: false, estado: 'NAO_CONFIGURADO', messageId: null }; }
   return { ok: true, registrado: true, ticketId: t.id, tipo: t.kind, notificacaoEnviada: sent.enviado, estadoEnvio: sent.estado, messageId: sent.messageId };
 }
