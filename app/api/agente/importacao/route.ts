@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { agentAuthorized, unauthorized } from '@/lib/agent-auth';
 import { AgentError, dateOnly, dayLaPaz, key, money, phone, text } from '@/lib/agent/rules';
 import { bookPayment, refreshPaid } from '@/lib/orders';
+import { recordReceiptPayment } from '@/lib/agent/payments';
 import type { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,14 @@ export async function POST(req: Request) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ref}))`;
       const old=await tx.order.findUnique({where:{agentRef:ref}});
       if(old)return {ok:true,duplicada:true,pedido:{id:old.id,numero:old.number,total:Number(old.total),pago:Number(old.paid)}};
+      const existingId=text(b.pedidoExistenteId,100);
+      if(existingId) {
+        const existing=await tx.order.findFirst({where:{id:existingId,customerPhone:p,deliveryDate:new Date(delivery+'T00:00:00Z'),total}});
+        if(!existing)throw new AgentError('Pedido existente não corresponde ao histórico revisado.',409);
+        const imported=[];
+        for(const r of payments) imported.push(await recordReceiptPayment(tx,existing.id,p,r.messageId,r.valor,new Date(`${day}T${r.hora}:00-04:00`)));
+        return {ok:true,pedidoExistente:true,pedido:{id:existing.id,numero:existing.number},pagamentos:imported};
+      }
       const existing=await tx.order.findFirst({where:{customerPhone:{endsWith:p.slice(-8)},deliveryDate:new Date(delivery+'T00:00:00Z'),total}});
       if(existing)throw new AgentError('Já existe encomenda com cliente, data e total iguais; revisar antes de importar.',409);
       const order=await tx.order.create({data:{agentRef:ref,customerName:name,customerPhone:p,channel:'WHATSAPP',deliveryDate:new Date(delivery+'T00:00:00Z'),deliveryTime:null,deliveryMode:b.modalidade,deliveryAddress:text(b.endereco,1000)||null,product:normalized.map((i:{descricao:string;quantidade:number;precoUnitario:number})=>`${i.quantidade} × ${i.descricao} — ${i.precoUnitario} Bs`).join('\n'),agentItems:normalized as Prisma.InputJsonValue,total,paid:0,notes:'IMPORTAÇÃO REVISADA: '+text(b.observacoes,1800),createdAt:new Date(day+'T12:00:00-04:00')}});

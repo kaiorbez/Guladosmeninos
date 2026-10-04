@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { AgentError, dateOnly, dayLaPaz, key, orderInput, paymentPlan, phone, resolvedCommand, text, yangoUrl } from './rules';
 import { lockConversation, sendOnce } from './transport';
 import { importHistory } from './history';
+import { recordReceiptPayment } from './payments';
 import { receiptReview, receiptNotice, closeMessage } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
 
@@ -121,6 +122,12 @@ export async function ticket(b: Body) {
       const expected=order?paymentPlan(Number(order.total),Number(order.paid),order.deliveryDate.toISOString().slice(0,10),order.payFull).pagarAgora:null;
       const review=receiptReview(receipt as Body,expected,dayLaPaz());
       report=receiptNotice(receipt as Body,order?presentOrder(order):null,review);
+      if(order && review.alertas.length===0 && review.valorVisivel!==null) {
+        const ownMedia=media.find(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;});
+        if(!ownMedia)throw new AgentError('Comprovante sem mídia vinculada ao cliente.');
+        const mediaId=ownMedia.key.slice(`in:${p}:`.length);
+        await recordReceiptPayment(tx,order.id,p,mediaId,review.valorVisivel);
+      }
     }
     const sourceKey = `ticket:${p}:${kind}:${id}`;
     return tx.agentTicket.upsert({ where: { sourceKey }, create: { sourceKey, phone: p, customerName: text(b.cliente, 120) || p, question:report, kind, nextReminderAt: new Date(Date.now() + 10 * 60000) }, update: {} });
@@ -248,7 +255,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-avisos-compativeis-v9',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-comprovante-financeiro-v10',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
