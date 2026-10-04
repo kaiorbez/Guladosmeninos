@@ -452,6 +452,21 @@ async function main() {
     }
     console.log(`  ${payments.length} pagamento(s) antigo(s) levado(s) ao faturamento`);
   });
+  // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
+  // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
+  await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
+    await prisma.$transaction(async tx => {
+      const removed = await tx.order.deleteMany({ where: {
+        customerPhone: "59175678921", customerName: { startsWith: "[TESTE]" },
+        paid: 0, saleId: null, payments: { none: {} },
+      } });
+      const tickets = await tx.agentTicket.deleteMany({ where: {
+        phone: "59175678921", customerName: { startsWith: "[TESTE]" },
+      } });
+      console.log(`Limpeza autorizada: ${removed.count} encomendas e ${tickets.count} pendências de teste removidas.`);
+    });
+  });
+
 }
 
 main()

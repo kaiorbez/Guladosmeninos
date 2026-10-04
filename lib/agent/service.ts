@@ -237,7 +237,7 @@ export async function operate(b: Body) {
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
     case 'lembretes': return reminders(text(b.destinoTeste));
-    case 'diagnostico': return {ok:true,versao:'gula-avisos-organizados-v6',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-avisos-organizados-v7',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
