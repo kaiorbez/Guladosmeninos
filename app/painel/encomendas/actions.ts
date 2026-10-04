@@ -64,7 +64,7 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
     const current = await prisma.order.findUnique({ where: { id } });
     if (!current) return "Encomenda não encontrada.";
     if (total < Number(current.paid)) return "O total não pode ser menor que o valor já pago.";
-    await prisma.order.update({ where: { id }, data: { ...data, ...photo } });
+    await prisma.order.update({ where: { id }, data: { ...data, ...photo, agentVersion: { increment: 1 } } });
   } else {
     // Na criação, o valor pago vira o primeiro pagamento (o sinal).
     const paid = money(form.get("paid"));
@@ -147,3 +147,4 @@ export async function deletePaymentAction(form: FormData) {
   await removePayment(String(form.get("paymentId")), session.userId);
   revalidatePath("/painel", "layout");
 }
+

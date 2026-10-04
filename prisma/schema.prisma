@@ -187,6 +187,12 @@ enum OrderStatus {
 
 // Encomenda: a ficha de papel da cozinha (o que produzir, para quando e quanto falta receber).
 model Order {
+  agentRef      String? @unique
+  agentVersion  Int @default(1)
+  deliveryMode  String?
+  deliveryAddress String?
+  agentItems    Json?
+  payFull       Boolean @default(false)
   id            String      @id @default(cuid())
   number        Int         @unique @default(autoincrement())
   status        OrderStatus @default(PENDENTE)
@@ -268,4 +274,70 @@ model Expense {
   createdAt   DateTime        @default(now())
 
   @@index([date])
+}
+
+
+// Eventos autenticados do WhatsApp: deduplicação e auditoria de ações do agente.
+model AgentEvent {
+  key       String   @id
+  phone     String
+  kind      String
+  payload   Json
+  result    Json?
+  createdAt DateTime @default(now())
+  @@index([phone, createdAt])
+}
+
+model AgentConversation {
+  phone         String   @id
+  generation    Int      @default(0)
+  latestMoment  BigInt   @default(0)
+  pausedUntil   DateTime?
+  updatedAt     DateTime @updatedAt
+}
+
+model AgentTicket {
+  id              String   @id @default(cuid())
+  sourceKey       String   @unique
+  phone           String
+  customerName    String
+  question        String
+  kind            String   @default("DUVIDA")
+  status          String   @default("ABERTA")
+  answer          String?
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  reminderCount   Int      @default(0)
+  nextReminderAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([status, nextReminderAt])
+  @@index([phone, createdAt])
+}
+
+model AgentDelivery {
+  key          String   @id
+  phone        String
+  // SENDING/UNKNOWN são deliberadamente não reenviados automaticamente.
+  status       String
+  messageId    String?  @unique
+  ticketId     String?
+  body         Json
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([phone, createdAt])
+}
+
+model AgentInbox {
+  id         String   @id
+  phone      String
+  messageId  String
+  mediaKind  String
+  content    String?
+  ready      Boolean  @default(false)
+  consumedAt DateTime?
+  moment     BigInt
+  createdAt  DateTime @default(now())
+  @@index([phone, consumedAt, moment])
 }

@@ -213,6 +213,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             <img src={decorationPhotoUrl(o)!} alt="Foto da decoração" loading="lazy" className="h-28 w-28 rounded-lg border border-creme-300 object-cover" />
                           </a>
                         )}
+                        {o.deliveryMode && <p className="mt-2 text-sm">{o.deliveryMode === "ENTREGA" ? "Entrega" : "Retirada"}{o.deliveryAddress ? ` — ${o.deliveryAddress}` : ""}</p>}
                         {o.notes && <p className="mt-3 rounded-md bg-creme-200/70 px-3 py-2 text-sm text-cacau-700">{o.notes}</p>}
                       </div>
 
@@ -303,3 +304,4 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
     </>
   );
 }
+
