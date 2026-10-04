@@ -7,6 +7,8 @@ export async function lockConversation(tx: Prisma.TransactionClient, phone: stri
 }
 /** Durable claim first: a crash after sending leaves SENDING, never a blind retry. */
 export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string, failureReply = false) {
+  // Send plain text consistently, including captions and model-generated replies.
+  message = message.replace(/\*+/g, '');
   const instance = process.env.ZAPI_INSTANCE, token = process.env.ZAPI_TOKEN, client = process.env.ZAPI_CLIENT_TOKEN;
   if (!instance || !token || !client) throw new AgentError('Z-API não configurada no painel.', 503);
   const candidateUrl = sourceUrl || (media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined);
