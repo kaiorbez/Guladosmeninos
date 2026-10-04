@@ -6,10 +6,10 @@ export async function lockConversation(tx: Prisma.TransactionClient, phone: stri
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${phone}))`;
 }
 /** Durable claim first: a crash after sending leaves SENDING, never a blind retry. */
-export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu') {
+export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string) {
   const instance = process.env.ZAPI_INSTANCE, token = process.env.ZAPI_TOKEN, client = process.env.ZAPI_CLIENT_TOKEN;
   if (!instance || !token || !client) throw new AgentError('Z-API não configurada no painel.', 503);
-  const mediaUrl = media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined;
+  const mediaUrl = media?.startsWith('receipt-') ? sourceUrl : media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined;
   if (media && !mediaUrl) throw new AgentError('Arquivo não configurado no painel.', 503);
   const claim = await prisma.$transaction(async tx => {
     await lockConversation(tx, target);
@@ -35,8 +35,8 @@ export async function sendOnce(id: string, target: string, message: string, tick
         return { enviado: false, estado: 'CANCELLED', messageId: null };
       }
     }
-    const route = media === 'qr' ? 'send-image' : media === 'menu' ? 'send-document/pdf' : 'send-text';
-    const body = media === 'qr' ? { phone: target, image: mediaUrl, caption: message } : media === 'menu' ? { phone: target, document: mediaUrl, fileName: 'Cardapio-Gula-dos-Meninos', caption: message } : { phone: target, message };
+    const route = media === 'qr' || media === 'receipt-image' ? 'send-image' : media === 'menu' || media === 'receipt-pdf' ? 'send-document/pdf' : 'send-text';
+    const body = media === 'qr' || media === 'receipt-image' ? { phone: target, image: mediaUrl, caption: message } : media === 'menu' || media === 'receipt-pdf' ? { phone: target, document: mediaUrl, fileName: media === 'receipt-pdf' ? 'Comprovante-Gula' : 'Cardapio-Gula-dos-Meninos', caption: message } : { phone: target, message };
     let status = 'UNKNOWN', messageId: string | null = null, error: string | null = null;
     try {
       const r = await fetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Client-Token': client }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });

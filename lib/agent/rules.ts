@@ -58,5 +58,5 @@ export function orderInput(raw: Record<string, unknown>, now = new Date()) {
   if (!['ENTREGA', 'RETIRADA'].includes(mode)) throw new AgentError('Defina entrega ou retirada.');
   const time = text(raw.horario, 5);
   if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AgentError('Horário inválido.');
-  return { deliveryDate: new Date(date + 'T00:00:00Z'), deliveryTime: time || null, deliveryMode: mode, deliveryAddress: text(raw.endereco, 1000) || null, agentItems: lines, product: lines.map(i => `${i.quantidade} × ${i.descricao} — ${i.precoUnitario} Bs`).join('\n'), total, payFull: raw.pagarIntegral === true, notes: text(raw.observacoes, 2000) || null };
+  return { deliveryDate: new Date(date + 'T00:00:00Z'), deliveryTime: time || null, deliveryMode: mode, deliveryAddress: text(raw.endereco, 1000) || null, agentItems: lines, product: lines.map(i => `${i.quantidade} × ${i.descricao} — ${i.precoUnitario} Bs`).join('\n'), total, payFull: raw.pagarIntegral === true, dough:text(raw.massa,200)||null,filling:text(raw.recheio,300)||null,topping:text(raw.cobertura,300)||null,decoration:text(raw.decoracao,1000)||null,notes: text(raw.observacoes, 2000) || null };
 }

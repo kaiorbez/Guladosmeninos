@@ -20,7 +20,7 @@ function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  if(v instanceof Date)return +x===+v;return x===v;
 });}
 function fixture({network='ok'}={}) {
- let state={agentEvent:[],agentConversation:[{phone,generation:1,latestMoment:0n,pausedUntil:null}],agentInbox:[],agentTicket:[],agentDelivery:[],order:[]};let q=Promise.resolve(),calls=0,failWrite=false;
+ let state={product:[{id:'torta',name:'Torta maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:false,variants:[{id:'v-torta',name:'P',price:130,active:true,stock:0}]}],agentEvent:[],agentConversation:[{phone,generation:1,latestMoment:0n,pausedUntil:null}],agentInbox:[],agentTicket:[],agentDelivery:[],order:[]};let q=Promise.resolve(),calls=0,failWrite=false;
  function db(s){const out={$executeRaw:async()=>0};for(const table of Object.keys(s))out[table]={
   findUnique:async({where})=>s[table].find(o=>matches(o,where))||null,
   findUniqueOrThrow:async({where})=>{const o=s[table].find(o=>matches(o,where));if(!o)throw Error('not found');return o;},
@@ -34,10 +34,10 @@ function fixture({network='ok'}={}) {
  const prisma=new Proxy({}, {get(_,k){if(k==='$transaction')return fn=>{const task=q.then(async()=>{const copy=structuredClone(state);const r=await fn(db(copy));state=copy;return r;});q=task.catch(()=>{});return task;};return db(state)[k];}});
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./transport':transport,'./history':{importHistory:async()=>{}}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./transport':transport,'./history':{importHistory:async()=>{}}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,failWrite:()=>{failWrite=true;}};
 }
-const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
+const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
 test('hoje 100%; futuro 50%; madrugada usa La Paz; desconta só valor confirmado',()=>{
  const now=new Date('2026-10-04T02:00:00Z');
@@ -108,4 +108,32 @@ test('histórico inclui pedido antigo e exclui mensagem que falhou ao enviar',as
  const f=fixture();await f.service.saveOrder(body());f.state().order[0].deliveryDate=new Date('2026-01-01');
  f.state().agentDelivery.push({phone,status:'UNKNOWN',createdAt:new Date(),body:{message:'Falsa confirmação'}});
  const r=await f.service.context(phone);assert.equal(r.pedidos.length,1);assert(!r.historico.some(m=>m.texto==='Falsa confirmação'));
+});
+test('comprovante exige classificação e encaminha original junto do resumo estruturado',async()=>{
+ const f=fixture();const o=await f.service.saveOrder(body());
+ await f.service.inbound({telefone:phone,messageId:'receipt',momento:Date.now(),midia:'imagem',midiaUrl:'https://example.com/receipt.png'});
+ const b={telefone:phone,messageId:'receipt',geracao:2,mediaIds:['receipt'],tipo:'COMPROVANTE',pergunta:'Dados visíveis',cliente:'Cliente'};
+ await assert.rejects(f.service.ticket(b),/Classifique/);
+ const r=await f.service.ticket({...b,comprovante:{tipo:'COMPROVANTE_BANCARIO',pedidoId:o.pedido.id,valor:65,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:rules.dayLaPaz(),hora:'16:45'}});
+ assert.equal(r.midiaEnviada,true);assert.equal(r.notificacaoEnviada,true);
+ const d=f.state().agentDelivery.find(d=>d.key==='ticket:'+r.ticketId);assert.match(d.body.message,/GULA — AVISO DO AGENTE/);assert.match(d.body.message,/✅ CONFERE/);assert.match(d.body.message,/Pagar ahora: 65 Bs/);assert.equal(f.state().order[0].paid,0);
+ assert(f.state().agentDelivery.some(d=>d.body.media==='receipt-image'));
+});
+test('comprovante sem original disponível sinaliza falha de mídia, não sucesso',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'r',midia:'pdf',momento:Date.now()});
+ const r=await f.service.ticket({telefone:phone,messageId:'r',geracao:2,mediaIds:['r'],tipo:'COMPROVANTE',pergunta:'Dados',comprovante:{tipo:'COMPROVANTE_BANCARIO'}});assert.equal(r.midiaEnviada,false);
+});
+test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
+ const review=load('review',{'./rules':rules});const r=review.receiptReview({valor:10,moeda:'Bs',beneficiario:'Outra pessoa',bancoDestino:'Outro banco',data:today},20,today);
+ assert(r.alertas.length>=3);assert.equal(r.pagamentoConfirmado,false);
+ const msg=review.receiptNotice({valor:10,moeda:'Bs'},null,r);assert(!msg.includes('✅ CONFERE'));assert.match(msg,/Pedido não identificado/);
+});
+test('catálogo impede preço alterado e permite nova intenção explícita sem duplicar callback',async()=>{
+ const f=fixture();await assert.rejects(f.service.saveOrder({...body(),pedido:{...order(),itens:[{variantId:'v-torta',descricao:'Torta',quantidade:1,precoUnitario:1}]}}),/Preço mudou/);
+ await f.service.saveOrder(body());const b={...body(),messageId:'m2',pedido:{...order(),novoPedidoSeparado:true}};await f.service.saveOrder(b);await f.service.saveOrder(b);assert.equal(f.state().order.length,2);
+});
+test('rastreio mantém somente espanhol quando cliente escreveu espanhol anteriormente',async()=>{
+ const f=fixture();f.state().agentInbox.push({phone,ready:true,messageId:'old',moment:BigInt(Date.now()-1000),content:'Hola, quiero recibir mañana'});
+ const r=await f.service.ticket({telefone:phone,messageId:'m1',geracao:1,pergunta:'Pedido'});await f.service.team({grupo:'test',referenceMessageId:r.messageId,messageId:'team1',texto:'https://delivery.yango.com/route/#abc'});
+ const msg=f.state().agentDelivery.at(-1).body.message;assert.match(msg,/Sigue tu entrega/);assert(!msg.includes('Acompanhe'));assert.match(msg,/instagram.com/);
 });
