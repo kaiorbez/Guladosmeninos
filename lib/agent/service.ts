@@ -261,9 +261,9 @@ export async function operate(b: Body) {
       const response=await fetch(`https://api.z-api.io/instances/${instance}/token/${token}/me`,{headers:{'Client-Token':client},signal:AbortSignal.timeout(15000)});
       if(!response.ok)return {ok:false,status:response.status};
       const d=await response.json();
-      return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
+      return {ok:true,connected:d.connected,receiveCallbackSentByMe:d.receiveCallbackSentByMe,receivedCallbackUrl:d.receivedCallbackUrl,messageFilters:d.messageFilters??null,callbackTypeFilters:d.callbackTypeFilters??null,configuracaoGrupo:Object.fromEntries(Object.entries(d).filter(([k,v])=>/group|notify/i.test(k)&&typeof v==='boolean'))};
     }
-    case 'diagnostico': return {ok:true,versao:'gula-horario-revisado-v12',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
+    case 'diagnostico': return {ok:true,versao:'gula-diagnostico-filtros-v13',reciboEstruturado:true,midiaOriginal:true,lembretesPainel:true};
     case 'prepararLembreteTeste': {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
