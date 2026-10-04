@@ -1,6 +1,20 @@
 const divider = '━━━━━━━━━━━━━━━';
 const header = '🔔 *GULA — AVISO DO AGENTE*';
 
+/** Presentation only: keep business references and agreed times, hide technical metadata. */
+export function teamDisplay(value: string) {
+  return value
+    .replace(/\s*\(\s*(?:id|pedidoId|messageId|ticketId|executionId)\s*[:=]?\s*[a-z0-9_-]{15,}\s*\)/gi, '')
+    .replace(/\b(?:pedidoId|messageId|ticketId|executionId|id)\s*[:=]\s*[a-z0-9_-]{15,}\b/gi, '')
+    .replace(/\s*\((\d{1,2}:\d{2})(?:\s*(?:UTC|GMT|Z))?\)/gi, (match, _time, offset, source) => {
+      const prefix = source.slice(Math.max(0, offset - 70), offset);
+      // An explicit delivery, pickup or receipt time is still useful to the team.
+      if (/(?:hor[aá]rio|hora|entrega|retirada)[^.!?\n]{0,35}$|(?:para|[aà]s)\s*$/i.test(prefix)) return match;
+      return '';
+    })
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
 /** Keep structured reports; make older plain-text tickets readable without inventing fields. */
 export function noticeDetails(question: string) {
   const body = question.trim().split(divider)[0].split('👉 *Ação da equipe*')[0].trim();
@@ -10,7 +24,7 @@ export function noticeDetails(question: string) {
 }
 
 export function groupNotice(title: string, name: string, phone: string, details: string, action: string) {
-  return `${header}\n${divider}\n*${title}*\n\n👤 *Cliente:* ${name}\n📱 wa.me/${phone}\n\n${details.trim()}\n\n${divider}\n👉 *Ação da equipe*\n${action}`;
+  return `${header}\n${divider}\n*${title}*\n\n👤 *Cliente:* ${name}\n📱 wa.me/${phone}\n\n${teamDisplay(details.trim())}\n\n${divider}\n👉 *Ação da equipe*\n${teamDisplay(action)}`;
 }
 
 export function compatibleReceipt(kind: string, question: string) {

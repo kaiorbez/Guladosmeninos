@@ -172,6 +172,18 @@ test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
  const msg=review.receiptNotice({valor:10,moeda:'Bs'},null,r);assert(!msg.includes('✅ CONFERE'));assert.match(msg,/Pedido não identificado/);
 });
 
+test('avisos e lembretes ocultam ID interno e horário técnico sem perder dados do pedido',()=>{
+ const notices=load('notices');
+ const question='📌 *Resumo*\nCliente pediu 15:30 e depois (20:36) solicitou envio.\n\n🛒 *Pedido*\nPedido nº15 (id cmutxmmvu001ens3caqjcunjj): Bolo P. Total 130 Bs.\n\n📅 *Data e horário*\n2026-10-04. Horário no painel: 15:00.\n\n🚚 *Entrega*\nhttps://maps.google.com/?q=-17.834,-63.166';
+ for(const reminder of [false,true]){
+  const result=notices.pendingNotice('DUVIDA','Cliente',phone,question,reminder);
+  assert(!result.includes('cmutxmmvu001ens3caqjcunjj'));assert(!result.includes('20:36'));
+  for(const data of ['Pedido nº15','130 Bs','2026-10-04','15:30','15:00','https://maps.google.com/?q=-17.834,-63.166'])assert(result.includes(data));
+ }
+ assert.equal(notices.teamDisplay('Entrega (15:30). Hora do comprovante: (11:04). Retirada às (16:00).'),'Entrega (15:30). Hora do comprovante: (11:04). Retirada às (16:00).');
+ assert.equal(notices.teamDisplay('pedidoId: cmutxmmvu001ens3caqjcunjj. Pedido nº15.'),'. Pedido nº15.');
+});
+
 test('data de comprovante exige dia real em ISO; data ausente, ilegível ou impossível não é compatível',()=>{
  const review=load('review',{'./rules':rules});
  const receipt={valor:50,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero'};
