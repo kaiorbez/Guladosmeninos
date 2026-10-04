@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, PAYMENT_LABEL, bs, dateTime } from "@/lib/format";
 import { getOverview } from "@/lib/metrics";
-import { startOfDay, startOfMonth } from "@/lib/time";
+import { dayKey, startOfDay, startOfMonth } from "@/lib/time";
 import { cancelSaleAction, deleteSaleAction } from "./actions";
 
 const PERIODS = {
@@ -34,30 +34,27 @@ export default async function VendasPage({
       take: 300,
       include: { items: true, user: { select: { name: true } } },
     }),
-    // Tudo o que entrou no faturamento do período (sem limite), para o resumo por cliente.
+    // Entradas confirmadas, do primeiro ao último horário do período (sem limite).
     prisma.sale.findMany({
       where: { status: "CONFIRMADA", createdAt: { gte: from } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { number: "asc" }],
       select: { id: true, number: true, createdAt: true, total: true, channel: true, customerName: true, customerPhone: true, externalRef: true, items: { select: { description: true, quantity: true } } },
     }),
   ]);
 
-  // Resumo por cliente: junta pelo celular (com ou sem 591); sem celular, pelo nome.
-  type ClientRow = { key: string; name: string; phone: string | null; total: number; sales: typeof inPeriod };
-  const byClient = new Map<string, ClientRow>();
+  // Agrupa apenas por dia; cada recebimento permanece na sua posição cronológica.
+  const days = new Map<string, typeof inPeriod>();
   for (const sale of inPeriod) {
-    const digits = (sale.customerPhone ?? "").replace(/\D/g, "");
-    const phone = digits.length === 11 && digits.startsWith("591") ? digits.slice(3) : digits;
-    const name = sale.customerName?.trim() || "";
-    const key = phone.length >= 7 ? `tel:${phone}` : name ? `nome:${name.toLowerCase()}` : "sem-cliente";
-    const row = byClient.get(key) ?? { key, name: name || (phone ? phone : "Sem cliente informado"), phone: phone.length >= 7 ? phone : null, total: 0, sales: [] };
-    if (name) row.name = name;
-    row.total += Number(sale.total);
-    row.sales.push(sale);
-    byClient.set(key, row);
+    const day = dayKey(sale.createdAt);
+    const entries = days.get(day) ?? [];
+    entries.push(sale);
+    days.set(day, entries);
   }
-  const clientRows = [...byClient.values()].sort((a, b) => b.total - a.total);
-  const hour = (d: Date) => d.toLocaleString("pt-BR", { timeZone: "America/La_Paz", ...(periodo === "hoje" ? {} : { day: "2-digit", month: "2-digit" }), hour: "2-digit", minute: "2-digit" });
+  const hour = (d: Date) => d.toLocaleTimeString("pt-BR", { timeZone: "America/La_Paz", hour: "2-digit", minute: "2-digit" });
+  const dayTitle = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("pt-BR", {
+    timeZone: "America/La_Paz", weekday: "long", day: "numeric", month: "long",
+  });
+  const revenueTotal = inPeriod.reduce((sum, sale) => sum + Number(sale.total), 0);
 
   const confirmed = sales.filter((s) => s.status === "CONFIRMADA");
   const periodTotal = confirmed.reduce((s, x) => s + Number(x.total), 0);
@@ -75,9 +72,9 @@ export default async function VendasPage({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Kpi tone="accent" label="Vendido hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-cliente" />
-        <Kpi label="Vendido na semana" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s) · últimos 7 dias`} href="/painel/vendas?periodo=semana#por-cliente" />
-        <Kpi label="Vendido no mês" value={bs(overview.month.revenue)} hint={`${overview.month.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-cliente" />
+        <Kpi tone="accent" label="Vendido hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-horario" />
+        <Kpi label="Vendido na semana" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s) · últimos 7 dias`} href="/painel/vendas?periodo=semana#por-horario" />
+        <Kpi label="Vendido no mês" value={bs(overview.month.revenue)} hint={`${overview.month.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-horario" />
       </div>
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-3">
@@ -97,42 +94,50 @@ export default async function VendasPage({
         </p>
       </div>
 
-      <section id="por-cliente" className="card mb-6 scroll-mt-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base">O que entrou no faturamento · {PERIODS[periodo].label.toLowerCase()}, por cliente</h2>
+      <section id="por-horario" className="card mb-6 scroll-mt-6">
+        <span id="por-cliente" className="scroll-mt-6" aria-hidden="true" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base">O que entrou no faturamento · por horário</h2>
+            <p className="mt-1 text-xs text-cacau-500">{PERIODS[periodo].label} · do primeiro ao último recebimento</p>
+          </div>
           <p className="text-sm text-cacau-500">
-            {clientRows.length} cliente(s) · <b className="text-cacau-900">{bs(clientRows.reduce((t, c) => t + c.total, 0))}</b>
+            {inPeriod.length} lançamento(s) · <b className="text-cacau-900">{bs(revenueTotal)}</b>
           </p>
         </div>
-        {clientRows.length === 0 ? (
-          <p className="mt-3 text-sm text-cacau-500">Nada entrou no faturamento neste período.</p>
+        {inPeriod.length === 0 ? (
+          <p className="mt-4 text-sm text-cacau-500">Nada entrou no faturamento neste período.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-creme-300/70">
-            {clientRows.map((c) => (
-              <li key={c.key} className="py-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="font-semibold">
-                    {c.name}
-                    {c.phone && <span className="ml-2 text-xs font-normal text-cacau-500">{c.phone}</span>}
-                  </p>
-                  <p className="whitespace-nowrap font-semibold tabular-nums">{bs(c.total)}</p>
+          <div className="mt-5 space-y-5">
+            {[...days.entries()].map(([day, entries]) => (
+              <div key={day}>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-creme-200/60 px-3 py-2">
+                  <h3 className="text-xs font-semibold capitalize">{dayTitle(day)}</h3>
+                  <span className="text-xs tabular-nums text-cacau-500">{bs(entries.reduce((sum, sale) => sum + Number(sale.total), 0))}</span>
                 </div>
-                <ul className="mt-1 space-y-0.5 text-sm text-cacau-700">
-                  {c.sales.map((sale) => (
-                    <li key={sale.id} className="flex items-baseline gap-3">
-                      <span className="w-24 shrink-0 tabular-nums text-cacau-500">{hour(sale.createdAt)}</span>
-                      <span className="min-w-0 flex-1">
-                        {sale.items.map((i) => (i.quantity > 1 ? `${i.quantity}× ${i.description}` : i.description)).join(", ")}
-                        {sale.externalRef?.startsWith("encomenda:") && " (restante na entrega)"}
-                        <span className="ml-2 text-xs text-cacau-400">{CHANNEL_LABEL[sale.channel] ?? sale.channel}</span>
-                      </span>
-                      <span className="whitespace-nowrap tabular-nums">{bs(sale.total)}</span>
+                <ol className="divide-y divide-creme-300/70">
+                  {entries.map((sale) => (
+                    <li key={sale.id} className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-start gap-3 py-4 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:gap-4">
+                      <time dateTime={sale.createdAt.toISOString()} className="rounded-md bg-creme-200/60 px-1 py-1 text-center text-sm font-semibold tabular-nums">{hour(sale.createdAt)}</time>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{sale.customerName?.trim() || "Sem cliente informado"}</p>
+                        <p className="mt-1 whitespace-pre-line break-words text-sm text-cacau-700">
+                          {sale.items.map((i) => (i.quantity > 1 ? `${i.quantity}× ${i.description}` : i.description)).join("\n")}
+                          {sale.externalRef?.startsWith("encomenda:") && " (restante na entrega)"}
+                        </p>
+                        <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-xs text-cacau-500">
+                          <span>#{sale.number}</span>
+                          <span>{CHANNEL_LABEL[sale.channel] ?? sale.channel}</span>
+                          {sale.customerPhone && <span>{sale.customerPhone}</span>}
+                        </p>
+                      </div>
+                      <span className="whitespace-nowrap pt-1 text-sm font-semibold tabular-nums">{bs(sale.total)}</span>
                     </li>
                   ))}
-                </ul>
-              </li>
+                </ol>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ProductPhoto } from "@/components/ProductPhoto";
 import { RevenueChart } from "@/components/RevenueChart";
 import { prisma } from "@/lib/db";
-import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
+import { CHANNEL_LABEL, bs, dateTime } from "@/lib/format";
 import { getDailySeries, getOverview, getSalesByChannel, getTopProducts } from "@/lib/metrics";
 import { dayKey, startOfMonth } from "@/lib/time";
 
@@ -26,7 +26,7 @@ export default async function VisaoGeral() {
     // Pendentes até amanhã (inclui as atrasadas)
     prisma.order.findMany({
       where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) } },
-      orderBy: [{ deliveryDate: "asc" }, { deliveryTime: "asc" }],
+      orderBy: [{ deliveryDate: "asc" }, { deliveryTime: { sort: "asc", nulls: "last" } }, { number: "asc" }],
       take: 12,
     }),
   ]);
@@ -37,6 +37,12 @@ export default async function VisaoGeral() {
   const channelTotal = channels.reduce((s, c) => s + c.revenue, 0) || 1;
   const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/La_Paz" });
 
+  const orderGroups = [
+    { key: "atrasadas", label: "Dias anteriores", tone: "text-coral-600", orders: orders.filter((o) => o.deliveryDate.toISOString().slice(0, 10) < todayKey) },
+    { key: "hoje", label: "Hoje", tone: "text-dourado-600", orders: orders.filter((o) => o.deliveryDate.toISOString().slice(0, 10) === todayKey) },
+    { key: "amanha", label: "Amanhã", tone: "text-cacau-700", orders: orders.filter((o) => o.deliveryDate.toISOString().slice(0, 10) === tomorrowKey) },
+  ].filter((group) => group.orders.length > 0);
+
   return (
     <>
       <PageHeader title="Visão geral" subtitle={today.charAt(0).toUpperCase() + today.slice(1)}>
@@ -44,39 +50,60 @@ export default async function VisaoGeral() {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <Kpi tone="accent" label="Faturamento hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-cliente" />
-        <Kpi label="Últimos 7 dias" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s)`} href="/painel/vendas?periodo=semana#por-cliente" />
-        <Kpi label="No mês" value={bs(m.revenue)} hint={`${m.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-cliente" />
+        <Kpi tone="accent" label="Faturamento hoje" value={bs(overview.today.revenue)} hint={`${overview.today.orders} pedido(s)`} href="/painel/vendas?periodo=hoje#por-horario" />
+        <Kpi label="Últimos 7 dias" value={bs(overview.week.revenue)} hint={`${overview.week.orders} pedido(s)`} href="/painel/vendas?periodo=semana#por-horario" />
+        <Kpi label="No mês" value={bs(m.revenue)} hint={`${m.orders} pedido(s)`} href="/painel/vendas?periodo=mes#por-horario" />
         <Kpi label="Ticket médio no mês" value={bs(ticket)} hint="Valor médio por pedido" />
       </div>
 
       <section className="card mt-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base">Encomendas para hoje e amanhã</h2>
-          <Link href="/painel/encomendas" className="text-xs font-medium text-dourado-600 hover:underline">Ver todas →</Link>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base">Encomendas para hoje e amanhã</h2>
+            <p className="mt-1 text-xs text-cacau-500">Pendentes por dia e horário · toque na encomenda para abrir a ficha</p>
+          </div>
+          <Link href="/painel/encomendas" className="btn-ghost px-3 py-1.5 text-xs">Ver todas →</Link>
         </div>
         {orders.length === 0 ? (
-          <p className="mt-3 text-sm text-cacau-500">Nenhuma encomenda pendente para hoje ou amanhã.</p>
+          <p className="mt-4 rounded-lg bg-creme-200/50 px-4 py-5 text-sm text-cacau-500">Nenhuma encomenda pendente para hoje ou amanhã.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-creme-300/60 text-sm">
-            {orders.map((o) => {
-              const k = o.deliveryDate.toISOString().slice(0, 10);
-              const missing = Number(o.total) - Number(o.paid);
-              return (
-                <li key={o.id}>
-                  <Link href={`/painel/encomendas/${o.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 hover:text-dourado-600">
-                    <span className={`badge ${k < todayKey ? "bg-coral-500 text-white" : k === todayKey ? "bg-dourado-400/25 text-dourado-600" : "bg-creme-200 text-cacau-700"}`}>
-                      {k < todayKey ? "Atrasada" : k === todayKey ? "Hoje" : "Amanhã"}
-                    </span>
-                    <span className="w-12 tabular-nums text-cacau-500">{o.deliveryTime ?? "—"}</span>
-                    <span className="font-medium">{o.customerName}</span>
-                    <span className="min-w-0 flex-1 truncate text-cacau-500">{o.product}</span>
-                    {missing > 0 && <span className="text-coral-600">falta {bs(missing)}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className={`mt-5 grid gap-4 ${orderGroups.length > 1 ? "lg:grid-cols-2" : ""} ${orderGroups.length > 2 ? "2xl:grid-cols-3" : ""}`}>
+            {orderGroups.map((group) => (
+              <section key={group.key} aria-label={`Encomendas: ${group.label}`} className="min-w-0 rounded-xl border border-creme-300 bg-creme-200/30 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2 px-1">
+                  <h3 className={`text-sm font-semibold ${group.tone}`}>{group.label}</h3>
+                  <span className="text-xs text-cacau-500">{group.orders.length} encomenda(s)</span>
+                </div>
+                <ul className="space-y-2">
+                  {group.orders.map((o) => {
+                    const missing = Math.max(0, Number(o.total) - Number(o.paid));
+                    return (
+                      <li key={o.id}>
+                        <Link href={`/painel/encomendas/${o.id}`} className="group block rounded-lg border border-creme-300 bg-white p-3 transition-colors hover:border-dourado-400 dark:bg-creme-50">
+                          <div className="flex items-start gap-3">
+                            <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-creme-200 px-1 py-2 text-center">
+                              <span className={`font-semibold tabular-nums ${o.deliveryTime ? "text-base" : "text-xs"}`}>{o.deliveryTime || "Sem horário"}</span>
+                              {group.key === "atrasadas" && <span className="mt-1 text-[10px] text-coral-600">{o.deliveryDate.toLocaleDateString("pt-BR", { timeZone: "UTC", day: "2-digit", month: "2-digit" })}</span>}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-sm font-semibold group-hover:text-dourado-600">{o.customerName}</p>
+                              <p className="mt-1 line-clamp-3 whitespace-pre-line break-words text-xs leading-relaxed text-cacau-500" title={o.product}>{o.product}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-creme-300/60 pt-2">
+                            <span className="text-xs text-cacau-500">#{o.number} · Total {bs(o.total)}</span>
+                            <span className={`badge text-xs ${missing > 0 ? "bg-coral-500/15 text-coral-600" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"}`}>
+                              {missing > 0 ? `Falta ${bs(missing)}` : "Pago"}
+                            </span>
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </section>
 
