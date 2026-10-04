@@ -6,7 +6,7 @@ export async function lockConversation(tx: Prisma.TransactionClient, phone: stri
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${phone}))`;
 }
 /** Durable claim first: a crash after sending leaves SENDING, never a blind retry. */
-export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string) {
+export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string, failureReply = false) {
   const instance = process.env.ZAPI_INSTANCE, token = process.env.ZAPI_TOKEN, client = process.env.ZAPI_CLIENT_TOKEN;
   if (!instance || !token || !client) throw new AgentError('Z-API não configurada no painel.', 503);
   const candidateUrl = sourceUrl || (media === 'qr' ? process.env.GULA_QR_URL : media === 'menu' ? process.env.GULA_MENU_URL : undefined);
@@ -25,7 +25,7 @@ export async function sendOnce(id: string, target: string, message: string, tick
     await lockConversation(tx, target);
     if (generation !== undefined) {
       const c = await tx.agentConversation.findUnique({ where: { phone: target } });
-      if (!c || c.generation !== generation || (c.pausedUntil && c.pausedUntil > new Date())) {
+      if (!c || c.generation !== generation || (!failureReply && c.pausedUntil && c.pausedUntil > new Date())) {
         await tx.agentDelivery.update({ where: { key: id }, data: { status: 'SUPERADA' } });
         return { enviado: false, estado: 'SUPERADA', messageId: null };
       }

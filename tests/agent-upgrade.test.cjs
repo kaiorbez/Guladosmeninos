@@ -41,6 +41,46 @@ function fixture({network='ok'}={}) {
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+
+test('falha de mídia registra pendência, responde sem IA e deduplica callbacks concorrentes',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'photo',midia:'imagem',texto:'precio',momento:Date.now()});
+ const b={acao:'falhaAnalise',telefone:phone,messageId:'photo',geracao:2,etapa:'imagem',idioma:'es'};
+ const results=await Promise.all([f.service.operate(b),f.service.operate(b)]);
+ assert(results.every(r=>r.registrado));assert(results.some(r=>r.enviado));assert.equal(f.state().agentTicket.length,1);assert.equal(f.calls(),2);
+ assert(f.state().agentInbox[0].consumedAt);assert.equal(f.state().agentConversation[0].generation,3);
+ assert(f.state().agentDelivery.find(d=>d.phone===phone).body.message.startsWith('No pude'));
+ assert.equal(f.state().order.length,0);
+});
+
+test('falha antiga após resposta humana não altera fila nem envia aviso',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'photo',midia:'imagem',momento:Date.now()});
+ await f.service.inbound({telefone:phone,messageId:'human',humano:true,momento:Date.now()});
+ await assert.rejects(f.service.analysisFailure({telefone:phone,messageId:'photo',geracao:2,etapa:'imagem'}),/Nova mensagem/);
+ assert.equal(f.calls(),0);assert.equal(f.state().agentTicket.length,0);assert.equal(f.state().agentInbox[0].ready,false);
+});
+
+test('timeout do aviso técnico mantém pendência e não repete envios incertos',async()=>{
+ const f=fixture({network:'timeout'});await f.service.inbound({telefone:phone,messageId:'audio',midia:'audio',momento:Date.now()});
+ const b={telefone:phone,messageId:'audio',geracao:2,etapa:'audio'};
+ const r=await f.service.analysisFailure(b);assert.equal(r.enviado,false);assert.equal(r.notificacaoEnviada,false);
+ await f.service.analysisFailure(b);assert.equal(f.calls(),2);assert.equal(f.state().agentTicket.length,1);
+});
+
+test('falha da IA preserva lote consumido e resposta humana impede callback atrasado',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'text',midia:'texto',momento:Date.now()});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'text',texto:'Quero bolo'});
+ await f.service.prepare({telefone:phone,execucao:'run'});
+ const b={telefone:phone,messageId:'text',geracao:2,etapa:'ia'};
+ const r=await f.service.analysisFailure(b);assert(r.enviado);assert.equal(f.state().agentInbox[0].content,'Quero bolo');assert(f.state().agentInbox[0].consumedAt);
+ await f.service.resolveTicket(r.ticketId,'','grupo');await f.service.analysisFailure(b);assert.equal(f.calls(),2);assert.equal(f.state().agentTicket[0].status,'RESOLVIDA');
+});
+
+test('erro tardio não substitui análise de mídia já concluída',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'photo',midia:'imagem',momento:Date.now()});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'photo',texto:'REFERENCIA_BOLO'});
+ await assert.rejects(f.service.analysisFailure({telefone:phone,messageId:'photo',geracao:2,etapa:'imagem'}),/já processada/);
+ assert.equal(f.state().agentInbox[0].content,'REFERENCIA_BOLO');assert.equal(f.calls(),0);
+});
 test('hoje 100%; futuro 50%; madrugada usa La Paz; desconta só valor confirmado',()=>{
  const now=new Date('2026-10-04T02:00:00Z');
  assert.equal(rules.paymentPlan(130,0,'2026-10-03',false,now).pagarAgora,130);

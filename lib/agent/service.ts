@@ -225,9 +225,43 @@ export async function prepare(b: Body) {
   return {...(await context(p)),...(claim as object)};
 }
 
+/** Called by an authenticated n8n error branch; never requires an LLM. */
+export async function analysisFailure(b: Body) {
+  const p=phone(b.telefone), id=key(b.messageId);
+  const stage=String(b.etapa);
+  if (!['imagem','audio','ia'].includes(stage)) throw new AgentError('Etapa de análise inválida.');
+  const failureKey=`analysis-failure:${p}:${id}`;
+  const claim=await prisma.$transaction(async tx=>{
+    await lockConversation(tx,p);
+    const prior=await tx.agentEvent.findUnique({where:{key:failureKey}});
+    if(prior?.result) return prior.result as Body;
+    await current(tx,p,b);
+    const inbound=await tx.agentEvent.findUnique({where:{key:`in:${p}:${id}`}});
+    if(!inbound || (inbound.payload as Body).fromMe!==false) throw new AgentError('Mensagem do cliente não encontrada.',404);
+    const inbox=await tx.agentInbox.findUnique({where:{id:`in:${p}:${id}`}});
+    if(!inbox || (stage!=='ia' && (inbox.ready || inbox.consumedAt))) throw new AgentError('Mídia já processada; não sobrescrever.',409);
+    const question=`Falha técnica na etapa ${stage}. Conteúdo indisponível; consultar a conversa e pedidos no painel, sem presumir conteúdo ou pagamento. Retomada depende de conferência da equipe.`;
+    const t=await tx.agentTicket.upsert({where:{sourceKey:failureKey},create:{sourceKey:failureKey,phone:p,customerName:text(b.cliente,120)||p,kind:'DUVIDA',question,nextReminderAt:new Date(Date.now()+10*60000)},update:{}});
+    // Consume only the failed input. Later customer messages remain queued.
+    if(stage!=='ia') await tx.agentInbox.update({where:{id:inbox.id},data:{ready:true,content:'[Mídia indisponível: análise falhou. Não inferir conteúdo nem pagamento.]',consumedAt:new Date()}});
+    // Invalidate the failed generation and pause until the linked ticket is resolved.
+    await tx.agentConversation.update({where:{phone:p},data:{generation:{increment:1},pausedUntil:new Date(Date.now()+30*60000)}});
+    const result={ticketId:t.id,question:t.question,customerName:t.customerName,geracao:Number(b.geracao)+1,idioma:b.idioma==='es'?'es':'pt'};
+    await tx.agentEvent.create({data:{key:failureKey,phone:p,kind:'ANALYSIS_FAILURE',payload:{etapa:stage},result:json(result)}});
+    return result;
+  });
+  let notice={enviado:false,estado:'NAO_CONFIGURADO',messageId:null as string|null};
+  try {notice=await sendOnce(`${failureKey}:team`,group(),pendingNotice('DUVIDA',String(claim.customerName),p,String(claim.question)),String(claim.ticketId));} catch { /* Ticket remains durable even without transport. */ }
+  const message=claim.idioma==='es'?'No pude procesar tu mensaje ahora. La solicitud quedó registrada para revisión del equipo 😊':'Não consegui processar sua mensagem agora. A solicitação ficou registrada para revisão da equipe 😊';
+  let sent={enviado:false,estado:'SUPERADA',messageId:null as string|null};
+  try {sent=await sendOnce(`${failureKey}:customer`,p,message,String(claim.ticketId),Number(claim.geracao),undefined,undefined,true);} catch {sent.estado='NAO_CONFIGURADO';}
+  return {ok:true,registrado:true,ticketId:claim.ticketId,notificacaoEnviada:notice.enviado,enviado:sent.enviado,estadoEnvio:sent.estado};
+}
+
 export async function operate(b: Body) {
   switch (b.acao) {
     case 'entrada': return inbound(b);
+    case 'falhaAnalise': return analysisFailure(b);
     case 'buffer': return buffer(phone(b.telefone));
     case 'preparar': return prepare(b);
     case 'conteudo': {

@@ -37,6 +37,10 @@ Credencial n8n `Painel Gula API`: chamadas ao painel, não à Z-API. Credencial 
 
 ## Pendências críticas reais
 
+### Continuação local no Windows em 04/10/2026
+
+Implementado o contrato `falhaAnalise` no backend, com pendência durável, resposta sem OpenAI, deduplicação e proteção por geração. Integração e limites: `docs/FALHA-ANALISE.md`. Ainda não publicado nem conectado ao fluxo ativo. O conector n8n retornou workflow inexistente/sem permissão para `K5M9CtCwpIC3LdQ7`; portanto não foi possível confirmar o estado ativo nem as execuções reais. Yango real, saldo OpenAI, Railway e testes de envio continuam pendentes.
+
 ### 1. API OpenAI sem saldo e cliente sem resposta
 
 Verificado em 04/10/2026 nas execuções `1428097` (12:59 local) e `1428106` (13:00): foto de bolo com pergunta em espanhol sobre preço; depois pergunta sobre quantidade de pessoas. Não publicar dados do cliente.
