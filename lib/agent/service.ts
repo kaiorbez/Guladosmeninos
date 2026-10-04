@@ -160,6 +160,12 @@ export async function team(b: Body) {
   if (b.fromApi === true) return { ok: true, ignorar: true, motivo: 'MENSAGEM_AUTOMATICA' };
   const ref = key(b.referenceMessageId), id = key(b.messageId), message = text(b.texto, 3000);
   let delivery = await prisma.agentDelivery.findUnique({ where: { messageId: ref } });
+  // Staff can reply to another staff response in the same linked notice thread.
+  if (!delivery?.ticketId) {
+    const parent=await prisma.agentEvent.findUnique({where:{key:`team-claim:${ref}`}});
+    const ticketId=text((parent?.payload as Body|undefined)?.ticketId,100);
+    if(ticketId) delivery={ticketId} as typeof delivery;
+  }
   // Legacy reference comes only from the authenticated n8n Redis lookup.
   if(!delivery && text(b.legadoTelefone)) {
     const legacyPhone=phone(b.legadoTelefone);
@@ -172,6 +178,7 @@ export async function team(b: Body) {
   }
   const t = await prisma.agentTicket.findUniqueOrThrow({ where: { id: delivery.ticketId } });
   if (resolvedCommand(message)) return resolveTicket(t.id, '', 'grupo');
+  if(t.kind==='DUVIDA' && /yango|entrega|env[ií]o/i.test(t.question) && /^(?:sim[,!\s]+)?(?:j[aá]\s+)?foi\s+(?:enviado|entregue)(?:\b|[.!\s])/i.test(message)) return resolveTicket(t.id,message,'grupo');
   if(/^(preparando|pedido confirmado[,; ]+preparando|pagamento confirmado[,; ]+preparando|pago confirmado[,; ]+preparando)[.!\s]*$/i.test(message)) {
     const ctx=await context(t.phone);const es=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).some(m=>/\b(hola|quiero|gracias|mañana)\b/i.test(String(m.texto)));
     const sent=await sendOnce(`preparing:${t.id}`,t.phone,es?'¡El equipo confirmó tu pedido y ya está preparándolo! 💛🧁':'A equipe confirmou seu pedido e já está preparando! 💛🧁',t.id);

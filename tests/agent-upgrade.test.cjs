@@ -43,6 +43,19 @@ function fixture({network='ok'}={}) {
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
 
+test('resposta a outra resposta vinculada resolve entrega sem alterar pedido ou pagamento',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Confirmar entrega por Yango'});
+ await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'staff1',texto:'Vou verificar'});
+ const r=await f.service.team({grupo:'test',referenceMessageId:'staff1',messageId:'staff2',texto:'Sim, já foi enviado. Não precisa mais notificar'});
+ assert.equal(r.retomado,true);assert.equal(f.state().agentTicket[0].status,'RESOLVIDA');assert.equal(f.calls(),1);assert.equal(f.receiptPayments(),0);
+});
+
+test('entrega não enviada não resolve aviso nem comprova pagamento',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Entrega por Yango'});
+ await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'staff',texto:'Não foi enviado ainda'});
+ assert.equal(f.state().agentTicket[0].status,'ASSUMIDA');assert.equal(f.receiptPayments(),0);
+});
+
 test('texto retido durante pausa recupera localização original sem inventar análise de imagem',async()=>{
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'location-text',midia:'texto',texto:'Ubicación: https://maps.google.com/?q=-17,-63',momento:Date.now()-20*60000});
  f.state().agentInbox[0].createdAt=new Date(Date.now()-20*60000);
