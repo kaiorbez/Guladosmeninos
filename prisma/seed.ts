@@ -452,6 +452,17 @@ async function main() {
     }
     console.log(`  ${payments.length} pagamento(s) antigo(s) levado(s) ao faturamento`);
   });
+  // Oferta permanente confirmada pelo proprietário em 05/10/2026.
+  // Produto separado: preservar preços, IDs e encomendas dos outros combos.
+  await once("2026-10-05-combo-perfecto-permanente", async () => {
+    await prisma.$transaction(async tx => {
+      const category = await tx.category.upsert({ where: { slug: "combos" }, update: {}, create: { slug: "combos", name: "Combos", group: "Combos" } });
+      const existing = await tx.product.findFirst({ where: { name: "Combo Perfecto" } });
+      const data = { name: "Combo Perfecto", categoryId: category.id, description: "1 empadão P + 1 bolo de pote + 1 Coca-Cola Zero 300 ml. Combo sempre disponível, conforme orientação da loja. Consultar sabores do bolo de pote; não presumir disponibilidade permanente de cada sabor. Valor total do combo: 45 Bs.", trackStock: false, priceOnRequest: false, active: true, onStore: true };
+      const product = existing ? await tx.product.update({ where: { id: existing.id }, data }) : await tx.product.create({ data });
+      await tx.variant.upsert({ where: { productId_name: { productId: product.id, name: "Único" } }, update: { price: 45, active: true }, create: { productId: product.id, name: "Único", price: 45, active: true } });
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
