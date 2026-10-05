@@ -69,7 +69,7 @@ export async function saveOrder(b: Body) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AgentError('Pedido inválido.');
   const raw = input as Body, orderId = text(raw.id, 100), name = text(raw.cliente, 120);
   if (!name) throw new AgentError('Nome do cliente obrigatório.');
-  const data = orderInput(raw);
+  if (!Array.isArray(raw.itens) || !raw.itens.length) throw new AgentError('Informe os itens da encomenda.');
   const prices=await catalog();
   for (const line of raw.itens as Body[]) {
     const variant=prices.find(v=>v.variantId===line.variantId);
@@ -82,9 +82,11 @@ export async function saveOrder(b: Body) {
     const old = await tx.agentEvent.findUnique({ where: { key: eventKey } });
     if (old?.result) return old.result;
     await current(tx, p, b);
+    const existing = orderId ? await tx.order.findFirst({ where: { id: orderId, customerPhone: p, status: 'PENDENTE' } }) : null;
+    if (orderId && !existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);
+    const data = orderInput(raw, new Date(), existing || undefined);
     let order;
     if (orderId) {
-      const existing = await tx.order.findFirst({ where: { id: orderId, customerPhone: p, status: 'PENDENTE' } });
       if (!existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);
       if (data.total < Number(existing.paid)) throw new AgentError('Total menor que o pagamento confirmado; equipe deve ajustar.', 409);
       const result = await tx.order.updateMany({ where: { id: orderId, customerPhone: p, status: 'PENDENTE', agentVersion: Number(raw.versao) }, data: { ...data, customerName: name, agentVersion: { increment: 1 } } });

@@ -321,11 +321,28 @@ test('rastreio mantém somente espanhol quando cliente escreveu espanhol anterio
  const msg=f.state().agentDelivery.at(-1).body.message;assert.match(msg,/Sigue tu entrega/);assert(!msg.includes('Acompanhe'));assert.match(msg,/instagram.com/);
 });
 
-test('terça e horários fora da janela são bloqueados sem impedir encomenda futura válida',()=>{
+test('terça permite entrega antecipada, mas bloqueia nova compra no mesmo dia e retirada',()=>{
  const now=new Date('2026-10-03T12:00:00Z');
- assert.throws(()=>rules.orderInput({...order(),data:'2026-10-06'},now),/Terça-feira/);
+ assert.equal(rules.orderInput({...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'13:00'},now).deliveryTime,'13:00');
+ assert.throws(()=>rules.orderInput({...order(),data:'2026-10-06',modalidade:'RETIRADA'},now),/Terça-feira/);
+ const tuesday=new Date('2026-10-06T12:00:00Z');
+ const input={...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'15:00'};
+ assert.throws(()=>rules.orderInput(input,tuesday),/nova compra/);
+ assert.equal(rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-06'),createdAt:new Date('2026-10-05T15:00:00Z')}).deliveryTime,'15:00');
+ assert.throws(()=>rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-06'),createdAt:tuesday}),/nova compra/);
+ assert.throws(()=>rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-07'),createdAt:new Date('2026-10-05T15:00:00Z')}),/nova compra/);
  assert.throws(()=>rules.orderInput({...order(),data:'2026-10-05',horario:'10:00'},now),/fora do atendimento/);
  assert.equal(rules.orderInput({...order(),data:'2026-10-05',horario:'14:00'},now).deliveryTime,'14:00');
+});
+test('compra na terça pode ir para quarta, mas chantilly exige quinta e preserva encomenda anterior',()=>{
+ const now=new Date('2026-10-06T16:00:00Z');
+ const input={...order(),data:'2026-10-07',horario:'15:00'};
+ assert.equal(rules.orderInput(input,now).deliveryTime,'15:00');
+ assert.throws(()=>rules.orderInput({...input,cobertura:'Chantilly'},now),/dois dias/);
+ assert.throws(()=>rules.orderInput({...input,itens:[{descricao:'Bolo chantilly',quantidade:1,precoUnitario:130}]},now),/dois dias/);
+ assert.equal(rules.orderInput({...input,data:'2026-10-08',cobertura:'Chantilly'},now).deliveryTime,'15:00');
+ assert.equal(rules.orderInput({...input,cobertura:'Chantilly'},now,{deliveryDate:new Date('2026-10-07'),createdAt:new Date('2026-10-04T15:00:00Z'),topping:'Chantilly'}).deliveryTime,'15:00');
+ assert.throws(()=>rules.orderInput({...input,cobertura:'Chantilly'},now,{deliveryDate:new Date('2026-10-07'),createdAt:new Date('2026-10-04T15:00:00Z'),topping:'Chocolate'}),/dois dias/);
 });
 test('preparo depende de comando da equipe, não de imagem de comprovante',async()=>{
  const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m1',geracao:1,pergunta:'Pedido'});

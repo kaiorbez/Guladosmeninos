@@ -41,7 +41,7 @@ export function resolvedCommand(v: unknown) {
   return /^(respondid[oa]|resolvid[oa]|duvida respondida|ja respondi|cliente respondido)[.!\s]*$/.test(s);
 }
 export type OrderLine = { descricao: string; quantidade: number; precoUnitario: number };
-export function orderInput(raw: Record<string, unknown>, now = new Date()) {
+export function orderInput(raw: Record<string, unknown>, now = new Date(), existing?: { deliveryDate: Date; createdAt: Date; topping?: string | null; product?: string }) {
   const date = dateOnly(raw.data);
   if (date < dayLaPaz(now)) throw new AgentError('Data passada: consulte a encomenda existente antes de criar outra.');
   const items = raw.itens;
@@ -57,19 +57,25 @@ export function orderInput(raw: Record<string, unknown>, now = new Date()) {
   const mode = text(raw.modalidade, 20);
   if (!['ENTREGA', 'RETIRADA'].includes(mode)) throw new AgentError('Defina entrega ou retirada.');
   const weekday=new Date(date+'T12:00:00Z').getUTCDay();
-  if(weekday===2) throw new AgentError('Terça-feira: WhatsApp aceita encomendas para outros dias; pedidos do dia pelo PedidosYa.');
+  const preserved = existing?.deliveryDate.toISOString().slice(0,10) === date;
+  if(weekday===2 && mode!=='ENTREGA') throw new AgentError('Terça-feira: somente entrega de encomendas antecipadas; sem retirada presencial.');
+  if(weekday===2 && date===dayLaPaz(now) && !(preserved && dayLaPaz(existing!.createdAt)<date)) throw new AgentError('Terça-feira: não aceitar nova compra para o mesmo dia pelo WhatsApp. Ofereça outra data ou PedidosYa. Encomendas antecipadas mantêm a entrega.');
+  const chantilly = /chantil(?:ly|i)/i.test([raw.cobertura, ...lines.map(line=>line.descricao)].join(' '));
+  const preservedChantilly = preserved && /chantil(?:ly|i)/i.test([existing?.topping, existing?.product].join(' '));
+  if(chantilly && !preservedChantilly && Date.parse(date)-Date.parse(dayLaPaz(now))<2*86400000) throw new AgentError('Bolo com chantilly exige dois dias de antecedência. Compra na terça: oferecer quinta-feira ou depois, nunca quarta.');
   const immediate=raw.paraAgora===true || text(raw.horario,5).toUpperCase()==='AGORA';
   if(immediate) {
     const local=new Date(now.getTime()-4*3600000);
     const minutes=local.getUTCHours()*60+local.getUTCMinutes();
     const opens=weekday===1||weekday===3?14*60:10*60, closes=weekday===1||weekday===3?20*60:21*60;
-    if(date!==dayLaPaz(now) || minutes<opens || minutes>=closes)throw new AgentError('Pedido para agora exige hoje dentro do atendimento. Combine o próximo horário disponível.');
+    if(weekday===2 || date!==dayLaPaz(now) || minutes<opens || minutes>=closes)throw new AgentError('Pedido para agora exige hoje dentro do atendimento. Combine o próximo horário disponível.');
   }
   const time = immediate?'':text(raw.horario, 5);
   if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AgentError('Horário inválido.');
   if(time) {
     const minutes=Number(time.slice(0,2))*60+Number(time.slice(3));const opens=weekday===1||weekday===3?14*60:10*60;const closes=weekday===1||weekday===3?20*60:21*60;
-    if(minutes<opens||minutes>=closes) throw new AgentError('Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
+    // As duas janelas de entrega de terça ainda precisam de confirmação da equipe.
+    if(weekday!==2 && (minutes<opens||minutes>=closes)) throw new AgentError('Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
     const local=new Date(now.getTime()-4*3600000);if(date===dayLaPaz(now)&&minutes<=local.getUTCHours()*60+local.getUTCMinutes())throw new AgentError('Horário já passou: consulte equipe para confirmar disponibilidade.');
   }
   return { deliveryDate: new Date(date + 'T00:00:00Z'), deliveryTime: immediate ? 'AGORA' : time || null, deliveryMode: mode, deliveryAddress: text(raw.endereco, 1000) || null, agentItems: lines, product: lines.map(i => `${i.quantidade} × ${i.descricao} — ${i.precoUnitario} Bs`).join('\n'), total, payFull: raw.pagarIntegral === true, dough:text(raw.massa,200)||null,filling:text(raw.recheio,300)||null,topping:text(raw.cobertura,300)||null,decoration:text(raw.decoracao,1000)||null,notes: text(raw.observacoes, 2000) || null };
