@@ -10,7 +10,7 @@ export function conversationFacts(history: Message[]) {
  const location=[...clients].reverse().find(m=>/https:\/\/maps\.google\.com\//i.test(String(m.texto)));
  return {
   ultimaMensagemCliente:[...clients].reverse().find(m=>!unavailable(m))||null,
-  ultimaRespostaAnterior:[...ordered].reverse().find(m=>m.papel==='atendente'&&m.origem!=='agente')||null,
+  ultimaRespostaAnterior:[...ordered].reverse().find(m=>m.papel==='atendente'&&m.origem!=='agente'&&typeof m.texto==='string'&&m.texto.trim()&&!unavailable(m))||null,
   localizacaoRecebida:location?String(location.texto).match(/https:\/\/maps\.google\.com\/[^\s<>]+/i)?.[0]||null:null,
   falhasAnterioresDeAnalise:clients.filter(unavailable).length,
   orientacao:'Cruzar com pedidos e pagamentos atuais. Falha antiga de análise não é nova dúvida. Resposta anterior não comprova entrega ou crédito bancário. Histórico parcial não significa ausência de contexto.'

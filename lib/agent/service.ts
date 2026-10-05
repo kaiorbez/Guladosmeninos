@@ -182,7 +182,7 @@ export async function team(b: Body) {
   }
   const t = await prisma.agentTicket.findUniqueOrThrow({ where: { id: delivery.ticketId } });
   if (resolvedCommand(message)) return resolveTicket(t.id, '', 'grupo');
-  if(t.kind==='DUVIDA' && /yango|entrega|env[ií]o/i.test(t.question) && /^(?:sim[,!\s]+)?(?:j[aá]\s+)?foi\s+(?:enviado|entregue)(?:\b|[.!\s])/i.test(message)) return resolveTicket(t.id,message,'grupo');
+  if(t.kind==='DUVIDA' && /yango|entrega|env[ií]o/i.test(t.question) && !/[?¿]/.test(message) && /^(?:sim[,!\s]+)?(?:j[aá]\s+)?foi\s+(?:enviado|entregue)(?:\b|[.!\s])/i.test(message)) return resolveTicket(t.id,message,'grupo');
   if(/^(preparando|pedido confirmado[,; ]+preparando|pagamento confirmado[,; ]+preparando|pago confirmado[,; ]+preparando)[.!\s]*$/i.test(message)) {
     const ctx=await context(t.phone);const es=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).some(m=>/\b(hola|quiero|gracias|mañana)\b/i.test(String(m.texto)));
     const sent=await sendOnce(`preparing:${t.id}`,t.phone,es?'¡El equipo confirmó tu pedido y ya está preparándolo! 💛🧁':'A equipe confirmou seu pedido e já está preparando! 💛🧁',t.id);

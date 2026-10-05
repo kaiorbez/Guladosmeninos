@@ -13,8 +13,8 @@ export function catalogForPrompt(items: Item[], query: unknown) {
   if(/^empad|^torta pao/.test(name))return 'salgados';
   if(/^coca|^fanta|^sprite/.test(name))return 'bebidas';
   if(/^kit|^combo/.test(name))return 'kits';
-  if(/^torta\b/.test(name))return 'bolos';
   if(item.precoSobConsulta===true)return 'personalizados';
+  if(/^torta\b/.test(name))return 'bolos';
   return 'adicionais';
  };
  const selected=all?items:items.filter(item=>families.includes(family(item)));

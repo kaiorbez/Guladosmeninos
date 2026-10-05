@@ -11,3 +11,9 @@ test('catálogo completo e categoria desconhecida não perdem nenhuma variante, 
  const extended=[item('Torta chocolate','b',20,{alergenos:'leite'})];assert.deepEqual(restore(select(extended,'bolos')),extended);
 });
 
+
+test('torta sob orçamento aparece na consulta de personalizados e não perde SKU',()=>{
+ const custom=item('Torta temática','personalizado',0,{precoSobConsulta:true});const ordinary=item('Torta chocolate','padrao',130);
+ assert.deepEqual(restore(select([custom,ordinary],'personalizados')),[custom]);
+ assert.deepEqual(restore(select([custom,ordinary],'bolos')),[ordinary]);
+});

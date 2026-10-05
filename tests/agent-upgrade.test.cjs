@@ -394,3 +394,13 @@ test('envio remove negrito e travessões sem modificar links ou hífens',async()
  const f=fixture();await f.transport.sendOnce('reply:plain',phone,'*Olá* — pronta – sim https://example.com/meu-link',undefined,1);
  assert.equal(f.state().agentDelivery[0].body.message,'Olá, pronta, sim https://example.com/meu-link');assert.equal(f.calls(),1);
 });
+
+test('pergunta da equipe sobre envio não encerra uma pendência',async()=>{
+ for(const question of ['Foi enviado?','Sim, já foi enviado?']){
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'doubt-question',geracao:1,pergunta:'Entrega por Yango'});
+ await f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'staff-question',texto:question});assert.equal(f.state().agentTicket[0].status,'ASSUMIDA');assert.equal(f.receiptPayments(),0);
+ }
+});
+test('mídia humana sem texto não esconde última resposta legível nem inventa conteúdo',()=>{
+ const facts=load('conversation-context').conversationFacts([{papel:'atendente',origem:'humano',texto:'Já combinamos a entrega.',data:'2026-10-05T18:00:00Z'},{papel:'atendente',origem:'humano',texto:'',data:'2026-10-05T18:01:00Z'},{papel:'atendente',origem:'humano',texto:undefined,data:'2026-10-05T18:02:00Z'}]);assert.equal(facts.ultimaRespostaAnterior.texto,'Já combinamos a entrega.');
+});
