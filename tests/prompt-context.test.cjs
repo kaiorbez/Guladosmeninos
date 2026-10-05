@@ -42,3 +42,10 @@ test('repetição de descrições é reduzida sem truncar conversa ou catálogo'
  const context={message:'Hola',catalogo:Array.from({length:100},(_,i)=>item('v'+i,String(i))),historico:Array.from({length:100},(_,i)=>({papel:'cliente',texto:'Mensagem '+i,data:String(i)}))};
  assert(format(context).length<JSON.stringify(context).length*0.7);assert.equal(payload(format(context)).historico.length,100);assert.equal(payload(format(context)).catalogo.grupos[0].variantes.length,100);
 });
+
+test('relógio oficial distingue 18:59 local de 22:59 UTC e não oferece próxima abertura enquanto aberto',()=>{
+ const clock=exportsObject.agentBusinessHours(Date.parse('2026-10-05T22:59:08Z'));
+ assert.equal(clock.agora,'2026-10-05 18:59');assert.equal(clock.atendimentoWhatsappAberto,true);assert.equal(clock.proximaAberturaWhatsapp,null);
+ const text=exportsObject.formatLeanAgentContext({estadoAtendimento:clock,message:'pago por qr pfv',historico:[{papel:'cliente',texto:'sim',data:'2026-10-05T22:59:03Z'}]});
+ assert.match(text,/18:59.*UTC-4/);assert.match(text,/ABERTO AGORA/);assert.match(text,/histórico com Z estão em UTC/);assert.equal(payload(text).historico.mensagens[0][2],'2026-10-05T22:59:03Z');
+});

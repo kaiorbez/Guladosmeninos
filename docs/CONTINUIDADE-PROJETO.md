@@ -139,3 +139,5 @@ Solicitar/confirmar destino próprio de teste no novo ambiente. Não usar client
 ## O que não está no GitHub
 
 A conversa completa do Codex, capturas/comprovantes privados, arquivos temporários do Mac, credenciais e banco de produção. O prompt anexado é uma fotografia documentada da versão publicada anteriormente; confirmar o texto atual no nó Agente Gula antes de substituir. Operações locais antigas não devem ser reproduzidas como instruções de execução.
+
+Correção de 05/10/2026 após execução 8124: GPT-5 mini confundiu 22:59 UTC do histórico com 18:59 no horário da loja, apesar de estadoAtendimento indicar aberto. Retornado ao GPT-5.2 por solicitação do usuário. Contexto passa a começar pelo relógio oficial explícito; próxima abertura fica nula enquanto aberto. Transporte elimina travessões/meia-risca das mensagens ao cliente, mantendo links e avisos internos. 80 testes e TypeScript passaram; nenhum envio de teste ao WhatsApp. Redução de texto não comprova equivalência de qualidade entre modelos.

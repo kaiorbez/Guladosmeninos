@@ -389,3 +389,8 @@ test('falha atual do QR abre pendência e não apresenta o mesmo arquivo como QR
 
 test('promessa de agendamento sem registro vira solicitação pendente, nunca confirmação',async()=>{const f=fixture();await f.service.operate({acao:'enviar',telefone:phone,messageId:'promise',geracao:1,texto:'Te agendo la entrega para hoy a las 15:30',parte:'0'});const reply=f.state().agentDelivery.find(x=>x.key.startsWith('reply:'));assert.match(reply.body.message,/pendiente de confirmación/);assert.doesNotMatch(reply.body.message,/Te agendo/);assert.equal(f.state().agentTicket.length,1);assert.equal(f.state().order.length,0);});
 test('agendamento efetivamente registrado pode ser confirmado no mesmo atendimento',async()=>{const f=fixture();await f.service.saveOrder(body());await f.service.operate({acao:'enviar',telefone:phone,messageId:'m1',geracao:1,texto:'Ficou agendado para as 17:00 😊',parte:'0'});assert.equal(f.state().agentTicket.length,0);assert.match(f.state().agentDelivery[0].body.message,/Ficou agendado/);});
+
+test('envio remove negrito e travessões sem modificar links ou hífens',async()=>{
+ const f=fixture();await f.transport.sendOnce('reply:plain',phone,'*Olá* — pronta – sim https://example.com/meu-link',undefined,1);
+ assert.equal(f.state().agentDelivery[0].body.message,'Olá, pronta, sim https://example.com/meu-link');assert.equal(f.calls(),1);
+});
