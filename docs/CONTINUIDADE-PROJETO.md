@@ -75,6 +75,7 @@ Consulta tentada à Z-API para mensagens antigas retornou 400. Histórico recupe
 - Sabores e preços vêm do cardápio/catálogo. Distinguir produto listado de estoque disponível naquele momento. Orçamento personalizado sem preço cadastrado exige equipe, com aviso e pendência reais.
 - Segunda e quarta: 14:00 a 20:00. Quinta a domingo: 10:00 a 21:00. Fuso interno America/La_Paz.
 - Terça: entregas de encomendas feitas antecipadamente são permitidas, inclusive WhatsApp/Yango; bloquear somente nova compra na própria terça para o mesmo dia. Compras na terça podem ir para quarta, exceto chantilly, que exige dois dias e vai para quinta ou depois. Sem atendimento presencial; duas janelas de entrega ainda sem horários confirmados. Não alterar compromisso anterior confirmado sem equipe. Ver `docs/TERCA-E-CHANTILLY.md`.
+- Economia (05/10): atendimento com GPT-5 mini e prompt `docs/PROMPT-AGENTE-COMPACTO.md`; catálogo por ferramenta de consulta/famílias, histórico e pedidos preservados. Ver `docs/ECONOMIA-TOKENS-GPT-MINI.md`. Não restaurar prompt anterior extenso nem remover a ferramenta `consultar_cardapio` sem reavaliar esta integração. Trocar modelo não adiciona saldo OpenAI.
 - Fora de horário: explicar, oferecer próxima abertura e perguntar se serve. Não prometer entrega sem confirmação. Lembretes para equipe devem respeitar horário.
 - PedidosYa: https://www.pedidosya.com.bo/restaurantes/santa-cruz-de-la-sierra/gula-dos-meninos-99bca082-3bd8-4f9f-a829-c1c2c6350c0e-menu
 

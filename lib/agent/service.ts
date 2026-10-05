@@ -9,6 +9,7 @@ import { receiptReview, receiptNotice, closeMessage, deliveryFee } from './revie
 import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
 import { lookupYangoFee } from './yango';
+import { catalogForPrompt } from './catalog-context';
 
 type Body = Record<string, unknown>;
 const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
@@ -351,7 +352,7 @@ export async function operate(b: Body) {
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
       return {ok:true,atualizados:r.count};
     }
-    case 'catalogo': return {ok:true,itens:await catalog()};
+    case 'catalogo': { const items=await catalog(); return b.compacto===true?catalogForPrompt(items,b.familias):{ok:true,itens:items}; }
     case 'finalizarTeste': {
       if(b.telefone!=='59175678921') throw new AgentError('Contato de teste inválido.');
       await prisma.agentInbox.updateMany({where:{phone:b.telefone,consumedAt:null,OR:[{messageId:{startsWith:'e2e-'}},{messageId:{startsWith:'fixture-'}},{messageId:{startsWith:'loc-'}}]},data:{consumedAt:new Date()}});
