@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { setOrderProduced } from "@/lib/order-production";
+import { recordOrderActivity } from "@/lib/order-history";
 import { InventoryError } from "@/lib/inventory";
 import { OrderError, addPayment, bookPayment, deliverOrder, removePayment, undoAllOrderSales, undoOrderSale } from "@/lib/orders";
 
@@ -14,11 +15,12 @@ const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", 
 const METHODS: PaymentMethod[] = ["QR", "EFECTIVO", "TARJETA", "OTRO"];
 
 export async function setOrderProducedAction(form: FormData) {
-  await requireSession();
+  const session = await requireSession();
   const id = String(form.get("orderId") ?? "").trim();
   const produced = form.get("produced");
   if (!id || (produced !== "1" && produced !== "0")) return;
-  await setOrderProduced(id, produced === "1");
+  const result = await setOrderProduced(id, produced === "1", session.userId);
+  if (!result.count) throw new OrderError("O pedido já foi atualizado. Confira a situação atual.");
   revalidatePath("/painel", "layout");
 }
 
@@ -106,9 +108,10 @@ export async function saveOrderAction(_: string | null, form: FormData): Promise
 export async function setOrderStatusAction(form: FormData) {
   const session = await requireSession();
   const status = String(form.get("status")) as OrderStatus;
-  if (!STATUSES.includes(status)) return;
+  if (!STATUSES.includes(status)) throw new OrderError("Situação inválida.");
   const order = await prisma.order.findUnique({ where: { id: String(form.get("orderId")) } });
-  if (!order || order.status === status) return;
+  if (!order) throw new OrderError("Encomenda não encontrada.");
+  if (order.status === status) throw new OrderError("O pedido já está nesta situação. Atualize a página.");
 
   try {
     if (status === "ENTREGUE") {
@@ -116,10 +119,13 @@ export async function setOrderStatusAction(form: FormData) {
     } else {
       // Saindo de "entregue": a venda gerada na entrega é cancelada.
       await undoOrderSale(order.saleId, session.userId);
-      await prisma.order.update({ where: { id: order.id }, data: { status, saleId: null } });
+      await prisma.$transaction(async tx => {
+        await tx.order.update({ where: { id: order.id }, data: { status, saleId: null } });
+        await recordOrderActivity(tx, order.id, status === "CANCELADA" ? "Encomenda cancelada" : "Retornado para pendente", session.userId);
+      });
     }
   } catch (e) {
-    if (!(e instanceof InventoryError)) throw e;
+    throw e;
   }
   revalidatePath("/painel", "layout");
 }
@@ -149,7 +155,23 @@ export async function addPaymentAction(_: string | null, form: FormData): Promis
 
 /** Versão sem retorno, para os botões do card. */
 export async function payRestAction(form: FormData) {
-  await addPaymentAction(null, form);
+  const error = await addPaymentAction(null, form);
+  if (error) throw new OrderError(error);
+}
+
+export async function performOrderAction(form: FormData): Promise<{ ok: boolean; message: string }> {
+  await requireSession();
+  try {
+    const action = form.get("operation");
+    if (action === "produced") await setOrderProducedAction(form);
+    else if (action === "status") await setOrderStatusAction(form);
+    else if (action === "pay") await payRestAction(form);
+    else if (action === "delete") await deleteOrderAction(form);
+    else return {ok:false,message:"Ação inválida."};
+    return {ok:true,message:action === "pay" ? "Pagamento registrado." : action === "delete" ? "Encomenda excluída." : "Pedido atualizado."};
+  } catch (e) {
+    return {ok:false,message:e instanceof OrderError || e instanceof InventoryError ? e.message : "Não foi possível concluir. Atualize a página e confira o pedido antes de tentar novamente."};
+  }
 }
 
 export async function deletePaymentAction(form: FormData) {

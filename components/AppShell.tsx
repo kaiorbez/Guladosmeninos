@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MenuIcon, MoonIcon, PanelLeftIcon, SunIcon } from "lucide-react";
 import { SidebarContent, type Category } from "./Sidebar";
+import { OrderActionNotice } from "./OrderActionNotice";
 
 export const SIDEBAR_COOKIE = "gula_menu_recolhido";
 
@@ -93,6 +94,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh">
+      <OrderActionNotice />
       <aside className={`hidden shrink-0 border-r border-creme-300 transition-[width] print:hidden lg:block ${collapsed ? "w-0 overflow-hidden border-r-0" : "w-64"}`}>
         <div className="sticky top-0 h-svh w-64">
           <SidebarContent categories={categories} logout={logout} />

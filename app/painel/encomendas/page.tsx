@@ -11,7 +11,7 @@ import { decorationPhotoUrl, lateLabel, minutesLate } from "@/lib/orders";
 import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
 import type { SaleChannel } from "@prisma/client";
 import { OrderFilters } from "./OrderFilters";
-import { deleteOrderAction, payRestAction, setOrderStatusAction } from "./actions";
+import { OrderActionForm } from "@/components/OrderActionForm";
 
 const TABS = {
   proximas: { label: "Próximas", status: "PENDENTE" },
@@ -39,7 +39,7 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; hora?: string; dia?: string; pgto?: string; canal?: string }> }) {
+export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; hora?: string; dia?: string; pgto?: string; canal?: string; producao?: string; pagina?: string }> }) {
   const sp = await searchParams;
   const tab: Tab = sp.aba && sp.aba in TABS ? (sp.aba as Tab) : "proximas";
   const pendingTab = tab === "proximas";
@@ -50,10 +50,11 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
   const pgto = sp.pgto === "falta" || sp.pgto === "pago" ? sp.pgto : "";
   const canal = ORDER_CHANNELS.some(([v]) => v === sp.canal) ? (sp.canal as SaleChannel) : "";
 
-  const [found, pending, timeRows] = await Promise.all([
-    prisma.order.findMany({
-      where: {
+  const producao = sp.producao === "feito" || sp.producao === "fazer" ? sp.producao : "";
+  const where = {
         status: TABS[tab].status,
+        ...(producao ? { producedAt: producao === "feito" ? { not: null } : null } : {}),
+        ...(pgto ? { paid: pgto === "falta" ? { lt: prisma.order.fields.total } : { gte: prisma.order.fields.total } } : {}),
         ...(hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
         ...(dia ? { deliveryDate: new Date(`${dia}T00:00:00Z`) } : {}),
         ...(canal ? { channel: canal } : {}),
@@ -63,20 +64,27 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                 { customerName: { contains: q, mode: "insensitive" as const } },
                 { product: { contains: q, mode: "insensitive" as const } },
                 { customerPhone: { contains: q } },
+                ...(/^#?\d+$/.test(q) && Number(q.replace('#','')) <= 2147483647 ? [{ number: Number(q.replace('#','')) }] : []),
               ],
             }
           : {}),
-      },
-      orderBy: [{ deliveryDate: pendingTab ? "asc" : "desc" }, { deliveryTime: "asc" }],
-      take: 200,
+      };
+  const total = await prisma.order.count({ where });
+  const pageSize = 30, pages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(pages, Math.max(1, Math.floor(Number(sp.pagina) || 1)));
+  const pageHref = (p: number) => { const params = new URLSearchParams({aba:tab, q:q || "", hora, dia, pgto, canal, producao, pagina:String(p)});return `/painel/encomendas?${params}`; };
+  const [orders, pending, timeRows] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      orderBy: [{ deliveryDate: pendingTab ? "asc" : "desc" }, { deliveryTime: "asc" }, { id: "asc" }],
+      take: pageSize, skip: (page - 1) * pageSize,
     }),
     prisma.order.findMany({ where: { status: "PENDENTE" }, select: { deliveryDate: true, total: true, paid: true } }),
     // Horários que existem nesta aba, para as opções do filtro.
     prisma.order.findMany({ where: { status: TABS[tab].status, deliveryTime: { not: null } }, select: { deliveryTime: true }, distinct: ["deliveryTime"] }),
   ]);
-  const orders = pgto ? found.filter((o) => (Number(o.total) - Number(o.paid) > 0) === (pgto === "falta")) : found;
   const hours = [...new Set(timeRows.map((r) => r.deliveryTime!.slice(0, 2)).filter((h) => /^\d{2}$/.test(h)))].sort();
-  const filtering = Boolean(q || hora || dia || pgto || canal);
+  const filtering = Boolean(q || hora || dia || pgto || canal || producao);
 
   const today = dayKey(new Date());
   const tomorrow = dayKey(new Date(Date.now() + DAY_MS));
@@ -122,14 +130,15 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
       </div>
 
       <OrderFilters
-        values={{ aba: tab, q: q ?? "", hora, dia, pgto, canal }}
+        key={JSON.stringify([tab,q,hora,dia,pgto,canal,producao])}
+        values={{ aba: tab, q: q ?? "", hora, dia, pgto, canal, producao }}
         hours={hours}
         channels={ORDER_CHANNELS}
         today={today}
         tomorrow={tomorrow}
       />
       {filtering && orders.length > 0 && (
-        <p className="-mt-2 mb-4 text-sm text-cacau-500">{orders.length} encomenda(s) encontrada(s) com esses filtros.</p>
+          <p className="-mt-2 mb-4 text-sm text-cacau-500">{total} encomenda(s) encontrada(s) com esses filtros.</p>
       )}
 
       {orders.length === 0 && (
@@ -224,14 +233,14 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                           Total <b className="text-cacau-900">{bs(o.total)}</b> · pago {bs(o.paid)}
                         </p>
                         {o.status !== "CANCELADA" && missing > 0 && (
-                          <form action={pendingTab ? setOrderStatusAction : payRestAction} className="flex items-center gap-2">
+                          <OrderActionForm operation={pendingTab ? "status" : "pay"} className="flex items-center gap-2">
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="amount" value={missing} />
                             {pendingTab && <input type="hidden" name="status" value="ENTREGUE" />}
                             <select name="method" aria-label="Forma de pagamento" className="input h-[34px] w-auto px-2 py-1 text-xs">
                               {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                             </select>
-                            <ConfirmButton formAction={payRestAction} message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost py-1.5">
+                            <ConfirmButton value="pay" message={`Marcar ${bs(missing)} como recebido?`} className="btn-ghost py-1.5">
                               Receber {bs(missing)}
                             </ConfirmButton>
                             {pendingTab && (
@@ -243,13 +252,13 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                                 Entregue
                               </ConfirmButton>
                             )}
-                          </form>
+                          </OrderActionForm>
                         )}
                         {o.status === "ENTREGUE" && (o.saleId || Number(o.paid) > 0) && (
                           <span className="badge bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">No faturamento</span>
                         )}
                         {pendingTab && missing <= 0 && (
-                          <form action={setOrderStatusAction}>
+                          <OrderActionForm operation="status">
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="status" value="ENTREGUE" />
                             <ConfirmButton
@@ -260,7 +269,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             >
                               Entregue
                             </ConfirmButton>
-                          </form>
+                          </OrderActionForm>
                         )}
                         <Link
                           href={`/painel/encomendas/nova?cliente=${o.id}`}
@@ -273,7 +282,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                           <PencilIcon className="size-3.5" />
                         </Link>
                         <div className="flex basis-full justify-end gap-4">
-                          <form action={setOrderStatusAction}>
+                          <OrderActionForm operation="status">
                             <input type="hidden" name="orderId" value={o.id} />
                             <input type="hidden" name="status" value={pendingTab ? "CANCELADA" : "PENDENTE"} />
                             {pendingTab ? (
@@ -283,8 +292,8 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             ) : (
                               <button className="text-xs text-cacau-400 hover:text-cacau-900 hover:underline">voltar para pendente</button>
                             )}
-                          </form>
-                          <form action={deleteOrderAction}>
+                          </OrderActionForm>
+                          <OrderActionForm operation="delete">
                             <input type="hidden" name="orderId" value={o.id} />
                             <ConfirmButton
                               message={`Excluir a encomenda #${o.number} de ${o.customerName}? Ela some de vez e não dá para desfazer.`}
@@ -292,7 +301,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             >
                               excluir
                             </ConfirmButton>
-                          </form>
+                          </OrderActionForm>
                         </div>
                       </footer>
                     </article>
@@ -303,6 +312,13 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
           );
         })}
       </div>
+      <nav aria-label="Páginas de encomendas" className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm text-cacau-500">{total} encomenda(s) · Página {page} de {pages}</span>
+        <div className="flex gap-2">
+          {page > 1 && <Link className="btn-ghost" href={pageHref(page-1)}>Anterior</Link>}
+          {page < pages && <Link className="btn-ghost" href={pageHref(page+1)}>Próxima</Link>}
+        </div>
+      </nav>
     </>
   );
 }

@@ -1,5 +1,12 @@
 import { prisma, productImage } from "./db";
 import { dayKey, startOfDay, startOfMonth } from "./time";
+import { saleOrderKey } from "./sale-order-key";
+
+async function paymentOrders(sales: { externalRef: string | null }[]) {
+  const ids = sales.flatMap(s => s.externalRef?.startsWith("encomenda-pagamento:") ? [s.externalRef.slice(20)] : []);
+  const rows = ids.length ? await prisma.orderPayment.findMany({ where: { id: { in: ids } }, select: { id: true, orderId: true } }) : [];
+  return new Map(rows.map(p => [p.id, p.orderId]));
+}
 
 const confirmed = { status: "CONFIRMADA" as const };
 
@@ -55,8 +62,10 @@ export async function getDailySeries(days = 14) {
   const from = startOfDay(days - 1);
   const sales = await prisma.sale.findMany({
     where: { ...confirmed, createdAt: { gte: from } },
-    select: { createdAt: true, total: true },
+    select: { id: true, externalRef: true, createdAt: true, total: true },
   });
+  const paymentMap = await paymentOrders(sales);
+  const unique = new Map<string, Set<string>>();
   const byDay = new Map<string, { revenue: number; orders: number }>();
   for (let i = days - 1; i >= 0; i--) {
     byDay.set(dayKey(startOfDay(i)), { revenue: 0, orders: 0 });
@@ -65,7 +74,8 @@ export async function getDailySeries(days = 14) {
     const d = byDay.get(dayKey(s.createdAt));
     if (d) {
       d.revenue += Number(s.total);
-      d.orders += 1;
+      const key = dayKey(s.createdAt), seen = unique.get(key) || new Set<string>();
+      seen.add(saleOrderKey(s, paymentMap)); unique.set(key, seen); d.orders = seen.size;
     }
   }
   return [...byDay.entries()].map(([day, v]) => ({ day, ...v }));
@@ -79,17 +89,31 @@ export async function getTopProducts(from: Date, limit = 6) {
       quantity: true,
       unitPrice: true,
       unitCost: true,
+      sale: { select: { id: true, externalRef: true } },
       variant: { select: { product: { select: { id: true, name: true, imageUrl: true, photoUpdatedAt: true } } } },
     },
   });
-  const map = new Map<string, { id: string; name: string; image: string | null; quantity: number; revenue: number; profit: number }>();
+  const map = new Map<string, { id: string; name: string; image: string | null; quantity: number; revenue: number; profit: number; unit: string }>();
+  const paymentMap = await paymentOrders(items.map(i => i.sale));
+  const orderRevenue = new Map<string, number>();
   for (const i of items) {
+    const key = saleOrderKey(i.sale, paymentMap);
+    if (key.startsWith('order:')) { const id = key.slice(6); orderRevenue.set(id, (orderRevenue.get(id) || 0) + Number(i.unitPrice) * i.quantity); continue; }
+    if (i.sale.externalRef?.startsWith('encomenda')) continue;
     const p = i.variant.product;
-    const row = map.get(p.id) ?? { id: p.id, name: p.name, image: productImage(p), quantity: 0, revenue: 0, profit: 0 };
+    const row = map.get(p.id) ?? { id: p.id, name: p.name, image: productImage(p), quantity: 0, revenue: 0, profit: 0, unit: "un" };
     row.quantity += i.quantity;
     row.revenue += Number(i.unitPrice) * i.quantity;
     row.profit += (Number(i.unitPrice) - Number(i.unitCost)) * i.quantity;
     map.set(p.id, row);
+  }
+  const orders = orderRevenue.size ? await prisma.order.findMany({where:{id:{in:[...orderRevenue.keys()]}},select:{id:true,product:true}}) : [];
+  // Texto livre é uma encomenda, não uma unidade de cada produto nem de cada parcela.
+  for (const o of orders) {
+    const name = o.product.trim() || 'Encomenda sem descrição';
+    const id = `order-product:${name.toLocaleLowerCase('pt-BR')}`;
+    const row = map.get(id) || {id,name,image:null,quantity:0,revenue:0,profit:0,unit:'pedido(s)'};
+    row.quantity++; row.revenue += orderRevenue.get(o.id) || 0; map.set(id,row);
   }
   return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, limit);
 }

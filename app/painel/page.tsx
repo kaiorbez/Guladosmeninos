@@ -111,6 +111,7 @@ export default async function VisaoGeral() {
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <section className="card xl:col-span-3">
           <h2 className="text-base">Mais vendidos no mês</h2>
+          <p className="mt-1 text-xs text-cacau-500">Por valor recebido. Encomendas agrupadas pela descrição, contadas uma vez no período.</p>
           {top.length === 0 ? (
             <p className="mt-4 text-sm text-cacau-500">Ainda não há vendas registradas neste mês.</p>
           ) : (
@@ -121,7 +122,7 @@ export default async function VisaoGeral() {
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between gap-3 text-sm">
                       <span className="font-medium"><span className="text-dourado-500">{i + 1}.</span> {t.name}</span>
-                      <span className="whitespace-nowrap text-cacau-500">{t.quantity} un · <b className="text-cacau-900">{bs(t.revenue)}</b></span>
+                      <span className="whitespace-nowrap text-cacau-500">{t.quantity} {t.unit} · <b className="text-cacau-900">{bs(t.revenue)}</b></span>
                     </div>
                     <div className="mt-1.5 h-2 rounded-full bg-creme-200">
                       <div className="h-2 rounded-full bg-dourado-400" style={{ width: `${(t.revenue / topMax) * 100}%` }} />

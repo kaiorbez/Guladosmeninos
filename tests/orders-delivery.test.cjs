@@ -10,6 +10,7 @@ function fixture({ total = 230, paid = 115, booked = true, failPayment = false, 
     order: { id: "order", number: 6, total, paid, status: "PENDENTE", channel: "WHATSAPP", product: "Torta G", customerName: "Cliente", saleId: null },
     payments: paid ? [{ id: "deposit", orderId: "order", amount: paid, method: "EFECTIVO", saleId: booked ? "deposit-sale" : null }] : [],
     sales: paid && booked ? [{ id: "deposit-sale", total: paid, status: "CONFIRMADA" }] : [],
+    activities: [],
   };
   let queue = Promise.resolve();
   function client(state) {
@@ -75,6 +76,7 @@ function fixture({ total = 230, paid = 115, booked = true, failPayment = false, 
     require: (name) => {
       if (name === "./db") return { prisma };
       if (name === "./inventory") return inventory;
+      if (name === "./order-history") return { recordOrderActivity: async(tx,orderId,action,userId)=>tx._state.activities.push({orderId,action,userId}) };
       throw new Error("Unexpected import: " + name);
     },
   });
@@ -86,6 +88,8 @@ test("delivery receives only the remaining 115 and uses the selected method", as
   await f.api.deliverOrder("order", "user", "TARJETA");
   const s = f.state();
   assert.equal(s.order.status, "ENTREGUE");
+  assert.equal(s.activities[0].userId, "user");
+  assert.equal(s.activities[0].action, "Marcado como entregue");
   assert.equal(s.order.paid, 230);
   assert.equal(s.payments.length, 2);
   assert.equal(s.payments[1].amount, 115);
@@ -124,6 +128,7 @@ test("repeated or concurrent delivery does not duplicate payment or revenue", as
   await f.api.deliverOrder("order");
   assert.equal(f.state().payments.length, 2);
   assert.equal(f.state().sales.length, 2);
+  assert.equal(f.state().activities.length, 1);
 });
 
 test("manual receive alongside delivery does not double charge", async () => {
@@ -142,6 +147,7 @@ for (const fault of ["failPayment", "failSale"]) {
     assert.equal(f.state().order.paid, 115);
     assert.equal(f.state().payments.length, 1);
     assert.equal(f.state().sales.length, 1);
+    assert.equal(f.state().activities.length, 0);
   });
 }
 

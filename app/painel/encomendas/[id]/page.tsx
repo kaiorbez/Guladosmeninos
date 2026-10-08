@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { OrderForm } from "@/components/OrderForm";
 import { OrderPayments } from "@/components/OrderPayments";
 import { OrderProducedButton } from "@/components/OrderProducedButton";
+import { dateTime } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { decorationPhotoUrl } from "@/lib/orders";
@@ -11,7 +12,7 @@ import { orderFormData } from "../suggestions";
 export default async function EditarEncomenda({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [order, data] = await Promise.all([
-    prisma.order.findUnique({ where: { id }, include: { payments: { orderBy: { paidAt: "asc" } } } }),
+    prisma.order.findUnique({ where: { id }, include: { payments: { orderBy: { paidAt: "asc" } }, activities: { orderBy: { createdAt: "desc" } } } }),
     orderFormData(),
   ]);
   if (!order) notFound();
@@ -22,6 +23,10 @@ export default async function EditarEncomenda({ params }: { params: Promise<{ id
         <Link href={`/painel/encomendas/nova?cliente=${order.id}`} className="btn-ghost">＋ Pedido p/ este cliente</Link>
       </PageHeader>
       <div className="space-y-4">
+        <section className="card">
+          <h2>Histórico do pedido</h2>
+          {order.activities.length ? <ul className="mt-2 space-y-2 text-sm">{order.activities.map(a=><li key={a.id}>{dateTime(a.createdAt)} · {a.action} · {a.actorName}</li>)}</ul> : <p className="mt-2 text-sm text-cacau-500">Sem alterações registradas. O histórico passa a registrar as ações a partir desta atualização.</p>}
+        </section>
         {order.status === "PENDENTE" && <OrderProducedButton orderId={order.id} producedAt={order.producedAt} />}
         <OrderForm
           {...data}

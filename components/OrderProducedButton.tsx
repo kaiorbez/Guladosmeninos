@@ -1,11 +1,11 @@
 import { CheckIcon, ChefHatIcon } from "lucide-react";
 import { ConfirmButton } from "./ConfirmButton";
 import { dateTime } from "@/lib/format";
-import { setOrderProducedAction } from "@/app/painel/encomendas/actions";
+import { OrderActionForm } from "./OrderActionForm";
 
 export function OrderProducedButton({ orderId, producedAt }: { orderId: string; producedAt: Date | null }) {
   return (
-    <form action={setOrderProducedAction}>
+    <OrderActionForm operation="produced">
       <input type="hidden" name="orderId" value={orderId} />
       <input type="hidden" name="produced" value={producedAt ? "0" : "1"} />
       {producedAt ? (
@@ -17,6 +17,6 @@ export function OrderProducedButton({ orderId, producedAt }: { orderId: string; 
           <ChefHatIcon className="size-4" /> Marcar produzido
         </button>
       )}
-    </form>
+    </OrderActionForm>
   );
 }

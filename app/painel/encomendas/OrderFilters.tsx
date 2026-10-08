@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 
-export type OrderFilterValues = { aba: string; q: string; hora: string; dia: string; pgto: string; canal: string };
+export type OrderFilterValues = { aba: string; q: string; hora: string; dia: string; pgto: string; canal: string; producao: string };
 
 /** Filtros das encomendas: mudar uma opção já aplica (sem precisar clicar em Buscar). */
 export function OrderFilters({
@@ -21,7 +21,7 @@ export function OrderFilters({
 }) {
   const form = useRef<HTMLFormElement>(null);
   const submit = () => form.current?.requestSubmit();
-  const active = Boolean(values.q || values.hora || values.dia || values.pgto || values.canal);
+  const active = Boolean(values.q || values.hora || values.dia || values.pgto || values.canal || values.producao);
   const isDate = /^\d{4}-\d{2}-\d{2}$/.test(values.dia) && values.dia !== today && values.dia !== tomorrow;
 
   const select = (name: keyof OrderFilterValues, label: string, options: [string, string][]) => (
@@ -39,8 +39,8 @@ export function OrderFilters({
     <form ref={form} action="/painel/encomendas" className="card mb-5 flex flex-wrap items-end gap-3 p-4">
       <input type="hidden" name="aba" value={values.aba} />
       <label className="flex min-w-48 flex-1 flex-col gap-1">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-cacau-500">Cliente, produto ou celular</span>
-        <input name="q" defaultValue={values.q} placeholder="Ex.: Maria, empadão, 7130..." className={`input py-1.5 text-sm ${values.q ? "border-dourado-500" : ""}`} />
+        <span className="text-[11px] font-medium uppercase tracking-wide text-cacau-500">Número, cliente, produto ou celular</span>
+        <input name="q" defaultValue={values.q} placeholder="Ex.: #44, Maria, empadão..." className={`input py-1.5 text-sm ${values.q ? "border-dourado-500" : ""}`} />
       </label>
       {select("dia", "Dia", [
         ["", "Todos os dias"],
@@ -66,6 +66,7 @@ export function OrderFilters({
       </label>
       {select("hora", "Horário", [["", "Todos os horários"], ...hours.map((h): [string, string] => [h, `${h}h`]), ["sem", "Sem horário"]])}
       {select("pgto", "Pagamento", [["", "Todos"], ["falta", "Falta receber"], ["pago", "Pago"]])}
+      {select("producao", "Produção", [["", "Todas"], ["fazer", "A produzir"], ["feito", "Produzidos"]])}
       {select("canal", "Canal", [["", "Todos"], ...channels.map(([v, l]): [string, string] => [v, l])])}
       <button className="btn-ghost py-1.5">Buscar</button>
       {active && (

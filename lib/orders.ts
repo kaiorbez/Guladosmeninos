@@ -2,6 +2,7 @@
 import type { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { InventoryError, cancelSale, createSale } from "./inventory";
+import { recordOrderActivity } from "./order-history";
 
 export class OrderError extends Error {}
 
@@ -201,6 +202,7 @@ export async function deliverOrder(orderId: string, userId?: string, method: Pay
       await refreshPaid(orderId, tx);
     }
     await tx.order.update({ where: { id: orderId }, data: { saleId } });
+    await recordOrderActivity(tx, orderId, "Marcado como entregue", userId);
   });
 }
 

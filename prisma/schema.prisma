@@ -223,8 +223,21 @@ model Order {
   userId        String?
   createdAt     DateTime    @default(now())
   payments      OrderPayment[]
+  activities    OrderActivity[]
 
   @@index([deliveryDate])
+}
+
+model OrderActivity {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  action    String
+  actorId   String?
+  actorName String
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 // Cada valor recebido de uma encomenda (sinal, restante...).

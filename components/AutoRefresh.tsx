@@ -14,12 +14,16 @@ export function AutoRefresh({ seconds = 60 }: { seconds?: number }) {
 
   useEffect(() => {
     if (!enabled) return;
+    let lastInteraction = Date.now();
+    const interacted = () => { lastInteraction = Date.now(); };
+    const events = ['scroll','wheel','pointerdown','keydown','submit'] as const;
+    for (const name of events) window.addEventListener(name, interacted, {passive:true,capture:true});
     const id = setInterval(() => {
       const el = document.activeElement;
       const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
-      if (document.visibilityState === "visible" && !typing) router.refresh();
+      if (document.visibilityState === "visible" && !typing && Date.now()-lastInteraction > 15000) router.refresh();
     }, seconds * 1000);
-    return () => clearInterval(id);
+    return () => { clearInterval(id); for(const name of events)window.removeEventListener(name,interacted,true); };
   }, [router, seconds, enabled]);
 
   return null;
