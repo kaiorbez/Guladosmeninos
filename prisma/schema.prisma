@@ -196,6 +196,7 @@ model Order {
   id            String      @id @default(cuid())
   number        Int         @unique @default(autoincrement())
   status        OrderStatus @default(PENDENTE)
+  producedAt    DateTime? // pronto na cozinha; continua pendente de entrega
   // Dia da entrega (sem hora) e horário combinado, ex.: "14:00"
   deliveryDate  DateTime    @db.Date
   deliveryTime  String?

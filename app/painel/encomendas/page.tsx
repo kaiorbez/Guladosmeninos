@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClockIcon, MessageCircleIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { OrderProducedButton } from "@/components/OrderProducedButton";
 import { Kpi } from "@/components/Kpi";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
@@ -218,6 +219,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                       </div>
 
                       <footer className="mt-auto flex flex-wrap items-center gap-2 border-t border-creme-300 px-5 py-3">
+                        {pendingTab && <OrderProducedButton orderId={o.id} producedAt={o.producedAt} />}
                         <p className="mr-auto text-sm tabular-nums text-cacau-500">
                           Total <b className="text-cacau-900">{bs(o.total)}</b> · pago {bs(o.paid)}
                         </p>

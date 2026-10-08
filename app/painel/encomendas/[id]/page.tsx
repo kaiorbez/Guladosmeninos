@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderForm } from "@/components/OrderForm";
 import { OrderPayments } from "@/components/OrderPayments";
+import { OrderProducedButton } from "@/components/OrderProducedButton";
 import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { decorationPhotoUrl } from "@/lib/orders";
@@ -21,6 +22,7 @@ export default async function EditarEncomenda({ params }: { params: Promise<{ id
         <Link href={`/painel/encomendas/nova?cliente=${order.id}`} className="btn-ghost">＋ Pedido p/ este cliente</Link>
       </PageHeader>
       <div className="space-y-4">
+        {order.status === "PENDENTE" && <OrderProducedButton orderId={order.id} producedAt={order.producedAt} />}
         <OrderForm
           {...data}
           values={{

@@ -5,12 +5,22 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { setOrderProduced } from "@/lib/order-production";
 import { InventoryError } from "@/lib/inventory";
 import { OrderError, addPayment, bookPayment, deliverOrder, removePayment, undoAllOrderSales, undoOrderSale } from "@/lib/orders";
 
 const STATUSES: OrderStatus[] = ["PENDENTE", "ENTREGUE", "CANCELADA"];
 const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
 const METHODS: PaymentMethod[] = ["QR", "EFECTIVO", "TARJETA", "OTRO"];
+
+export async function setOrderProducedAction(form: FormData) {
+  await requireSession();
+  const id = String(form.get("orderId") ?? "").trim();
+  const produced = form.get("produced");
+  if (!id || (produced !== "1" && produced !== "0")) return;
+  await setOrderProduced(id, produced === "1");
+  revalidatePath("/painel", "layout");
+}
 
 const method = (v: FormDataEntryValue | null): PaymentMethod => (METHODS.includes(v as PaymentMethod) ? (v as PaymentMethod) : "QR");
 const money = (v: FormDataEntryValue | null) => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { PrintButton } from "@/components/PrintButton";
+import { OrderProducedButton } from "@/components/OrderProducedButton";
 import { prisma } from "@/lib/db";
 import { dayKey } from "@/lib/time";
 import { decorationPhotoUrl } from "@/lib/orders";
@@ -40,7 +41,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
       <header className="mb-4 border-b-2 border-cacau-900 pb-3">
         <p className="text-xs uppercase tracking-wider text-cacau-500">Gula dos Meninos · Folha da cozinha</p>
         <h1 className="text-2xl capitalize">{title}</h1>
-        <p className="text-sm text-cacau-500">{orders.length} encomenda(s) para produzir</p>
+        <p className="text-sm text-cacau-500">{orders.filter(o => !o.producedAt).length} para produzir · {orders.filter(o => o.producedAt).length} produzida(s), aguardando entrega</p>
       </header>
 
       {orders.length === 0 ? (
@@ -55,8 +56,9 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
                   <p className="whitespace-pre-line text-lg font-semibold">{o.product}</p>
                   <p className="text-sm text-cacau-500">#{o.number} · {o.customerName}</p>
                 </div>
-                <span className="size-5 shrink-0 rounded border-2 border-cacau-400" aria-hidden title="Feito" />
+                <span className="text-sm font-medium">{o.producedAt ? "✓ Produzido" : "A produzir"}</span>
               </div>
+              <div className="mt-2 print:hidden"><OrderProducedButton orderId={o.id} producedAt={o.producedAt} /></div>
               <dl className="ml-[4.25rem] mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-[15px] sm:grid-cols-4">
                 {[
                   ["Massa", o.dough],

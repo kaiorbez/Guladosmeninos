@@ -1,10 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import { bs, shortDate } from "@/lib/format";
 
 type Point = { day: string; revenue: number; orders: number };
 
 /** Barras de faturamento diário em SVG puro (sem dependências). */
 export function RevenueChart({ data }: { data: Point[] }) {
-  const max = Math.max(...data.map((d) => d.revenue), 1);
+  const [active, setActive] = useState<number | null>(null);
+  const peak = Math.max(...data.map((d) => d.revenue), 0);
+  const max = Math.max(peak, 1);
   if (data.every((d) => d.revenue === 0)) {
     return (
       <div className="mt-4 flex h-52 flex-col items-center justify-center rounded-lg border border-dashed border-creme-300 bg-creme-100/60 text-center">
@@ -17,10 +22,19 @@ export function RevenueChart({ data }: { data: Point[] }) {
   const H = 200;
   const gap = 8;
   const bw = (W - gap * (data.length - 1)) / data.length;
+  const selected = active === null ? null : data[active];
+  const label = (d: Point) => `${shortDate(new Date(d.day + "T12:00:00Z"))}: ${bs(d.revenue)} · ${d.orders} pedido(s)`;
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H + 24}`} className="h-auto w-full" role="img" aria-label="Faturamento por dia">
+    <div className="relative" onMouseLeave={() => setActive(null)}>
+      {selected && active !== null && (
+        <div role="status" className="pointer-events-none absolute top-1 z-10 w-44 max-w-full -translate-x-1/2 rounded-lg bg-cacau-900 px-3 py-2 text-center text-xs text-white shadow-lg" style={{ left: `clamp(5.5rem, ${((active * (bw + gap) + bw / 2) / W) * 100}%, calc(100% - 5.5rem))` }}>
+          <div>{shortDate(new Date(selected.day + "T12:00:00Z"))}</div>
+          <div className="text-sm font-semibold">{bs(selected.revenue)}</div>
+          <div>{selected.orders} pedido(s)</div>
+        </div>
+      )}
+      <svg viewBox={`0 0 ${W} ${H + 24}`} className="h-auto w-full" role="group" aria-label="Faturamento por dia. Passe o mouse, toque ou selecione uma barra para ver o valor.">
         {[0.25, 0.5, 0.75, 1].map((f) => (
           <line key={f} x1={0} x2={W} y1={H - H * f} y2={H - H * f} className="stroke-creme-300" strokeDasharray="3 4" />
         ))}
@@ -29,8 +43,11 @@ export function RevenueChart({ data }: { data: Point[] }) {
           const x = i * (bw + gap);
           const isToday = i === data.length - 1;
           return (
-            <g key={d.day}>
-              <title>{`${shortDate(new Date(d.day + "T12:00:00Z"))}: ${bs(d.revenue)} · ${d.orders} pedido(s)`}</title>
+            <g key={d.day} tabIndex={0} role="button" aria-label={label(d)} aria-pressed={active === i}
+              className="cursor-pointer focus:outline-none"
+              onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)} onBlur={() => setActive(null)} onClick={() => setActive(i)}
+              onKeyDown={e => { if (e.key === "Escape") setActive(null); if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActive(i); } }}>
+              <rect x={x} y={0} width={bw} height={H + 24} fill="transparent" />
               <rect
                 x={x}
                 y={H - Math.max(h, d.revenue > 0 ? 3 : 1)}
@@ -38,6 +55,7 @@ export function RevenueChart({ data }: { data: Point[] }) {
                 height={Math.max(h, d.revenue > 0 ? 3 : 1)}
                 rx={4}
                 className={isToday ? "fill-coral-500" : "fill-dourado-400"}
+                stroke={active === i ? "currentColor" : "none"} strokeWidth={2}
               />
               <text x={x + bw / 2} y={H + 16} textAnchor="middle" className="fill-cacau-400 text-[11px]">
                 {d.day.slice(8, 10)}
@@ -46,7 +64,7 @@ export function RevenueChart({ data }: { data: Point[] }) {
           );
         })}
       </svg>
-      <p className="mt-1 text-right text-xs text-cacau-400">Maior dia: {bs(max === 1 ? 0 : max)}</p>
+      <p className="mt-1 text-right text-xs text-cacau-400">Maior dia: {bs(peak)}</p>
     </div>
   );
 }
