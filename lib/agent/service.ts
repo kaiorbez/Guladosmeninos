@@ -361,6 +361,11 @@ export async function operate(b: Body) {
       await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'}},data:{status:'RESOLVIDA',resolvedAt:new Date(),resolvedBy:'teste autorizado'}});
       return {ok:true,cancelados:orders.length};
     }
+    case 'planejarMenu': {
+      const p=phone(b.telefone);
+      await prisma.$transaction(async tx=>{await lockConversation(tx,p);await current(tx,p,b);});
+      return {ok:true,planejado:true,enviado:false,instrucao:'O fluxo enviará o catálogo após sua resposta. Responda à dúvida e termine com uma pergunta útil. Não afirme que já enviou.'};
+    }
     case 'menu': {
       const p = phone(b.telefone);
       if (!Number.isInteger(b.geracao)) throw new AgentError('Geração obrigatória.');

@@ -42,6 +42,13 @@ function fixture({network='ok',yangoFee=null}={}) {
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+test('planejar catálogo não envia e rejeita geração antiga ou pausa humana',async()=>{
+ const f=fixture();const r=await f.service.operate({acao:'planejarMenu',telefone:phone,geracao:1});
+ assert.equal(r.planejado,true);assert.equal(r.enviado,false);assert.equal(f.calls(),0);
+ await assert.rejects(f.service.operate({acao:'planejarMenu',telefone:phone,geracao:0}));
+ await f.prisma.agentConversation.update({where:{phone},data:{pausedUntil:new Date(Date.now()+60000)}});
+ await assert.rejects(f.service.operate({acao:'planejarMenu',telefone:phone,geracao:1}));assert.equal(f.calls(),0);
+});
 
 test('preço consultado na Yango acompanha o link sem tarifa digitada pela equipe',async()=>{
  const f=fixture({yangoFee:8});const t=await f.service.ticket({telefone:phone,messageId:'m',geracao:1,pergunta:'Entrega por Yango'});
