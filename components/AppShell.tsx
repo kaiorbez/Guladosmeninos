@@ -93,7 +93,7 @@ export function AppShell({
   };
 
   return (
-    <div className="flex min-h-svh">
+    <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
       <OrderActionNotice />
       <aside className={`hidden shrink-0 border-r border-creme-300 transition-[width] print:hidden lg:block ${collapsed ? "w-0 overflow-hidden border-r-0" : "w-64"}`}>
         <div className="sticky top-0 h-svh w-64">
@@ -111,8 +111,8 @@ export function AppShell({
         <SidebarContent categories={categories} logout={logout} onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 print:hidden items-center gap-2 border-b border-creme-300 bg-creme-100/95 px-4 backdrop-blur">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col print:block">
+        <header className="z-30 flex h-14 shrink-0 print:hidden items-center gap-2 border-b border-creme-300 bg-creme-100/95 px-4 backdrop-blur">
           <button type="button" className="btn-icon lg:hidden" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}>
             <MenuIcon className="size-4" />
           </button>
@@ -124,7 +124,7 @@ export function AppShell({
             <ThemeToggle />
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
+        <main tabIndex={0} aria-label="Conteúdo do painel" className="min-h-0 min-w-0 flex-1 overflow-y-scroll overscroll-y-contain p-4 outline-none md:p-8 print:overflow-visible print:p-0">{children}</main>
       </div>
     </div>
   );
