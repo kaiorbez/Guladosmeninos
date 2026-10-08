@@ -42,6 +42,14 @@ function fixture({network='ok',yangoFee=null}={}) {
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+test('test reset clears pause and buffered input but preserves orders and history',async()=>{
+ const f=fixture();await f.service.saveOrder(body());await f.prisma.agentConversation.update({where:{phone},data:{pausedUntil:new Date(Date.now()+60000)}});
+ await f.prisma.agentInbox.create({data:{phone,messageId:'buffer',content:'texto'}});
+ const r=await f.service.operate({acao:'reiniciarAtendimento',telefone:phone,messageId:'reset-1',geracao:1});
+ assert.equal(r.retomado,true);assert.equal(f.state().agentConversation[0].pausedUntil,null);assert.equal(f.state().order.length,1);assert.ok(f.state().agentInbox[0].consumedAt);
+ await f.service.operate({acao:'reiniciarAtendimento',telefone:phone,messageId:'reset-1',geracao:1});assert.equal(f.state().agentConversation[0].generation,2);
+ await assert.rejects(f.service.operate({acao:'reiniciarAtendimento',telefone:phone,messageId:'reset-2',geracao:1}),/Atendimento mudou/);
+});
 test('venda padrão de quatro itens registra 115 Bs e envia QR sem dúvida humana',async()=>{
  const f=fixture();const prices=[35,30,30,20];
  f.state().product=prices.map((price,i)=>({id:'p'+i,name:'Item '+i,active:true,onStore:true,priceOnRequest:false,trackStock:true,variants:[{id:'v'+i,name:'Único',price,active:true,stock:3}]}));
@@ -296,6 +304,14 @@ test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
  assert(r.alertas.length>=3);assert.equal(r.pagamentoConfirmado,false);
  const msg=review.receiptNotice({valor:10,moeda:'Bs'},null,r);assert(!msg.includes('✅ CONFERE'));assert.match(msg,/Pedido não identificado/);
 });
+test('resolução repetida de aviso antigo preserva nova pausa humana',async()=>{
+ const f=fixture();const t=await f.service.ticket({telefone:phone,messageId:'m1',geracao:1,pergunta:'Dúvida'});
+ const b={grupo:'test',referenceMessageId:t.messageId,messageId:'team1',texto:'Resolvido'};
+ assert.equal((await f.service.team(b)).retomado,true);
+ const c=f.state().agentConversation[0];c.pausedUntil=new Date(Date.now()+60000);const generation=c.generation;
+ assert.equal((await f.service.team({...b,messageId:'team2'})).retomado,false);
+ assert.ok(f.state().agentConversation[0].pausedUntil);assert.equal(f.state().agentConversation[0].generation,generation);
+});
 
 test('avisos e lembretes ocultam ID interno e horário técnico sem perder dados do pedido',()=>{
  const notices=load('notices');
@@ -427,3 +443,4 @@ test('pergunta da equipe sobre envio não encerra uma pendência',async()=>{
 test('mídia humana sem texto não esconde última resposta legível nem inventa conteúdo',()=>{
  const facts=load('conversation-context').conversationFacts([{papel:'atendente',origem:'humano',texto:'Já combinamos a entrega.',data:'2026-10-05T18:00:00Z'},{papel:'atendente',origem:'humano',texto:'',data:'2026-10-05T18:01:00Z'},{papel:'atendente',origem:'humano',texto:undefined,data:'2026-10-05T18:02:00Z'}]);assert.equal(facts.ultimaRespostaAnterior.texto,'Já combinamos a entrega.');
 });
+
