@@ -42,6 +42,22 @@ function fixture({network='ok',yangoFee=null}={}) {
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+test('venda padrão de quatro itens registra 115 Bs e envia QR sem dúvida humana',async()=>{
+ const f=fixture();const prices=[35,30,30,20];
+ f.state().product=prices.map((price,i)=>({id:'p'+i,name:'Item '+i,active:true,onStore:true,priceOnRequest:false,trackStock:true,variants:[{id:'v'+i,name:'Único',price,active:true,stock:3}]}));
+ const pedido={...order(),pagarIntegral:true,itens:prices.map((precoUnitario,i)=>({variantId:'v'+i,descricao:'Item '+i,quantidade:1,precoUnitario}))};
+ const saved=await f.service.saveOrder({...body(),pedido});
+ assert.equal(saved.registrado,true);assert.equal(saved.pedido.total,115);assert.equal(saved.pedido.pagarAgora,115);assert.equal(f.state().agentTicket.length,0);
+ const qr=await f.service.operate({acao:'qr',telefone:phone,messageId:'m1',geracao:1,pedidoId:saved.pedido.id,arquivoUrl:'https://example.com/qr.png',idioma:'es'});
+ assert.equal(qr.enviado,true);assert.equal(f.calls(),1);assert.equal(f.state().agentTicket.length,0);
+ const retry=await f.service.saveOrder({...body(),pedido});assert.equal(retry.pedido.id,saved.pedido.id);assert.equal(f.state().order.length,1);
+ assert.equal(rules.paymentPlan(115,0,'2026-10-08',false,new Date('2026-10-08T19:20:00Z')).pagarAgora,115);
+});
+test('preço alterado e item sob consulta continuam bloqueados antes de cobrar',async()=>{
+ const f=fixture();let b=body();b.pedido.itens[0].precoUnitario=1;await assert.rejects(f.service.saveOrder(b),/Preço mudou/);
+ f.state().product[0].priceOnRequest=true;await assert.rejects(f.service.saveOrder(body()),/sem preço autorizado/);
+ assert.equal(f.state().order.length,0);assert.equal(f.calls(),0);
+});
 test('planejar catálogo não envia e rejeita geração antiga ou pausa humana',async()=>{
  const f=fixture();const r=await f.service.operate({acao:'planejarMenu',telefone:phone,geracao:1});
  assert.equal(r.planejado,true);assert.equal(r.enviado,false);assert.equal(f.calls(),0);
