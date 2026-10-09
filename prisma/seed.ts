@@ -463,6 +463,18 @@ async function main() {
       await tx.variant.upsert({ where: { productId_name: { productId: product.id, name: "Único" } }, update: { price: 45, active: true }, create: { productId: product.id, name: "Único", price: 45, active: true } });
     });
   });
+  // Preços do combo COMPLETO confirmados pelo proprietário em 08/10/2026.
+  await once("2026-10-08-combo-fatia-permanente", async () => {
+    await prisma.$transaction(async tx => {
+      const category = await tx.category.upsert({ where: { slug: "combos" }, update: {}, create: { slug: "combos", name: "Combos", group: "Combos" } });
+      const existing = await tx.product.findFirst({ where: { name: "Combo Fatia" } });
+      const data = { name: "Combo Fatia", categoryId: category.id, description: "Combo completo: 1 fatia + 1 empadão + 1 Coca-Cola. Oferta e quatro sabores sempre disponíveis, conforme confirmação da loja. O preço de cada variante é o TOTAL DO COMBO, não da fatia avulsa. Não cobrar empadão e Coca-Cola novamente. Tamanho/sabor do empadão e volume/tipo da Coca-Cola não informados; não presumir. Disponibilidade não altera horários nem regras de terça-feira.", trackStock: false, priceOnRequest: false, active: true, onStore: true };
+      const product = existing ? await tx.product.update({ where: { id: existing.id }, data }) : await tx.product.create({ data });
+      for (const [name, price] of [["Prestígio", 30], ["Maracujá com brigadeiro de chocolate", 30], ["Ninho com geleia de frutas vermelhas", 35], ["Cenoura com brigadeiro de chocolate", 30]] as const) {
+        await tx.variant.upsert({ where: { productId_name: { productId: product.id, name } }, update: { price, active: true }, create: { productId: product.id, name, price, active: true } });
+      }
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
