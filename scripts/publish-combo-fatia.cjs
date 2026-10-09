@@ -6,7 +6,7 @@ async function api(p,m='GET',b){const r=await fetch(cfg.N8N_BASE_URL+'/api/v1/'+
  const route='workflows/q2JCUkaCkX6Ab0Wg',w=await api(route);
  const a=w.nodes.find(n=>n.name==='Agente Gula');assert(a);
  const local=fs.readFileSync(path.join(root,'docs/PROMPT-AGENTE-COMPACTO.md'),'utf8').trim();
- const rules=local.split(/\r?\n/).filter(x=>x.startsWith('Combo Fatia (')||x.startsWith('PROMOÇÃO TEMPORÁRIA 09 a 11/10/2026')||x.startsWith('OFERTA PROATIVA DOS POTES 09 a 11/10/2026'));assert.equal(rules.length,3);
+ const rules=local.split(/\r?\n/).filter(x=>x.startsWith('Combo Fatia (')||x.startsWith('PROMOÇÃO TEMPORÁRIA 09 a 11/10/2026')||x.startsWith('OFERTA PROATIVA DOS POTES 09 a 11/10/2026')||x.startsWith('COMPLEMENTO DO TRIO PROMOCIONAL:'));assert.equal(rules.length,4);
  const before=a.parameters.options.systemMessage;
  const missing=rules.filter(rule=>!before.includes(rule));
  if(!missing.length){console.log('Ofertas já publicadas.');return;}
