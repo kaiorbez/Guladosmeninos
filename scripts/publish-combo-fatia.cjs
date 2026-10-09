@@ -8,11 +8,12 @@ async function api(p,m='GET',b){const r=await fetch(cfg.N8N_BASE_URL+'/api/v1/'+
  const local=fs.readFileSync(path.join(root,'docs/PROMPT-AGENTE-COMPACTO.md'),'utf8').trim();
  const rules=local.split(/\r?\n/).filter(x=>x.startsWith('Combo Fatia (')||x.startsWith('PROMOÇÃO TEMPORÁRIA 09 a 11/10/2026')||x.startsWith('OFERTA PROATIVA DOS POTES 09 a 11/10/2026')||x.startsWith('COMPLEMENTO DO TRIO PROMOCIONAL:'));assert.equal(rules.length,4);
  const before=a.parameters.options.systemMessage;
+ const prefixes=['Combo Fatia (','PROMOÇÃO TEMPORÁRIA 09 a 11/10/2026','OFERTA PROATIVA DOS POTES 09 a 11/10/2026','COMPLEMENTO DO TRIO PROMOCIONAL:'];
  const missing=rules.filter(rule=>!before.includes(rule));
  if(!missing.length){console.log('Ofertas já publicadas.');return;}
  assert(before.includes('CATÁLOGO SOB CONSULTA'));
  fs.writeFileSync(path.join(workspace,'n8n-backups-local/before-combo-fatia-'+Date.now()+'.json'),JSON.stringify(w));
- a.parameters.options.systemMessage=before.replace('CATÁLOGO SOB CONSULTA','CATÁLOGO SOB CONSULTA\n'+missing.join('\n'));
+ a.parameters.options.systemMessage=before.split(/\r?\n/).filter(line=>!prefixes.some(prefix=>line.startsWith(prefix))).join('\n').replace('CATÁLOGO SOB CONSULTA','CATÁLOGO SOB CONSULTA\n'+rules.join('\n'));
  await api(route,'PUT',{name:w.name,nodes:w.nodes,connections:w.connections,settings:w.settings});
  await api(route+'/activate','POST',{});
  const live=await api(route);assert(live.active);assert.deepEqual(live.nodes,w.nodes);assert.deepEqual(live.connections,w.connections);

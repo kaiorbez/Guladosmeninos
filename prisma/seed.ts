@@ -485,6 +485,9 @@ async function main() {
       await tx.variant.upsert({ where: { productId_name: { productId: product.id, name: "3 potes" } }, update: { price: 50, active: true }, create: { productId: product.id, name: "3 potes", price: 50, active: true } });
     });
   });
+  await once("2026-10-09-promocao-cinco-classicos", async () => {
+    await prisma.product.updateMany({ where: { name: POTS_PROMO }, data: { description: "Promoção de 09 a 11/10/2026: 3 potes por 50 Bs no total. Misture ou repita SOMENTE estes cinco sabores: Ninho com brigadeiro de chocolate; doce de leite com brigadeiro de chocolate; brigadeiro de chocolate; Prestígio (chocolate com coco); maracujá com brigadeiro de chocolate. Premium e outros sabores não participam. Registrar os três sabores escolhidos e consultar disponibilidade. Cada unidade do combo contém três potes. Bebida, empadão e entrega são separados. Correção da oferta anterior; não alterar pedidos já aceitos/pagos automaticamente." } });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
