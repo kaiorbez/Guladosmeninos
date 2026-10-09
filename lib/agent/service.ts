@@ -10,6 +10,7 @@ import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
 import { lookupYangoFee } from './yango';
 import { catalogForPrompt } from './catalog-context';
+import { promotionAvailable } from './promotions';
 
 type Body = Record<string, unknown>;
 const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
@@ -21,7 +22,7 @@ function presentOrder(o: { id: string; number: number; customerName: string; pro
 }
 export async function catalog() {
  const products=await prisma.product.findMany({where:{active:true,onStore:true},include:{variants:{where:{active:true}}}});
- return products.flatMap(p=>p.variants.map(v=>({variantId:v.id,produto:p.name,tamanho:v.name,descricao:p.description,preco:Number(v.price),estoque:v.stock,controlaEstoque:p.trackStock,precoSobConsulta:p.priceOnRequest})));
+ return products.filter(p=>promotionAvailable(p.name)).flatMap(p=>p.variants.map(v=>({variantId:v.id,produto:p.name,tamanho:v.name,descricao:p.description,preco:Number(v.price),estoque:v.stock,controlaEstoque:p.trackStock,precoSobConsulta:p.priceOnRequest})));
 }
 export async function context(p: string) {
   await linkLegacyOrders(p);

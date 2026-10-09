@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { agentAuthorized, unauthorized } from "@/lib/agent-auth";
 import { variantLabel } from "@/lib/format";
+import { promotionAvailable } from "@/lib/agent/promotions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
     },
   });
 
-  const itens = products.flatMap((p) =>
+  const itens = products.filter(p => promotionAvailable(p.name)).flatMap((p) =>
     p.variants.map((v) => ({
       variantId: v.id,
       nome: variantLabel(p.name, v.name),

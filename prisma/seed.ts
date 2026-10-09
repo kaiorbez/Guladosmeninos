@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed, type VariantSeed } from "./data/cardapio";
 import { PEDIDOSYA } from "./data/pedidosya";
 import { bookPayment } from "../lib/orders";
+import { POTS_PROMO } from "../lib/agent/promotions";
 
 const prisma = new PrismaClient();
 
@@ -473,6 +474,15 @@ async function main() {
       for (const [name, price] of [["Prestígio", 30], ["Maracujá com brigadeiro de chocolate", 30], ["Ninho com geleia de frutas vermelhas", 35], ["Cenoura com brigadeiro de chocolate", 30]] as const) {
         await tx.variant.upsert({ where: { productId_name: { productId: product.id, name } }, update: { price, active: true }, create: { productId: product.id, name, price, active: true } });
       }
+    });
+  });
+  await once("2026-10-08-promocao-tres-potes", async () => {
+    await prisma.$transaction(async tx => {
+      const category = await tx.category.upsert({ where: { slug: "combos" }, update: {}, create: { slug: "combos", name: "Combos", group: "Combos" } });
+      const existing = await tx.product.findFirst({ where: { name: POTS_PROMO } });
+      const data = { name: POTS_PROMO, categoryId: category.id, description: "Promoção de 09/10/2026 a 11/10/2026, inclusive: 3 bolos de pote de qualquer sabor por 50 Bs no total. Pode combinar sabores, inclusive premium, sem acréscimo. Registrar os três sabores escolhidos. Consultar catálogo de potes para sabores e disponibilidade; não presumir estoque infinito. Não inclui bebida, empadão ou taxa de entrega. Cada unidade deste combo equivale a três potes. Oferta temporária, não recorrente.", trackStock: false, priceOnRequest: false, active: true, onStore: true };
+      const product = existing ? await tx.product.update({ where: { id: existing.id }, data }) : await tx.product.create({ data });
+      await tx.variant.upsert({ where: { productId_name: { productId: product.id, name: "3 potes" } }, update: { price: 50, active: true }, create: { productId: product.id, name: "3 potes", price: 50, active: true } });
     });
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,

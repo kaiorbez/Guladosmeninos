@@ -8,7 +8,7 @@ const phone='59171384295';
 function load(name,mocks={}) {
  const file=path.join(__dirname,'../lib/agent',name+'.ts');
  const out=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- const exports={};vm.runInNewContext(out,{exports,Date,URL,Set,Map,BigInt,JSON,Number,String,Array,Math,AbortSignal,process,console,fetch:mocks.fetch,require:n=>mocks[n]||require(n)});return exports;
+ const exports={};vm.runInNewContext(out,{exports,Date,URL,Set,Map,BigInt,JSON,Number,String,Array,Math,AbortSignal,process,console,fetch:mocks.fetch,require:n=>mocks[n]||(n==='./promotions'?load('promotions'):require(n))});return exports;
 }
 const rules=load('rules');
 const today=new Date().toISOString().slice(0,10);
