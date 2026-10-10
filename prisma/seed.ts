@@ -507,6 +507,13 @@ async function main() {
       }
     });
   });
+  await once("2026-10-10-combo-fatia-55", async () => {
+    await prisma.$transaction(async tx => {
+      const product=await tx.product.findFirstOrThrow({where:{name:"Combo Fatia"}});
+      await tx.product.update({where:{id:product.id},data:{description:"Combo completo por 55 Bs em todos os quatro sabores: Prestígio, maracujá com brigadeiro de chocolate, Ninho com geleia de frutas vermelhas e cenoura com brigadeiro de chocolate. Inclui 1 fatia + 1 empadão P de 250 g (serve uma pessoa) + 1 Coca-Cola. Oferta e sabores permanentes. 30/35 Bs são preços de fatias avulsas, não deste combo. Não cobrar acompanhamentos novamente. Sabor do empadão e volume/tipo da Coca-Cola não informados. Preservar horários e regras de terça. Não alterar pedidos já aceitos/pagos automaticamente."}});
+      await tx.variant.updateMany({where:{productId:product.id},data:{price:55}});
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
