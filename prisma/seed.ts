@@ -492,6 +492,21 @@ async function main() {
     await prisma.product.updateMany({ where: { name: "Kit Fiesta" }, data: { description: "Cardápio 2026.2, página 16. Kit P (até 10 pessoas): 1 torta P + 10 docinhos sortidos + 1 Coca-Cola original 2 L, total 160 Bs. Kit M (até 15 pessoas): 1 torta M + 25 docinhos sortidos + 1 Coca-Cola original 2 L, total 270 Bs. Kit G (anunciado para até 25 pessoas): 1 torta G + 50 docinhos sortidos + 2 Coca-Colas originais 2 L, total 400 Bs. O próprio cardápio indica 20 porções para a torta G do kit; não confundir porções da torta com capacidade anunciada do kit. Encomenda padrão futura pode ser concluída pela IA dentro do horário de entrega/retirada e antecedência aplicável, sem confirmação genérica da equipe. Personalização fora da composição padrão requer orçamento. Não adicionar novamente a bebida já incluída." } });
     await prisma.product.updateMany({ where: { name: "Empadinha de Frango" }, data: { description: "Empadinha de 55 g, frango com requeijão. Cardápio 2026.2 página 15: 6,50 Bs por unidade; 35 unidades custam 227,50 Bs. Usar variante Unidade e quantidade real. Cento fechado é outro SKU, 600 Bs por 100; não dividir o cento para cobrar 6 Bs na unidade avulsa. Encomenda padrão futura autorizada dentro do horário de entrega/retirada, sem depender do estoque pronto de hoje; não inventar prazo mínimo ou quantidade mínima ausente." } });
   });
+  await once("2026-10-09-combos-troca-premium", async () => {
+    await prisma.$transaction(async tx => {
+      const classics = "Ninho com brigadeiro de chocolate; doce de leite com brigadeiro de chocolate; brigadeiro de chocolate; Prestígio (chocolate com coco); maracujá com brigadeiro de chocolate";
+      const upgrade = "Troca opcional por pote premium de frutas vermelhas, cenoura ou moca: acréscimo de 5 Bs por pote substituído. Consultar sabores completos e disponibilidade no catálogo de potes. Exige aceite; não é um pote extra. Registrar todos os sabores e usar a variante correspondente ao número de trocas, sem somar o pote avulso.";
+      for (const [name, base, max] of [["Combo Perfecto",45,1],[POTS_PROMO,50,3]] as const) {
+        const product=await tx.product.findFirstOrThrow({where:{name}});
+        const description=(name===POTS_PROMO?"Somente 09 a 11/10/2026, inclusive: 3 potes clássicos por 50 Bs. Bebida, empadão e entrega separados. ":"Combo permanente: 1 empadão P + 1 pote clássico + 1 Coca-Cola Zero 300 ml por 45 Bs. Entrega separada. ")+"Clássicos: "+classics+". "+upgrade+" Não modificar pedidos já aceitos ou pagos automaticamente.";
+        await tx.product.update({where:{id:product.id},data:{description}});
+        for(let count=1;count<=max;count++) {
+          const variantName=`Com ${count} pote${count>1?'s':''} premium`;
+          await tx.variant.upsert({where:{productId_name:{productId:product.id,name:variantName}},update:{price:base+5*count,active:true},create:{productId:product.id,name:variantName,price:base+5*count,active:true}});
+        }
+      }
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {

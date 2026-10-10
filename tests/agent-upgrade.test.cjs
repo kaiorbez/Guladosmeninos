@@ -42,6 +42,26 @@ function fixture({network='ok',yangoFee=null}={}) {
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
+
+test('citação do anúncio chega ao lote atual sem duplicar nem reabrir conteúdo consumido',async()=>{
+ const f=fixture();const id='reply-kit',quote='KIT FIESTA P YA ESTÁ AQUÍ';
+ await f.prisma.agentEvent.create({data:{key:`in:${phone}:${id}`,phone,kind:'INBOUND',payload:{quoted:quote}}});
+ await f.prisma.agentInbox.create({data:{id:`in:${phone}:${id}`,phone,messageId:id,mediaKind:'texto',moment:1n}});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:id,texto:'Teria disponível para amanhã?'});
+ const result=await f.service.prepare({telefone:phone,execucao:'reply-kit-test'});
+ assert.match(result.message,/Teria disponível/);assert.match(result.message,/KIT FIESTA P/);
+ assert.equal(result.message.split(quote).length,2);
+ const retry=await f.service.operate({acao:'conteudo',telefone:phone,messageId:id,texto:'outro texto'});
+ assert.equal(retry.atualizado,false);assert.match(f.state().agentInbox[0].content,/KIT FIESTA P/);
+});
+
+test('citação já incluída na análise não é repetida',async()=>{
+ const f=fixture(),id='quoted-media',quote='Kit Fiesta M';
+ await f.prisma.agentEvent.create({data:{key:`in:${phone}:${id}`,phone,kind:'INBOUND',payload:{quoted:quote}}});
+ await f.prisma.agentInbox.create({data:{id:`in:${phone}:${id}`,phone,messageId:id,mediaKind:'imagem',moment:1n}});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:id,texto:'Referência: '+quote});
+ assert.equal(f.state().agentInbox[0].content,'Referência: '+quote);
+});
 test('test reset clears pause and buffered input but preserves orders and history',async()=>{
  const f=fixture();await f.service.saveOrder(body());await f.prisma.agentConversation.update({where:{phone},data:{pausedUntil:new Date(Date.now()+60000)}});
  await f.prisma.agentInbox.create({data:{phone,messageId:'buffer',content:'texto'}});
