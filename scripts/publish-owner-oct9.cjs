@@ -13,6 +13,9 @@ async function api(p,m='GET',b){const r=await fetch(cfg.N8N_BASE_URL+'/api/v1/'+
  const old="citacao:(q.text||{}).message||q.message||''";
  assert(entry.parameters.jsonBody.includes(old));
  entry.parameters.jsonBody=entry.parameters.jsonBody.replace(old,"citacao:typeof q==='string'?q:typeof q.text==='string'?q.text:(q.text||{}).message||(typeof q.message==='string'?q.message:'')||q.caption||(q.image||{}).caption||(q.document||{}).caption||''");
+ const qr=w.nodes.find(n=>n.name==='enviar_qr_pagamento');assert(qr);
+ qr.parameters.jsonBody=qr.parameters.jsonBody.replace("acao:'qr',","acao:'qr',quitarSaldo:$fromAI('quitarSaldo','true apenas quando cliente pedir expressamente quitar o saldo inteiro agora; false para cobrança normal','boolean',false),");
+ qr.parameters.toolDescription+=' Se o cliente pedir expressamente pagar todo o restante agora, use quitarSaldo=true: o painel desconta o pago e permite quitação antecipada. Não cria novo pedido nem confirma recebimento.';
  await api(route,'PUT',{name:w.name,nodes:w.nodes,connections:w.connections,settings:w.settings});
  await api(route+'/activate','POST',{});
  const live=await api(route);assert(live.active);assert.deepEqual(live.nodes,w.nodes);assert.deepEqual(live.connections,w.connections);

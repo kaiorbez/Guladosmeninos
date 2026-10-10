@@ -287,7 +287,9 @@ export async function analysisFailure(b: Body) {
     if(!inbound || (inbound.payload as Body).fromMe!==false) throw new AgentError('Mensagem do cliente não encontrada.',404);
     const inbox=await tx.agentInbox.findUnique({where:{id:`in:${p}:${id}`}});
     if(!inbox || (stage!=='ia' && (inbox.ready || inbox.consumedAt))) throw new AgentError('Mídia já processada; não sobrescrever.',409);
-    const question=`Falha técnica na etapa ${stage}. Conteúdo indisponível; consultar a conversa e pedidos no painel, sem presumir conteúdo ou pagamento. Retomada depende de conferência da equipe.`;
+    const original=text((inbound.payload as Body).text,1200);
+    const readable=stage==='ia'?text(inbox.content,2000)||original:original;
+    const question=`Falha técnica na etapa ${stage}.\n\n${readable?'Mensagem recebida do cliente (referência):\n'+readable:'Conteúdo da mensagem indisponível.'}\n\n${stage==='ia'?'A IA não concluiu a resposta.':'A mídia não pôde ser analisada; o texto acima, quando presente, é apenas a legenda/referência.'} Consultar a conversa e pedidos no painel, sem presumir conteúdo ou pagamento. Retomada depende de conferência da equipe.`;
     const t=await tx.agentTicket.upsert({where:{sourceKey:failureKey},create:{sourceKey:failureKey,phone:p,customerName:text(b.cliente,120)||p,kind:'DUVIDA',question,nextReminderAt:new Date(Date.now()+10*60000)},update:{}});
     // Consume only the failed input. Later customer messages remain queued.
     if(stage!=='ia') await tx.agentInbox.update({where:{id:inbox.id},data:{ready:true,content:'[Mídia indisponível: análise falhou. Não inferir conteúdo nem pagamento.]',consumedAt:new Date()}});
@@ -398,10 +400,8 @@ export async function operate(b: Body) {
     case 'qr': {
       const p = phone(b.telefone);
       if (!Number.isInteger(b.geracao)) throw new AgentError('Geração obrigatória.');
-      const order = await prisma.order.findFirst({ where: { id: text(b.pedidoId, 100), customerPhone: p, status: 'PENDENTE' } });
+      let order = await prisma.order.findFirst({ where: { id: text(b.pedidoId, 100), customerPhone: p, status: 'PENDENTE' } });
       if (!order) throw new AgentError('Consulte ou registre a encomenda antes de cobrar.');
-      const plan = paymentPlan(Number(order.total), Number(order.paid), order.deliveryDate.toISOString().slice(0, 10), order.payFull);
-      if (!plan.pagarAgora) return { ok: true, enviado: false, motivo: 'Nenhum valor pendente agora.', ...plan };
       const batch = (await prisma.agentEvent.findMany({where:{phone:p,kind:'BATCH'},orderBy:{createdAt:'desc'},take:1}))[0];
       const batchResult=batch?.result as Body | undefined;
       const complaint=text(batchResult?.message,24000);
@@ -409,6 +409,18 @@ export async function operate(b: Body) {
         const alert=await ticket({...b,tipo:'DUVIDA',cliente:order.customerName,pergunta:'📌 *Resumo*\nCliente relatou falha no QR de pagamento.\n\n🛒 *Pedido*\nPedido #'+order.number+'\n'+order.product+'\n\n📝 *Observações / pendências*\n'+complaint+'\nVerificar o QR e orientar uma alternativa de pagamento autorizada.'});
         return {...alert,ok:false,enviado:false,motivo:'FALHA_QR_ENCAMINHADA',orientacao:'Informe que a equipe verificará o QR. Não diga QR novo, não reenvie o mesmo arquivo nem invente dados bancários.'};
       }
+      if (b.quitarSaldo===true) {
+        order=await prisma.$transaction(async tx=>{
+          await lockConversation(tx,p);await current(tx,p,b);
+          const actual=await tx.order.findFirst({where:{id:text(b.pedidoId,100),customerPhone:p,status:'PENDENTE'}});
+          if(!actual)throw new AgentError('Encomenda não encontrada.');
+          if(actual.payFull || Number(actual.paid)>=Number(actual.total))return actual;
+          // Explicit request changes only when the balance is due, never money received.
+          return tx.order.update({where:{id:actual.id},data:{payFull:true,agentVersion:{increment:1}}});
+        });
+      }
+      const plan = paymentPlan(Number(order.total), Number(order.paid), order.deliveryDate.toISOString().slice(0, 10), order.payFull);
+      if (!plan.pagarAgora) return { ok: true, enviado: false, motivo: 'Nenhum valor pendente agora.', ...plan };
       const caption = b.idioma === 'es' ? `Pago: ${plan.pagarAgora} Bs. Envíanos el comprobante para revisión.` : `Pagamento: ${plan.pagarAgora} Bs. Envie o comprovante para conferência.`;
       const sent = await sendOnce(`qr:${p}:${key(b.messageId)}`, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
       return { ok: sent.enviado, ...sent, ...plan };

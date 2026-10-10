@@ -43,6 +43,33 @@ function fixture({network='ok',yangoFee=null}={}) {
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
 
+test('quitação antecipada cobra saldo real sem alterar pagamentos e é idempotente',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());const id=saved.pedido.id;
+ await f.prisma.order.update({where:{id},data:{paid:65}});
+ const normal=await f.service.operate({acao:'qr',telefone:phone,messageId:'normal',pedidoId:id,geracao:1});
+ assert.equal(normal.enviado,false);assert.equal(normal.saldo,65);
+ const q={acao:'qr',telefone:phone,messageId:'restante',pedidoId:id,geracao:1,quitarSaldo:true,arquivoUrl:'https://example.com/qr.png'};
+ const result=await f.service.operate(q);assert.equal(result.pagarAgora,65);assert.equal(result.enviado,true);
+ const version=f.state().order[0].agentVersion;await f.service.operate(q);
+ assert.equal(f.state().order[0].agentVersion,version);assert.equal(f.state().order[0].paid,65);assert.equal(f.state().order[0].total,130);assert.equal(f.receiptPayments(),0);
+});
+
+test('pedido quitado não gera novo QR e geração antiga não altera plano',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());const id=saved.pedido.id;
+ const q={acao:'qr',telefone:phone,messageId:'restante',pedidoId:id,geracao:0,quitarSaldo:true};
+ await assert.rejects(f.service.operate(q),/Nova mensagem/);assert.equal(f.state().order[0].payFull,false);
+ await f.prisma.order.update({where:{id},data:{paid:130}});
+ const result=await f.service.operate({...q,geracao:1});assert.equal(result.enviado,false);assert.equal(result.saldo,0);assert.equal(f.state().order[0].payFull,false);
+});
+
+test('falha da IA inclui solicitação real sem expor erro bruto',async()=>{
+ const f=fixture(),id='failure-request';
+ await f.prisma.agentEvent.create({data:{key:`in:${phone}:${id}`,phone,kind:'INBOUND',payload:{fromMe:false,text:'Queria o QR para pagar o restante'}}});
+ await f.prisma.agentInbox.create({data:{id:`in:${phone}:${id}`,phone,messageId:id,mediaKind:'texto',content:'Queria o QR para pagar o restante',ready:true,consumedAt:new Date()}});
+ await f.service.analysisFailure({telefone:phone,messageId:id,geracao:1,etapa:'ia',erro:'SECRET INTERNAL STACK'});
+ assert.match(f.state().agentTicket[0].question,/Queria o QR para pagar o restante/);assert(!f.state().agentTicket[0].question.includes('SECRET'));assert.match(f.state().agentTicket[0].question,/não concluiu a resposta/);
+});
+
 test('citação do anúncio chega ao lote atual sem duplicar nem reabrir conteúdo consumido',async()=>{
  const f=fixture();const id='reply-kit',quote='KIT FIESTA P YA ESTÁ AQUÍ';
  await f.prisma.agentEvent.create({data:{key:`in:${phone}:${id}`,phone,kind:'INBOUND',payload:{quoted:quote}}});
