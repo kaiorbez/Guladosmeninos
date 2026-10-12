@@ -523,6 +523,17 @@ async function main() {
       }
     });
   });
+  await once("2026-10-12-empadao-calabresa", async () => {
+    await prisma.$transaction(async tx => {
+      const category=await tx.category.findUniqueOrThrow({where:{slug:"empadoes"}});
+      const existing=await tx.product.findFirst({where:{name:"Empadão de Calabresa"}});
+      const data={name:"Empadão de Calabresa",categoryId:category.id,active:true,onStore:true,priceOnRequest:false,description:"Empadão de calabresa. Tamanho P: 25 Bs; tamanho M: 75 Bs. Preços confirmados pela loja em 12/10/2026. Consultar estoque para pronta entrega; não presumir quantidade disponível, peso ou inclusão/substituição em combos."};
+      const product=existing?await tx.product.update({where:{id:existing.id},data}):await tx.product.create({data:{...data,trackStock:true}});
+      for(const [name,price] of [["P",25],["M",75]] as const) {
+        await tx.variant.upsert({where:{productId_name:{productId:product.id,name}},update:{price,active:true},create:{productId:product.id,name,price,active:true}});
+      }
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
