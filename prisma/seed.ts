@@ -514,6 +514,15 @@ async function main() {
       await tx.variant.updateMany({where:{productId:product.id},data:{price:55}});
     });
   });
+  await once("2026-10-11-bolos-disponibilidade-permanente", async () => {
+    await prisma.$transaction(async tx => {
+      const products=await tx.product.findMany({where:{category:{slug:{in:["campeones","acetato"]}}}});
+      for(const product of products) {
+        const rule="DISPONIBILIDADE PERMANENTE AUTORIZADA: neste produto, massa de chocolate nos tamanhos P, M e G; massa branca somente no tamanho P. Vale para todos os sabores cadastrados de Naked Cake e tortas em acetato, na composição padrão. Estas combinações podem ser vendidas mesmo com estoque pronto zero, sem aprovação genérica da equipe. O estoque numérico continua sendo a quantidade real pronta; não significa indisponibilidade de produção autorizada. Confirmar tamanho e massa quando faltarem. Não estender a GG, massa branca M/G, outros tipos de bolo ou personalizações. Usar apenas variantes e preços cadastrados, respeitar horários e restrições específicas; não prometer entrega instantânea. Não alterar pedidos anteriores.";
+        await tx.product.update({where:{id:product.id},data:{description:[product.description,rule].filter(Boolean).join("\n")}});
+      }
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {
