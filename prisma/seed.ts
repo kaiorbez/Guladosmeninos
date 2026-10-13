@@ -534,6 +534,13 @@ async function main() {
       }
     });
   });
+  // Retira oferta incorreta sem apagar variantes vinculadas a vendas históricas.
+  await once("2026-10-13-retirar-combo-pote-incorreto", async () => {
+    await prisma.$transaction(async tx => {
+      await tx.variant.updateMany({ where: { product: { name: "Combo Bolo de Pote" } }, data: { active: false } });
+      await tx.product.updateMany({ where: { name: "Combo Bolo de Pote" }, data: { active: false, onStore: false } });
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {

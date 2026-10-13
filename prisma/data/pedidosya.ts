@@ -30,7 +30,6 @@ export const PEDIDOSYA: PedidosYaSeed[] = [
 
   // Combos
   { section: "Combos", name: "Combo porción", price: 63, listPrice: 70, product: "Combo Porção Ninho com Morango", variant: "Único" },
-  { section: "Combos", name: "Combo cuchareable", price: 55, product: "Combo Bolo de Pote", variant: "Único" },
   { section: "Combos", name: "Combo fiesta p", price: 0, product: "Combo Festa P", variant: "Único", review: true },
   { section: "Combos", name: "Combo porción - nido con frutos rojos", price: 63, listPrice: 70, product: "Combo Porção Ninho com Frutas Vermelhas", variant: "Único", review: true },
   { section: "Combos", name: "Combo porción - maracuyá con chocolate", price: 63, listPrice: 70, product: "Combo Porção Maracujá com Chocolate", variant: "Único" },

@@ -213,7 +213,6 @@ export const EXTRAS: CategorySeed[] = [
       { name: "Combo Porção Maracujá com Chocolate", description: "1 empadão 250 g + Coca-Cola 300 ml + 1 fatia de maracujá com chocolate.", onStore: false, variants: unico(70) },
       { name: "Combo Porção Prestígio", description: "1 empadão 250 g + Coca-Cola 300 ml + 1 fatia de prestígio.", onStore: false, variants: unico(70) },
       { name: "Combo Porção Cenoura com Chocolate", description: "1 empadão 250 g + Coca-Cola 300 ml + 1 fatia de cenoura com chocolate.", onStore: false, variants: unico(70) },
-      { name: "Combo Bolo de Pote", description: "Bolo de pote + refrigerante + empadinha.", onStore: false, variants: unico(55) },
       { name: "Combo Empadão", description: "2 empadões M + Coca-Cola 2 L + 2 docinhos sortidos.", onStore: false, variants: unico(188) },
       { name: "Combo Festa P", description: "Torta P (10 pessoas) + docinhos sortidos + Coca-Cola 2 L.", onStore: false, variants: unico(0) },
     ],
