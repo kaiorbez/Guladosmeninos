@@ -133,6 +133,10 @@ export async function ticket(b: Body) {
       const expected=order?paymentPlan(Number(order.total),Number(order.paid),order.deliveryDate.toISOString().slice(0,10),order.payFull).pagarAgora:null;
       const review=receiptReview(receipt as Body,expected,dayLaPaz());
       report=receiptNotice(receipt as Body,order?presentOrder(order):null,review);
+      // Missing registration must not erase the commercial context sent with the receipt.
+      // This text is for human review only and never participates in payment matching.
+      const requestContext=text(b.pergunta,2000);
+      if(!order && requestContext) report+='\n\n📝 Contexto relatado para conferência (não é pedido registrado nem confirmação de pagamento)\n'+requestContext;
       if(order && review.alertas.length===0 && review.valorVisivel!==null) {
         const ownMedia=media.find(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;});
         if(!ownMedia)throw new AgentError('Comprovante sem mídia vinculada ao cliente.');

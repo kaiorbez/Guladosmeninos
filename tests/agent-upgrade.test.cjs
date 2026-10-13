@@ -346,6 +346,14 @@ test('comprovante sem original disponível sinaliza falha de mídia, não sucess
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'r',midia:'pdf',momento:Date.now()});
  const r=await f.service.ticket({telefone:phone,messageId:'r',geracao:2,mediaIds:['r'],tipo:'COMPROVANTE',pergunta:'Dados',comprovante:{tipo:'COMPROVANTE_BANCARIO'}});assert.equal(r.midiaEnviada,false);
 });
+
+test('comprovante sem pedido preserva contexto da compra sem registrar venda ou pagamento',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'receipt-context',midia:'imagem',momento:Date.now()});
+ await f.service.ticket({telefone:phone,messageId:'receipt-context',geracao:2,mediaIds:['receipt-context'],tipo:'COMPROVANTE',pergunta:'Cliente solicitou 1 fatia e 1 pote por 50 Bs, enviou localização. Compra na terça precisa de conferência.',comprovante:{tipo:'COMPROVANTE_BANCARIO',valor:50,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:rules.dayLaPaz()}});
+ const report=f.state().agentTicket[0].question;
+ assert.match(report,/1 fatia e 1 pote/);assert.match(report,/não é pedido registrado/);assert.match(report,/Pedido não identificado/);
+ assert.equal(f.state().order.length,0);assert.equal(f.receiptPayments(),0);
+});
 test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
  const review=load('review',{'./rules':rules});const r=review.receiptReview({valor:10,moeda:'Bs',beneficiario:'Outra pessoa',bancoDestino:'Outro banco',data:today},20,today);
  assert(r.alertas.length>=3);assert.equal(r.pagamentoConfirmado,false);
