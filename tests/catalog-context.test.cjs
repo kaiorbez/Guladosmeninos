@@ -17,3 +17,13 @@ test('torta sob orçamento aparece na consulta de personalizados e não perde SK
  assert.deepEqual(restore(select([custom,ordinary],'personalizados')),[custom]);
  assert.deepEqual(restore(select([custom,ordinary],'bolos')),[ordinary]);
 });
+
+test('modelo de acetato continua padrão e encontrável mesmo em consulta de personalizados',()=>{
+ const model=item('Torta em Acetato Modelo 11','m11',150,{controlaEstoque:false});
+ const custom=item('Torta temática','custom',0,{precoSobConsulta:true});
+ const all=[model,custom,item('Torta Brigadeiro','b',120)];
+ assert.deepEqual(restore(select(all,'personalizados')),[model,custom]);
+ assert.deepEqual(restore(select(all,'bolos,personalizados')),all);
+ const found=restore(select(all,'personalizados'))[0];
+ assert.equal(found.precoSobConsulta,false);assert.equal(found.preco,150);assert.equal(found.variantId,'m11');
+});

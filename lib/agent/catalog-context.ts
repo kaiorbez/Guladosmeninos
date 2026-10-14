@@ -17,7 +17,8 @@ export function catalogForPrompt(items: Item[], query: unknown) {
   if(/^torta\b/.test(name))return 'bolos';
   return 'adicionais';
  };
- const selected=all?items:items.filter(item=>families.includes(family(item)));
+ // Numbered catalog designs must remain discoverable even if the customer calls them customized.
+ const selected=all?items:items.filter(item=>families.includes(family(item)) || (families.includes('personalizados') && /^torta em acetato modelo \d+$/.test(normalize(item.produto))));
  const columns=['variantId','tamanho','preco','estoque'];
  const common=['produto','descricao','controlaEstoque','precoSobConsulta'];
  const supported=selected.every(item=>Object.keys(item).length===8&&[...columns,...common].every(k=>Object.keys(item).includes(k)));
