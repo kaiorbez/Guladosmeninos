@@ -398,7 +398,7 @@ export async function operate(b: Body) {
     case 'menu': {
       const p = phone(b.telefone);
       if (!Number.isInteger(b.geracao)) throw new AgentError('Geração obrigatória.');
-      const sent = await sendOnce(`menu:${p}:${key(b.messageId)}`, p, 'Cardápio / Menú — Gula dos Meninos', undefined, Number(b.geracao), 'menu', text(b.arquivoUrl,3000)||undefined);
+      const sent = await sendOnce(`menu:${p}:${key(b.messageId)}`, p, 'Cardápio / Menú — Gula dos Meninos\nInstagram: https://www.instagram.com/guladosmeninos', undefined, Number(b.geracao), 'menu', text(b.arquivoUrl,3000)||undefined);
       return { ok: sent.enviado, ...sent };
     }
     case 'qr': {

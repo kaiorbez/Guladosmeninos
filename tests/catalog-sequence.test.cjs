@@ -15,3 +15,9 @@ test('protection uses customer language and ignores agent/internal language',()=
  assert.equal(lang([{papel:'cliente',texto:'Buenas tardes'},{papel:'atendente',texto:'Aguarde a equipe'}],'Okay'),'es');
  assert.equal(lang([],'Quanto custa?'),'pt');assert.equal(lang([],'¿Cuál es el precio?'),'es');
 });
+
+test('abertura mantém apresentação completa antes do PDF e pergunta separada',()=>{
+ const p=plan([{json:{mensagem:'Oie, boa tarde! Somos a Gula dos Meninos 😊\n\nO que você deseja? 😊'}}],steps);
+ assert.equal(p.length,3);assert.equal(p[0].json.mensagem,'Oie, boa tarde! Somos a Gula dos Meninos 😊');
+ assert.equal(p[1].json.catalogo,true);assert.equal(p[2].json.mensagem,'O que você deseja? 😊');
+});
