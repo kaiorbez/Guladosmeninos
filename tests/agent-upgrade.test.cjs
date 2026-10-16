@@ -351,8 +351,15 @@ test('comprovante sem pedido preserva contexto da compra sem registrar venda ou 
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'receipt-context',midia:'imagem',momento:Date.now()});
  await f.service.ticket({telefone:phone,messageId:'receipt-context',geracao:2,mediaIds:['receipt-context'],tipo:'COMPROVANTE',pergunta:'Cliente solicitou 1 fatia e 1 pote por 50 Bs, enviou localização. Compra na terça precisa de conferência.',comprovante:{tipo:'COMPROVANTE_BANCARIO',valor:50,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:rules.dayLaPaz()}});
  const report=f.state().agentTicket[0].question;
- assert.match(report,/1 fatia e 1 pote/);assert.match(report,/não é pedido registrado/);assert.match(report,/Pedido não identificado/);
+ assert.match(report,/1 fatia e 1 pote/);assert.match(report,/não é pedido registrado/);assert.match(report,/Valor: 50 Bs/);assert.doesNotMatch(report,/Pedido não identificado|Modalidade\/endereço não identificado/);
  assert.equal(f.state().order.length,0);assert.equal(f.receiptPayments(),0);
+});
+test('comprovante sem pedido não repete as seções que a IA já escreveu',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'dup',midia:'imagem',momento:Date.now()});
+ const ctx='📌 Resumo\nNÃO FOI POSSÍVEL CONFERIR: sem pedido.\n\n🛒 Pedido\nKit Fiesta P (160 Bs) para 17/10 às 16:00.\n\n🧾 Comprovante mostra\nValor: 100 Bs.\n\n👉 Ação da equipe\nVincular.';
+ await f.service.ticket({telefone:phone,messageId:'dup',geracao:2,mediaIds:['dup'],tipo:'COMPROVANTE',pergunta:ctx,comprovante:{tipo:'COMPROVANTE_BANCARIO',valor:100,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:rules.dayLaPaz()}});
+ const report=f.state().agentTicket[0].question;
+ assert.match(report,/Kit Fiesta P/);for(const h of ['Resumo','Comprovante mostra','Ação da equipe'])assert.equal(report.split(h).length-1,1,h);
 });
 test('valor divergente e destinatário errado nunca geram CONFERE',()=>{
  const review=load('review',{'./rules':rules});const r=review.receiptReview({valor:10,moeda:'Bs',beneficiario:'Outra pessoa',bancoDestino:'Outro banco',data:today},20,today);

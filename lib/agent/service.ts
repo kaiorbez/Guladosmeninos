@@ -136,7 +136,9 @@ export async function ticket(b: Body) {
       // Missing registration must not erase the commercial context sent with the receipt.
       // This text is for human review only and never participates in payment matching.
       const requestContext=text(b.pergunta,2000);
-      if(!order && requestContext) report+='\n\n📝 Contexto relatado para conferência (não é pedido registrado nem confirmação de pagamento)\n'+requestContext;
+      // Without a registered order, skip the empty "não identificado" sections and the agent's own copies
+      // of the receipt fields; receipt values always come from the structured data, never from prose.
+      if(!order) report=receiptNoticeWithoutOrder(receipt as Body,review,requestContext);
       if(order && review.alertas.length===0 && review.valorVisivel!==null) {
         const ownMedia=media.find(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;});
         if(!ownMedia)throw new AgentError('Comprovante sem mídia vinculada ao cliente.');
@@ -274,6 +276,19 @@ export async function prepare(b: Body) {
     return result;
   });
   return {...(await context(p)),...(claim as object)};
+}
+
+function receiptNoticeWithoutOrder(receipt: Body, review: ReturnType<typeof receiptReview>, context: string) {
+  const full=receiptNotice(receipt,null,review);
+  const section=(name:string)=>full.split('\n\n').find(part=>part.includes(name))||'';
+  const own=/^(📌|🧾|👉|━)|Comprovante mostra|Ação da equipe|Resumo\s*$/;
+  const kept=context.split(/\n\s*\n/).map(part=>part.trim()).filter(part=>part&&!own.test(part.split('\n')[0].replace(/\*/g,'').trim())).join('\n\n');
+  return [
+    section('*Resumo*'),
+    section('*Comprovante mostra*'),
+    `📝 *O que a conversa indica* (não é pedido registrado nem confirmação de pagamento)\n${kept||'Não informado.'}`,
+    '👉 *Ação da equipe*\nVincular o comprovante ao pedido certo, conferir o valor e registrar a encomenda antes de confirmar. A leitura do comprovante não confirma crédito bancário.',
+  ].filter(Boolean).join('\n\n');
 }
 
 /** Called by an authenticated n8n error branch; never requires an LLM. */
