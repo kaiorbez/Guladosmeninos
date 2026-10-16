@@ -1,6 +1,7 @@
 import { agentAuthorized, unauthorized } from '@/lib/agent-auth';
 import { AgentError } from '@/lib/agent/rules';
 import { operate } from '@/lib/agent/service';
+import { dailySummary, salesFollowUps } from '@/lib/agent/growth';
 export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   if (!agentAuthorized(req)) return unauthorized();
@@ -9,6 +10,8 @@ export async function POST(req: Request) {
     if (raw.length > 100000) return Response.json({ ok: false, error: 'Requisição muito grande.' }, { status: 413 });
     const body = JSON.parse(raw);
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AgentError('JSON inválido.');
+    if (body.acao === 'lembretesVenda') return Response.json(await salesFollowUps(body));
+    if (body.acao === 'resumoDiario') return Response.json(await dailySummary(body));
     return Response.json(await operate(body));
   } catch (e) {
     if (e instanceof AgentError) return Response.json({ ok: false, error: e.message }, { status: e.status });
