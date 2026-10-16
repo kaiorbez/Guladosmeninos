@@ -305,9 +305,8 @@ export async function analysisFailure(b: Body) {
   });
   let notice={enviado:false,estado:'NAO_CONFIGURADO',messageId:null as string|null};
   try {notice=await sendOnce(`${failureKey}:team`,group(),pendingNotice('DUVIDA',String(claim.customerName),p,String(claim.question)),String(claim.ticketId));} catch { /* Ticket remains durable even without transport. */ }
-  const message=claim.idioma==='es'?'No pude procesar tu mensaje ahora. La solicitud quedó registrada para revisión del equipo 😊':'Não consegui processar sua mensagem agora. A solicitação ficou registrada para revisão da equipe 😊';
-  let sent={enviado:false,estado:'SUPERADA',messageId:null as string|null};
-  try {sent=await sendOnce(`${failureKey}:customer`,p,message,String(claim.ticketId),Number(claim.geracao),undefined,undefined,true);} catch {sent.estado='NAO_CONFIGURADO';}
+  // The customer is not told about technical failures; the team notice above handles the follow-up.
+  const sent={enviado:false,estado:'SEM_AVISO_CLIENTE'};
   return {ok:true,registrado:true,ticketId:claim.ticketId,notificacaoEnviada:notice.enviado,enviado:sent.enviado,estadoEnvio:sent.estado};
 }
 

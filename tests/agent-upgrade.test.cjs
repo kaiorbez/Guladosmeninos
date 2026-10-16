@@ -227,9 +227,9 @@ test('falha de mídia registra pendência, responde sem IA e deduplica callbacks
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'photo',midia:'imagem',texto:'precio',momento:Date.now()});
  const b={acao:'falhaAnalise',telefone:phone,messageId:'photo',geracao:2,etapa:'imagem',idioma:'es'};
  const results=await Promise.all([f.service.operate(b),f.service.operate(b)]);
- assert(results.every(r=>r.registrado));assert(results.some(r=>r.enviado));assert.equal(f.state().agentTicket.length,1);assert.equal(f.calls(),2);
+ assert(results.every(r=>r.registrado));assert(results.every(r=>!r.enviado));assert.equal(f.state().agentTicket.length,1);assert.equal(f.calls(),1);
  assert(f.state().agentInbox[0].consumedAt);assert.equal(f.state().agentConversation[0].generation,3);
- assert(f.state().agentDelivery.find(d=>d.phone===phone).body.message.startsWith('No pude'));
+ assert(!f.state().agentDelivery.some(d=>d.phone===phone));
  assert.equal(f.state().order.length,0);
 });
 
@@ -244,7 +244,7 @@ test('timeout do aviso técnico mantém pendência e não repete envios incertos
  const f=fixture({network:'timeout'});await f.service.inbound({telefone:phone,messageId:'audio',midia:'audio',momento:Date.now()});
  const b={telefone:phone,messageId:'audio',geracao:2,etapa:'audio'};
  const r=await f.service.analysisFailure(b);assert.equal(r.enviado,false);assert.equal(r.notificacaoEnviada,false);
- await f.service.analysisFailure(b);assert.equal(f.calls(),2);assert.equal(f.state().agentTicket.length,1);
+ await f.service.analysisFailure(b);assert.equal(f.calls(),1);assert.equal(f.state().agentTicket.length,1);
 });
 
 test('falha da IA preserva lote consumido e resposta humana impede callback atrasado',async()=>{
@@ -252,8 +252,8 @@ test('falha da IA preserva lote consumido e resposta humana impede callback atra
  await f.service.operate({acao:'conteudo',telefone:phone,messageId:'text',texto:'Quero bolo'});
  await f.service.prepare({telefone:phone,execucao:'run'});
  const b={telefone:phone,messageId:'text',geracao:2,etapa:'ia'};
- const r=await f.service.analysisFailure(b);assert(r.enviado);assert.equal(f.state().agentInbox[0].content,'Quero bolo');assert(f.state().agentInbox[0].consumedAt);
- await f.service.resolveTicket(r.ticketId,'','grupo');await f.service.analysisFailure(b);assert.equal(f.calls(),2);assert.equal(f.state().agentTicket[0].status,'RESOLVIDA');
+ const r=await f.service.analysisFailure(b);assert(!r.enviado);assert(r.notificacaoEnviada);assert.equal(f.state().agentInbox[0].content,'Quero bolo');assert(f.state().agentInbox[0].consumedAt);
+ await f.service.resolveTicket(r.ticketId,'','grupo');await f.service.analysisFailure(b);assert.equal(f.calls(),1);assert.equal(f.state().agentTicket[0].status,'RESOLVIDA');
 });
 
 test('erro tardio não substitui análise de mídia já concluída',async()=>{
