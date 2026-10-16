@@ -79,6 +79,16 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
     if(minutes<opens||minutes>=closes) throw new AgentError(weekday===2?'Terça-feira: entregas das encomendas antecipadas só das 14:00 às 20:00.':'Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
     const local=new Date(now.getTime()-4*3600000);if(date===dayLaPaz(now)&&minutes<=local.getUTCHours()*60+local.getUTCMinutes())throw new AgentError('Horário já passou: consulte equipe para confirmar disponibilidade.');
   }
+  // Kit Mini Cumpleaños needs about six hours to print the customer's photos: same day only with that margin before the requested time and closing.
+  if (lines.some(line => /mini\s*cumplea/i.test(line.descricao)) && date === dayLaPaz(now) && weekday !== 2) {
+    const local = new Date(now.getTime() - 4 * 3600000);
+    const ready = local.getUTCHours() * 60 + local.getUTCMinutes() + 360;
+    const closes = weekday === 1 || weekday === 3 ? 20 * 60 : 21 * 60;
+    const wanted = immediate ? ready - 1 : time ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) : ready;
+    const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    if (ready >= closes) throw new AgentError('Kit Mini Cumpleaños precisa de cerca de 6 horas para imprimir as fotos e não fica pronto hoje. Ofereça o próximo dia de atendimento.');
+    if (wanted < ready) throw new AgentError(`Kit Mini Cumpleaños precisa de cerca de 6 horas para imprimir as fotos: para hoje, o horário mínimo é ${hhmm(ready)}.`);
+  }
   // Empadão M and G need about one hour in the oven: same-day orders must leave that hour before the requested time and before closing.
   const bigPie = lines.some(line => /empad[aã]o/i.test(line.descricao) && !/empadinha/i.test(line.descricao) && (/\b[MG]\b/.test(line.descricao) || /750\s*g|1[.,]?3\s*kg|1\.?300\s*g|\bm[eé]dio\b|\bgrande\b/i.test(line.descricao)));
   if (bigPie && date === dayLaPaz(now) && weekday !== 2) {

@@ -528,3 +528,14 @@ test('terça entrega encomenda antecipada só das 14:00 às 20:00',()=>{
  const sun={...order(),data:'2026-10-04',modalidade:'ENTREGA'};
  assert.equal(rules.orderInput({...sun,horario:'10:30'},sat).deliveryTime,'10:30');
 });
+
+test('Kit Mini Cumpleaños no mesmo dia só com 6 horas para imprimir as fotos',()=>{
+ const kit={...order(),data:'2026-10-15',modalidade:'ENTREGA',itens:[{variantId:'kmc',descricao:'Kit Mini Cumpleaños Único',quantidade:1,precoUnitario:100}]};
+ const thu10=new Date('2026-10-15T14:00:00Z');// quinta 10:00 La Paz
+ assert.equal(rules.orderInput({...kit,horario:'16:00'},thu10).deliveryTime,'16:00');
+ assert.throws(()=>rules.orderInput({...kit,horario:'15:00'},thu10),/horário mínimo é 16:00/);
+ assert.throws(()=>rules.orderInput({...kit,horario:'AGORA',paraAgora:true},thu10),/6 horas/);
+ const thu1530=new Date('2026-10-15T19:30:00Z');// quinta 15:30, pronto 21:30 > fecha 21:00
+ assert.throws(()=>rules.orderInput({...kit,horario:'20:30'},thu1530),/não fica pronto hoje/);
+ assert.equal(rules.orderInput({...kit,data:'2026-10-16',horario:'11:00'},thu1530).deliveryTime,'11:00');
+});
