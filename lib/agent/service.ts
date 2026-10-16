@@ -381,7 +381,7 @@ export async function operate(b: Body) {
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
       return {ok:true,atualizados:r.count};
     }
-    case 'catalogo': { const items=await catalog(); return b.compacto===true?catalogForPrompt(items,b.familias):{ok:true,itens:items}; }
+    case 'catalogo': { const items=await catalog(); return b.compacto===true?catalogForPrompt(items,b.familias,b.busca):{ok:true,itens:items}; }
     case 'finalizarTeste': {
       if(b.telefone!=='59175678921') throw new AgentError('Contato de teste inválido.');
       await prisma.agentInbox.updateMany({where:{phone:b.telefone,consumedAt:null,OR:[{messageId:{startsWith:'e2e-'}},{messageId:{startsWith:'fixture-'}},{messageId:{startsWith:'loc-'}}]},data:{consumedAt:new Date()}});
