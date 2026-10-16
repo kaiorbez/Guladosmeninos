@@ -24,7 +24,8 @@ export function noticeDetails(question: string) {
 }
 
 export function groupNotice(title: string, name: string, phone: string, details: string, action: string) {
-  return `${header}\n${divider}\n*${title}*\n\n👤 *Cliente:* ${name}\n📱 wa.me/${phone}\n\n${teamDisplay(details.trim())}\n\n${divider}\n👉 *Ação da equipe*\n${teamDisplay(action)}`;
+  // Compact layout: who, what and the one action the team must take, readable at a glance on a phone.
+  return `${header}\n*${title}* · ${name}\n📱 wa.me/${phone}\n\n${teamDisplay(details.trim())}\n\n👉 ${teamDisplay(action)}`;
 }
 
 export function compatibleReceipt(kind: string, question: string) {
@@ -39,12 +40,24 @@ export function pendingNotice(kind: string, name: string, phone: string, questio
     : (reminder ? '⏰ LEMBRETE — DÚVIDA AINDA PENDENTE' : '❓ DÚVIDA SEM RESPOSTA');
   const originalAction = question.includes('👉 *Ação da equipe*') ? question.split('👉 *Ação da equipe*').slice(1).join('👉 *Ação da equipe*').trim() : '';
   const action = receipt
-    ? compatible ? 'Comprovante compatível com o pedido. Seguir a programação de preparo e entrega registrada no painel. Quando sair para entrega, responder a este aviso com o link da Yango para encaminhar ao cliente.' : originalAction || 'Conferir o comprovante e o crédito no banco antes de confirmar o pagamento. Responder a este aviso com “Respondido” ou “Resolvido” após a conferência.'
-    : 'Verificar a dúvida acima e informar a resposta ou o orçamento. Depois de atender, responder a este aviso com “Respondido” ou “Resolvido”.';
+    ? compatible ? 'Pagamento compatível com o pedido. Quando sair para entrega, responda ESTA mensagem com o link da Yango: ele vai direto para o cliente.' : originalAction || 'Confira o crédito no banco antes de confirmar. Depois, responda ESTA mensagem com “Resolvido”.'
+    : 'Atenda o cliente no WhatsApp. Ao terminar, responda ESTA mensagem com “Resolvido”.';
   return groupNotice(title, name, phone, noticeDetails(question), action);
 }
 
+const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function shortDate(day: string) {
+  const d = new Date(day + 'T12:00:00Z');
+  return Number.isFinite(d.getTime()) ? `${WEEK[d.getUTCDay()]} ${day.slice(8, 10)}/${day.slice(5, 7)}` : day;
+}
+
 export function orderNotice(order: {numero: number; produto: string; data: string; horario: string | null; total: number; pagarAgora: number}, name: string, phone: string, mode: string, address: string, notes: string) {
-  const details = `📌 *Resumo*\nEncomenda #${order.numero} registrada pelo WhatsApp.\n\n🛒 *Pedido*\n${order.produto}\n\nTotal: ${order.total} Bs\nPagar agora: ${order.pagarAgora} Bs\n\n📅 *Data e horário*\n${order.data}${order.horario ? ' às ' + order.horario : '\nHorário não informado'}\n\n🚚 *Entrega / retirada*\n${mode === 'RETIRADA' ? 'Retirada na loja' : 'Entrega'}\n${address || 'Endereço não informado'}\n\n📝 *Observações*\n${notes || 'Nenhuma observação informada.'}`;
-  return groupNotice('🛒 ENCOMENDA RECEBIDA', name, phone, details, 'Revisar a encomenda e acompanhar o pagamento. Quando sair para entrega, responder a este aviso com o link da Yango para encaminhar ao cliente.');
+  const details = [
+    `🛒 ${order.produto}`,
+    `💰 Total ${order.total} Bs · pagar agora ${order.pagarAgora} Bs`,
+    `📅 ${shortDate(order.data)}${order.horario ? ' às ' + order.horario : ' (horário não informado)'}`,
+    `🚚 ${mode === 'RETIRADA' ? 'Retirada na loja' : 'Entrega: ' + (address || 'endereço não informado')}`,
+    ...(notes ? [`📝 ${notes}`] : []),
+  ].join('\n');
+  return groupNotice(`🛒 ENCOMENDA #${order.numero}`, name, phone, details, 'Ao sair para entrega, responda ESTA mensagem com o link da Yango: ele vai direto para o cliente.');
 }

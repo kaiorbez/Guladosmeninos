@@ -339,7 +339,7 @@ test('comprovante exige classificação e encaminha original junto do resumo est
  await assert.rejects(f.service.ticket(b),/Classifique/);
  const r=await f.service.ticket({...b,comprovante:{tipo:'COMPROVANTE_BANCARIO',pedidoId:o.pedido.id,valor:65,moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:rules.dayLaPaz(),hora:'16:45'}});
  assert.equal(r.midiaEnviada,true);assert.equal(r.notificacaoEnviada,true);
- const d=f.state().agentDelivery.find(d=>d.key==='ticket:'+r.ticketId);assert.match(d.body.message,/GULA — AVISO DO AGENTE/);assert.match(d.body.message,/✅ CONFERE/);assert.match(d.body.message,/Pagar ahora: 65 Bs/);assert.equal(f.state().order[0].paid,0);
+ const d=f.state().agentDelivery.find(d=>d.key==='ticket:'+r.ticketId);assert.match(d.body.message,/GULA — AVISO DO AGENTE/);assert.match(d.body.message,/✅ CONFERE/);assert.match(d.body.message,/Pagar agora: 65 Bs/);assert.equal(f.state().order[0].paid,0);
  assert(f.state().agentDelivery.some(d=>d.body.media==='receipt-image'));
 });
 test('comprovante sem original disponível sinaliza falha de mídia, não sucesso',async()=>{
@@ -454,7 +454,7 @@ test('classificação explícita de não comprovante impede inventar recibo',asy
  test('comprovante compatível fica informativo e não gera lembretes; divergência continua alertando',async()=>{
  const notices=load('notices');const question='📌 *Resumo*\n✅ CONFERE: comprovante de 105 Bs.\n\n👉 *Ação da equipe*\nConferir no banco (texto antigo)';
  const notice=notices.pendingNotice('COMPROVANTE','Ana',phone,question);
- assert(!notice.includes('VERIFICAR PAGAMENTO'));assert(!notice.includes('Conferir no banco'));assert(notice.includes('programação de preparo'));
+ assert(!notice.includes('VERIFICAR PAGAMENTO'));assert(!notice.includes('Conferir no banco'));assert(notice.includes('Pagamento compatível'));
  const f=fixture();f.state().agentTicket.push({id:'compatible',kind:'COMPROVANTE',question,status:'ABERTA',phone,customerName:'Ana',reminderCount:0,nextReminderAt:new Date(0)});
  await f.service.reminders();assert.equal(f.calls(),0);assert.equal(f.state().agentTicket[0].reminderCount,0);
  f.state().agentTicket[0].question='📌 *Resumo*\n⚠️ CONFERIR: valor divergente';
