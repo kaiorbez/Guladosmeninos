@@ -417,7 +417,7 @@ test('rastreio mantém somente espanhol quando cliente escreveu espanhol anterio
 
 test('terça permite entrega antecipada, mas bloqueia nova compra no mesmo dia e retirada',()=>{
  const now=new Date('2026-10-03T12:00:00Z');
- assert.equal(rules.orderInput({...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'13:00'},now).deliveryTime,'13:00');
+ assert.equal(rules.orderInput({...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'14:30'},now).deliveryTime,'14:30');
  assert.throws(()=>rules.orderInput({...order(),data:'2026-10-06',modalidade:'RETIRADA'},now),/Terça-feira/);
  const tuesday=new Date('2026-10-06T12:00:00Z');
  const input={...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'15:00'};
@@ -516,4 +516,15 @@ test('empadão M/G exige 1 hora de forno no mesmo dia e não aceita perto do fec
  const empadinha={...pie,itens:[{variantId:'v-e',descricao:'Empadinha M',quantidade:10,precoUnitario:6.5}]};
  assert.equal(rules.orderInput({...empadinha,horario:'20:50'},thu2030).deliveryTime,'20:50');
  assert.equal(rules.orderInput({...pie,data:'2026-10-16',horario:'10:30'},thu2030).deliveryTime,'10:30');
+});
+
+test('terça entrega encomenda antecipada só das 14:00 às 20:00',()=>{
+ const sat=new Date('2026-10-03T12:00:00Z');
+ const tue={...order(),data:'2026-10-06',modalidade:'ENTREGA'};
+ assert.equal(rules.orderInput({...tue,horario:'14:00'},sat).deliveryTime,'14:00');
+ assert.equal(rules.orderInput({...tue,horario:'19:59'},sat).deliveryTime,'19:59');
+ assert.throws(()=>rules.orderInput({...tue,horario:'13:00'},sat),/14:00 às 20:00/);
+ assert.throws(()=>rules.orderInput({...tue,horario:'20:00'},sat),/14:00 às 20:00/);
+ const sun={...order(),data:'2026-10-04',modalidade:'ENTREGA'};
+ assert.equal(rules.orderInput({...sun,horario:'10:30'},sat).deliveryTime,'10:30');
 });

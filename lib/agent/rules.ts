@@ -73,9 +73,10 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
   const time = immediate?'':text(raw.horario, 5);
   if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AgentError('Horário inválido.');
   if(time) {
-    const minutes=Number(time.slice(0,2))*60+Number(time.slice(3));const opens=weekday===1||weekday===3?14*60:10*60;const closes=weekday===1||weekday===3?20*60:21*60;
-    // As duas janelas de entrega de terça ainda precisam de confirmação da equipe.
-    if(weekday!==2 && (minutes<opens||minutes>=closes)) throw new AgentError('Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
+    // Tuesday has no service, but advance orders are delivered 14:00-20:00, like Monday and Wednesday.
+    const short=weekday>=1&&weekday<=3;
+    const minutes=Number(time.slice(0,2))*60+Number(time.slice(3));const opens=short?14*60:10*60;const closes=short?20*60:21*60;
+    if(minutes<opens||minutes>=closes) throw new AgentError(weekday===2?'Terça-feira: entregas das encomendas antecipadas só das 14:00 às 20:00.':'Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
     const local=new Date(now.getTime()-4*3600000);if(date===dayLaPaz(now)&&minutes<=local.getUTCHours()*60+local.getUTCMinutes())throw new AgentError('Horário já passou: consulte equipe para confirmar disponibilidade.');
   }
   // Empadão M and G need about one hour in the oven: same-day orders must leave that hour before the requested time and before closing.
