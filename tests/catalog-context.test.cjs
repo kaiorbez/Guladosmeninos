@@ -47,14 +47,14 @@ test('busca sem resultado volta para a família pedida e sem busca nada muda',()
 });
 
 test('regra de disponibilidade permanente vai uma vez só e cada torta aponta para ela',()=>{
- const rule='DISPONIBILIDADE PERMANENTE AUTORIZADA: massa de chocolate P, M e G; massa branca só P. Não estender a GG.';
- const a=item('Torta Ninho','n',120,{descricao:'Recheio de Ninho.\n'+rule});const b=item('Torta Prestígio','p',130,{descricao:'Coco e chocolate.\n'+rule});const c=item('Torta Comum','c',100);
+ const rule='DISPONIBILIDADE PERMANENTE AUTORIZADA: vale para Naked Cake e tortas em acetato; massa de chocolate P, M e G; massa branca só P. Não estender a GG.';
+ const a=item('Torta Ninho','n',120,{descricao:'Recheio de Ninho.\n'+rule});const b=item('Torta em Acetato Modelo 02','p',130,{descricao:'Coco e chocolate.\n'+rule});const c=item('Torta Comum','c',100);
  const r=select([a,b,c],'bolos');const json=JSON.stringify(r);
  assert.equal(json.split('DISPONIBILIDADE PERMANENTE AUTORIZADA:').length-1,1);
  assert.deepEqual(r.regrasDisponibilidade,{R1:rule});
  const out=restore(r);
- assert.equal(out[0].descricao,'Recheio de Ninho. [Disponibilidade permanente autorizada: ver regrasDisponibilidade.R1]');
+ assert.equal(out[0].descricao,'Recheio de Ninho. [Naked Cake · Disponibilidade permanente autorizada: ver regrasDisponibilidade.R1]');assert.equal(out[1].descricao,'Coco e chocolate. [Torta em acetato · Disponibilidade permanente autorizada: ver regrasDisponibilidade.R1]');
  assert.equal(out[2].descricao,'Ingredientes completos');assert.deepEqual(out.map(x=>x.variantId),['n','p','c']);
  assert.equal(select([c],'bolos').regrasDisponibilidade,undefined);
- const found=select([a,b,c],'bolos','prestigio');assert.deepEqual(restore(found).map(x=>x.variantId),['p']);assert.deepEqual(found.regrasDisponibilidade,{R1:rule});
+ const found=select([a,b,c],'bolos','modelo 02');assert.deepEqual(restore(found).map(x=>x.variantId),['p']);assert.deepEqual(restore(select([a,b,c],'bolos','naked')).map(x=>x.variantId),['n','p']);assert.deepEqual(found.regrasDisponibilidade,{R1:rule});
 });

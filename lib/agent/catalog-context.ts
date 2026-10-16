@@ -56,7 +56,9 @@ function shareRules(groups: Item[]) {
   if(at<0) continue;
   const rule=desc.slice(at).trim();
   let index=texts.indexOf(rule); if(index<0){texts.push(rule);index=texts.length-1;}
-  group.descricao=(desc.slice(0,at).trim()+` [Disponibilidade permanente autorizada: ver regrasDisponibilidade.R${index+1}]`).trim();
+  // The rule names the product lines it covers (Naked Cake, tortas em acetato); keep that label on each item.
+  const line=/acetato/i.test(String(group.produto))?'Torta em acetato':/naked cake/i.test(rule)?'Naked Cake':'';
+  group.descricao=(desc.slice(0,at).trim()+` [${line?line+' · ':''}Disponibilidade permanente autorizada: ver regrasDisponibilidade.R${index+1}]`).trim();
  }
  return texts.length?{regrasDisponibilidade:Object.fromEntries(texts.map((t,i)=>[`R${i+1}`,t]))}:{};
 }
