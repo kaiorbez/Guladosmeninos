@@ -43,5 +43,20 @@ export function catalogForPrompt(items: Item[], query: unknown, search?: unknown
   if(!group){group=Object.fromEntries(common.map(k=>[k,item[k]]));group.variantes=[];groups.push(group);signatures.push(signature);}
   (group.variantes as unknown[][]).push(columns.map(k=>item[k]));
  }
- return {ok:true,escopo:all?'todos':families.join(','),totalCatalogo:items.length,totalRetornado:selected.length,formato:'variantes agrupadas',colunas:columns,grupos:groups};
+ const rules=shareRules(groups);
+ return {ok:true,escopo:all?'todos':families.join(','),totalCatalogo:items.length,totalRetornado:selected.length,formato:'variantes agrupadas',colunas:columns,...rules,grupos:groups};
+}
+
+const RULE_MARK='DISPONIBILIDADE PERMANENTE AUTORIZADA:';
+/** The same long authorization paragraph is stored on dozens of cakes; send it once and reference it by id. */
+function shareRules(groups: Item[]) {
+ const texts:string[]=[];
+ for(const group of groups){
+  const desc=String(group.descricao??''), at=desc.indexOf(RULE_MARK);
+  if(at<0) continue;
+  const rule=desc.slice(at).trim();
+  let index=texts.indexOf(rule); if(index<0){texts.push(rule);index=texts.length-1;}
+  group.descricao=(desc.slice(0,at).trim()+` [Disponibilidade permanente autorizada: ver regrasDisponibilidade.R${index+1}]`).trim();
+ }
+ return texts.length?{regrasDisponibilidade:Object.fromEntries(texts.map((t,i)=>[`R${i+1}`,t]))}:{};
 }
