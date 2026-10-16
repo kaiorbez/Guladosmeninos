@@ -78,5 +78,16 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
     if(weekday!==2 && (minutes<opens||minutes>=closes)) throw new AgentError('Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
     const local=new Date(now.getTime()-4*3600000);if(date===dayLaPaz(now)&&minutes<=local.getUTCHours()*60+local.getUTCMinutes())throw new AgentError('Horário já passou: consulte equipe para confirmar disponibilidade.');
   }
+  // Empadão M and G need about one hour in the oven: same-day orders must leave that hour before the requested time and before closing.
+  const bigPie = lines.some(line => /empad[aã]o/i.test(line.descricao) && !/empadinha/i.test(line.descricao) && (/\b[MG]\b/.test(line.descricao) || /750\s*g|1[.,]?3\s*kg|1\.?300\s*g|\bm[eé]dio\b|\bgrande\b/i.test(line.descricao)));
+  if (bigPie && date === dayLaPaz(now) && weekday !== 2) {
+    const local = new Date(now.getTime() - 4 * 3600000);
+    const ready = local.getUTCHours() * 60 + local.getUTCMinutes() + 60;
+    const closes = weekday === 1 || weekday === 3 ? 20 * 60 : 21 * 60;
+    const wanted = immediate ? ready : time ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) : ready;
+    const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    if (ready >= closes) throw new AgentError('Empadão M/G leva cerca de 1 hora para assar e não fica pronto antes do fechamento hoje. Ofereça o próximo dia de atendimento.');
+    if (wanted < ready) throw new AgentError(`Empadão M/G leva cerca de 1 hora para assar: para hoje, o horário mínimo é ${hhmm(ready)}.`);
+  }
   return { deliveryDate: new Date(date + 'T00:00:00Z'), deliveryTime: immediate ? 'AGORA' : time || null, deliveryMode: mode, deliveryAddress: text(raw.endereco, 1000) || null, agentItems: lines, product: lines.map(i => `${i.quantidade} × ${i.descricao} — ${i.precoUnitario} Bs`).join('\n'), total, payFull: raw.pagarIntegral === true, dough:text(raw.massa,200)||null,filling:text(raw.recheio,300)||null,topping:text(raw.cobertura,300)||null,decoration:text(raw.decoracao,1000)||null,notes: text(raw.observacoes, 2000) || null };
 }

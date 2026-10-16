@@ -499,3 +499,21 @@ test('mídia humana sem texto não esconde última resposta legível nem inventa
  const facts=load('conversation-context').conversationFacts([{papel:'atendente',origem:'humano',texto:'Já combinamos a entrega.',data:'2026-10-05T18:00:00Z'},{papel:'atendente',origem:'humano',texto:'',data:'2026-10-05T18:01:00Z'},{papel:'atendente',origem:'humano',texto:undefined,data:'2026-10-05T18:02:00Z'}]);assert.equal(facts.ultimaRespostaAnterior.texto,'Já combinamos a entrega.');
 });
 
+
+test('empadão M/G exige 1 hora de forno no mesmo dia e não aceita perto do fechamento',()=>{
+ const pie={...order(),data:'2026-10-15',modalidade:'ENTREGA',itens:[{variantId:'v-emp',descricao:'Empadão de Frango M (750 g)',quantidade:1,precoUnitario:65}]};
+ const thu1830=new Date('2026-10-15T22:30:00Z');// quinta 18:30 La Paz, fecha 21:00
+ assert.equal(rules.orderInput({...pie,horario:'19:30'},thu1830).deliveryTime,'19:30');
+ assert.throws(()=>rules.orderInput({...pie,horario:'19:00'},thu1830),/horário mínimo é 19:30/);
+ assert.equal(rules.orderInput({...pie,horario:'AGORA',paraAgora:true},thu1830).deliveryTime,'AGORA');
+ const thu2030=new Date('2026-10-16T00:30:00Z');// quinta 20:30 La Paz
+ assert.throws(()=>rules.orderInput({...pie,horario:'AGORA',paraAgora:true},thu2030),/não fica pronto antes do fechamento/);
+ assert.throws(()=>rules.orderInput({...pie,horario:'20:50'},thu2030),/não fica pronto antes do fechamento/);
+ const grande={...pie,itens:[{variantId:'v-g',descricao:'Empadão G frango com requeijão',quantidade:1,precoUnitario:120}]};
+ assert.throws(()=>rules.orderInput({...grande,horario:'20:50'},thu2030),/1 hora/);
+ const pequeno={...pie,itens:[{variantId:'v-p',descricao:'Empadão P (250 g)',quantidade:1,precoUnitario:20}]};
+ assert.equal(rules.orderInput({...pequeno,horario:'20:50'},thu2030).deliveryTime,'20:50');
+ const empadinha={...pie,itens:[{variantId:'v-e',descricao:'Empadinha M',quantidade:10,precoUnitario:6.5}]};
+ assert.equal(rules.orderInput({...empadinha,horario:'20:50'},thu2030).deliveryTime,'20:50');
+ assert.equal(rules.orderInput({...pie,data:'2026-10-16',horario:'10:30'},thu2030).deliveryTime,'10:30');
+});
