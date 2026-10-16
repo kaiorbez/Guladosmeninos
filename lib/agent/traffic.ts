@@ -48,6 +48,22 @@ export async function trafficReport(b: Body, now = new Date()) {
       vendas: s.map((x: Sl) => ({ total: Number(x.total) })),
     };
   });
+  if (b.detalhe === true) {
+    // Compact view of where each lead stopped: counts plus the last customer message and last reply, truncated.
+    const cut = (v: unknown, n: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+    for (const r of rows as (Row & Body)[]) {
+      const phone = String(r.telefone);
+      const evs = (inbound as Ev[]).filter(e => e.phone === phone);
+      const customer = evs.filter(e => (e.payload as Body)?.fromMe !== true);
+      const human = evs.filter(e => (e.payload as Body)?.fromMe === true);
+      const reply = await prisma.agentDelivery.findFirst({ where: { phone, status: 'SENT', NOT: { key: { startsWith: 'followup:' } } }, orderBy: { createdAt: 'desc' }, select: { body: true, createdAt: true } });
+      r.msgsCliente = customer.length;
+      r.equipeEscreveu = human.length > 0;
+      r.ultimaCliente = cut((customer.at(-1)?.payload as Body)?.text, 140);
+      const lastHuman = human.at(-1);
+      r.ultimaResposta = lastHuman && (!reply || lastHuman.createdAt > reply.createdAt) ? 'equipe: ' + cut((lastHuman.payload as Body)?.text, 140) : 'IA: ' + cut((reply?.body as Body)?.message, 140);
+    }
+  }
   const buyers = rows.filter(r => r.encomendas.length || r.vendas.length);
   const value = (rows as Row[]).reduce((sum: number, r: Row) => sum + r.encomendas.reduce((a: number, x) => a + x.total, 0) + r.vendas.reduce((a: number, x) => a + x.total, 0), 0);
   const paid = (rows as Row[]).reduce((sum: number, r: Row) => sum + r.encomendas.reduce((a: number, x) => a + x.pago, 0) + r.vendas.reduce((a: number, x) => a + x.total, 0), 0);
