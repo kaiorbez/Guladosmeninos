@@ -11,6 +11,7 @@ import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed,
 import { PEDIDOSYA } from "./data/pedidosya";
 import { bookPayment } from "../lib/orders";
 import { POTS_PROMO, SLICES_PROMO } from "../lib/agent/promotions";
+import { repairOwnerReceiptsOctober17 } from "../lib/agent/owner-receipt-repair";
 
 const prisma = new PrismaClient();
 
@@ -549,6 +550,11 @@ async function main() {
       const product=existing?await tx.product.update({where:{id:existing.id},data}):await tx.product.create({data});
       await tx.variant.upsert({where:{productId_name:{productId:product.id,name:"Par (2 fatias)"}},update:{price:60,active:true},create:{productId:product.id,name:"Par (2 fatias)",price:60,active:true}});
     });
+  });
+  await once("2026-10-17-owner-repair-eloa-ferreira", async () => {
+    await prisma.$transaction(async tx => {
+      console.log(JSON.stringify(await repairOwnerReceiptsOctober17(tx)));
+    }, { timeout: 30000 });
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
