@@ -23,14 +23,15 @@ export async function trafficReport(b: Body, now = new Date()) {
   const from = new Date(new Date(day + 'T04:00:00Z').getTime() - (days - 1) * 24 * HOUR), to = new Date(day + 'T04:00:00Z').getTime() + 24 * HOUR;
   const group = process.env.WHATSAPP_EQUIPE;
   const inbound = await prisma.agentEvent.findMany({ where: { kind: 'INBOUND', createdAt: { gte: from, lt: new Date(to) }, phone: { notIn: [TEST, ...(group ? [group] : [])] } }, orderBy: { createdAt: 'asc' }, select: { phone: true, createdAt: true, payload: true } });
-  const first = new Map<string, { at: Date; text: string }>();
+  const first = new Map<string, { at: Date; text: string; ad: boolean }>();
   for (const e of inbound as Ev[]) {
     const p = e.payload as Body;
     if (p?.fromMe === true || first.has(e.phone)) continue;
-    first.set(e.phone, { at: e.createdAt, text: String(p?.text ?? '') });
+    // Meta marks ad clicks on the message itself; the greeting text is the fallback for older messages.
+    first.set(e.phone, { at: e.createdAt, text: String(p?.text ?? ''), ad: !!(p?.anuncio as Body | undefined)?.id || isAdGreeting(p?.text) });
   }
   // A customer only counts as a new ad lead when they had no conversation before the period.
-  const leads = [...first].filter(([, f]) => isAdGreeting(f.text)).map(([phone, f]) => ({ phone, at: f.at }));
+  const leads = [...first].filter(([, f]) => f.ad).map(([phone, f]) => ({ phone, at: f.at }));
   const earlier = leads.length ? await prisma.agentEvent.findMany({ where: { kind: 'INBOUND', phone: { in: leads.map(l => l.phone) }, createdAt: { lt: from } }, select: { phone: true }, distinct: ['phone'] }) : [];
   const returning = new Set((earlier as { phone: string }[]).map(e => e.phone));
   const tails = leads.map(l => tail(l.phone));
@@ -41,7 +42,7 @@ export async function trafficReport(b: Body, now = new Date()) {
   const rows = leads.map(l => {
     const t = tail(l.phone);
     const o = (orders as Ord[]).filter((x: Ord) => tail(x.customerPhone) === t && x.createdAt >= l.at);
-    const s = (sales as Sl[]).filter((x: Sl) => tail(x.customerPhone) === t && x.createdAt >= l.at);
+    const s = o.length ? [] : (sales as Sl[]).filter((x: Sl) => tail(x.customerPhone) === t && x.createdAt >= l.at);
     return {
       telefone: l.phone, chegou: l.at.toISOString(), clienteAntigo: returning.has(l.phone),
       encomendas: o.map((x: Ord) => ({ produto: x.product, total: Number(x.total), pago: Number(x.paid), entrega: x.deliveryDate.toISOString().slice(0, 10), pelaIA: !!x.agentRef })),
@@ -70,10 +71,10 @@ export async function trafficReport(b: Body, now = new Date()) {
   const newcomers = [...first].filter(([phone]) => !seenBefore.has(phone)).map(([phone, f]) => {
     const t = tail(phone);
     const o = (orders as Ord[]).filter((x: Ord) => tail(x.customerPhone) === t && x.createdAt >= f.at);
-    const s = (sales as Sl[]).filter((x: Sl) => tail(x.customerPhone) === t && x.createdAt >= f.at);
+    const s = o.length ? [] : (sales as Sl[]).filter((x: Sl) => tail(x.customerPhone) === t && x.createdAt >= f.at);
     const total = o.reduce((a: number, x: Ord) => a + Number(x.total), 0) + s.reduce((a: number, x: Sl) => a + Number(x.total), 0);
     const pago = o.reduce((a: number, x: Ord) => a + Number(x.paid), 0) + s.reduce((a: number, x: Sl) => a + Number(x.total), 0);
-    return { telefone: phone, anuncio: isAdGreeting(f.text), primeira: String(f.text).slice(0, 60), compras: o.length + s.length, total, pago };
+    return { telefone: phone, anuncio: f.ad, primeira: String(f.text).slice(0, 60), compras: o.length + s.length, total, pago };
   });
   const novos = { total: newcomers.length, comTextoDoAnuncio: newcomers.filter(n => n.anuncio).length, compraram: newcomers.filter(n => n.compras).length, valor: newcomers.reduce((a, n) => a + n.total, 0), pago: newcomers.reduce((a, n) => a + n.pago, 0), compradores: newcomers.filter(n => n.compras) };
   const buyers = rows.filter(r => r.encomendas.length || r.vendas.length);

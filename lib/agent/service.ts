@@ -56,7 +56,7 @@ export async function inbound(b: Body) {
     await lockConversation(tx, p);
     const eventKey = `in:${p}:${id}`;
     if (await tx.agentEvent.findUnique({ where: { key: eventKey } })) return true;
-    await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment }) } });
+    await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment, ...(b.anuncio && typeof b.anuncio === 'object' ? { anuncio: { id: text((b.anuncio as Body).id, 60), tipo: text((b.anuncio as Body).tipo, 30), titulo: text((b.anuncio as Body).titulo, 120) } } : {}) }) } });
     const c = await tx.agentConversation.findUnique({ where: { phone: p } });
     if (c && BigInt(moment) < c.latestMoment) return true;
     if (b.humano === true) await tx.agentTicket.updateMany({ where: { phone: p, status: 'ABERTA' }, data: { status: 'ASSUMIDA' } });
