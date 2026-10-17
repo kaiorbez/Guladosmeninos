@@ -64,8 +64,20 @@ export async function trafficReport(b: Body, now = new Date()) {
       r.ultimaResposta = lastHuman && (!reply || lastHuman.createdAt > reply.createdAt) ? 'equipe: ' + cut((lastHuman.payload as Body)?.text, 140) : 'IA: ' + cut((reply?.body as Body)?.message, 140);
     }
   }
+  // Every customer whose first-ever message is in the period (ad greeting or typed text), with what they bought.
+  const firstEver = await prisma.agentEvent.findMany({ where: { kind: 'INBOUND', phone: { in: [...first.keys()] }, createdAt: { lt: from } }, select: { phone: true }, distinct: ['phone'] });
+  const seenBefore = new Set((firstEver as { phone: string }[]).map(e => e.phone));
+  const newcomers = [...first].filter(([phone]) => !seenBefore.has(phone)).map(([phone, f]) => {
+    const t = tail(phone);
+    const o = (orders as Ord[]).filter((x: Ord) => tail(x.customerPhone) === t && x.createdAt >= f.at);
+    const s = (sales as Sl[]).filter((x: Sl) => tail(x.customerPhone) === t && x.createdAt >= f.at);
+    const total = o.reduce((a: number, x: Ord) => a + Number(x.total), 0) + s.reduce((a: number, x: Sl) => a + Number(x.total), 0);
+    const pago = o.reduce((a: number, x: Ord) => a + Number(x.paid), 0) + s.reduce((a: number, x: Sl) => a + Number(x.total), 0);
+    return { telefone: phone, anuncio: isAdGreeting(f.text), primeira: String(f.text).slice(0, 60), compras: o.length + s.length, total, pago };
+  });
+  const novos = { total: newcomers.length, comTextoDoAnuncio: newcomers.filter(n => n.anuncio).length, compraram: newcomers.filter(n => n.compras).length, valor: newcomers.reduce((a, n) => a + n.total, 0), pago: newcomers.reduce((a, n) => a + n.pago, 0), compradores: newcomers.filter(n => n.compras) };
   const buyers = rows.filter(r => r.encomendas.length || r.vendas.length);
   const value = (rows as Row[]).reduce((sum: number, r: Row) => sum + r.encomendas.reduce((a: number, x) => a + x.total, 0) + r.vendas.reduce((a: number, x) => a + x.total, 0), 0);
   const paid = (rows as Row[]).reduce((sum: number, r: Row) => sum + r.encomendas.reduce((a: number, x) => a + x.pago, 0) + r.vendas.reduce((a: number, x) => a + x.total, 0), 0);
-  return { ok: true, periodo: { de: from.toISOString(), ate: new Date(to).toISOString(), dias: days }, clientesNoPeriodo: first.size, leadsAnuncio: rows.length, leadsNovos: rows.filter(r => !r.clienteAntigo).length, compraram: buyers.length, valorPedidos: value, valorPago: paid, totalTelefonesComparados: tails.length, leads: rows };
+  return { ok: true, periodo: { de: from.toISOString(), ate: new Date(to).toISOString(), dias: days }, clientesNoPeriodo: first.size, leadsAnuncio: rows.length, leadsNovos: rows.filter(r => !r.clienteAntigo).length, compraram: buyers.length, valorPedidos: value, valorPago: paid, totalTelefonesComparados: tails.length, novosClientes: novos, leads: b.detalhe === true ? rows : undefined };
 }
