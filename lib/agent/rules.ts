@@ -2,6 +2,16 @@ export class AgentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 export const text = (v: unknown, max = 1000) => typeof v === 'string' ? v.trim().slice(0, max) : '';
+/** Delivery/pickup times for scheduled orders (owners' rule, 16/10). Returns an error text or null. */
+export function scheduledSlot(weekday: number, minutes: number) {
+  const at=(h:number)=>h*60;
+  switch(weekday){
+    case 1: return minutes>=at(11)&&minutes<=at(20)?null:'Segunda-feira: encomendas agendadas das 11:00 às 20:00.';
+    case 2: return [at(11),at(14),at(17)].includes(minutes)?null:'Terça-feira: entregas das encomendas antecipadas só às 11:00, 14:00 ou 17:00.';
+    case 3: return minutes===at(10)||(minutes>=at(14)&&minutes<=at(20))?null:'Quarta-feira: encomendas agendadas às 10:00 ou das 14:00 às 20:00.';
+    default: return minutes>=at(10)&&minutes<=at(20)?null:'Encomendas agendadas de quinta a domingo: das 10:00 às 20:00.';
+  }
+}
 export function phone(v: unknown) {
   const p = text(v, 40).replace(/\D/g, '');
   if (!/^\d{10,15}$/.test(p)) throw new AgentError('Telefone internacional inválido.');
@@ -41,7 +51,7 @@ export function resolvedCommand(v: unknown) {
   return /^(respondid[oa]|resolvid[oa]|duvida respondida|ja respondi|cliente respondido)[.!\s]*$/.test(s);
 }
 export type OrderLine = { descricao: string; quantidade: number; precoUnitario: number };
-export function orderInput(raw: Record<string, unknown>, now = new Date(), existing?: { deliveryDate: Date; createdAt: Date; topping?: string | null; product?: string }) {
+export function orderInput(raw: Record<string, unknown>, now = new Date(), existing?: { deliveryDate: Date; createdAt: Date; topping?: string | null; product?: string; deliveryTime?: string | null }) {
   const date = dateOnly(raw.data);
   if (date < dayLaPaz(now)) throw new AgentError('Data passada: consulte a encomenda existente antes de criar outra.');
   const items = raw.itens;
@@ -73,10 +83,16 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
   const time = immediate?'':text(raw.horario, 5);
   if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AgentError('Horário inválido.');
   if(time) {
-    // Tuesday has no service, but advance orders are delivered 14:00-20:00, like Monday and Wednesday.
-    const short=weekday>=1&&weekday<=3;
-    const minutes=Number(time.slice(0,2))*60+Number(time.slice(3));const opens=short?14*60:10*60;const closes=short?20*60:21*60;
-    if(minutes<opens||minutes>=closes) throw new AgentError(weekday===2?'Terça-feira: entregas das encomendas antecipadas só das 14:00 às 20:00.':'Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
+    const minutes=Number(time.slice(0,2))*60+Number(time.slice(3));
+    if(date===dayLaPaz(now) && weekday!==2) {
+      // Same-day orders follow the service hours.
+      const short=weekday===1||weekday===3;const opens=short?14*60:10*60;const closes=short?20*60:21*60;
+      if(minutes<opens||minutes>=closes) throw new AgentError('Horário fora do atendimento: combine o primeiro horário disponível com o cliente.');
+    } else {
+      // An order already booked at this date and time keeps its slot even if the rule changed later.
+      const reason=preserved&&existing?.deliveryTime===time?null:scheduledSlot(weekday,minutes);
+      if(reason) throw new AgentError(reason);
+    }
     const local=new Date(now.getTime()-4*3600000);if(date===dayLaPaz(now)&&minutes<=local.getUTCHours()*60+local.getUTCMinutes())throw new AgentError('Horário já passou: consulte equipe para confirmar disponibilidade.');
   }
   // Kit Mini Cumpleaños needs about six hours to print the customer's photos: same day only with that margin before the requested time and closing.

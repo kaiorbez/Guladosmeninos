@@ -424,15 +424,15 @@ test('rastreio mantém somente espanhol quando cliente escreveu espanhol anterio
 
 test('terça permite entrega antecipada, mas bloqueia nova compra no mesmo dia e retirada',()=>{
  const now=new Date('2026-10-03T12:00:00Z');
- assert.equal(rules.orderInput({...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'14:30'},now).deliveryTime,'14:30');
+ assert.equal(rules.orderInput({...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'14:00'},now).deliveryTime,'14:00');
  assert.throws(()=>rules.orderInput({...order(),data:'2026-10-06',modalidade:'RETIRADA'},now),/Terça-feira/);
  const tuesday=new Date('2026-10-06T12:00:00Z');
  const input={...order(),data:'2026-10-06',modalidade:'ENTREGA',horario:'15:00'};
  assert.throws(()=>rules.orderInput(input,tuesday),/nova compra/);
- assert.equal(rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-06'),createdAt:new Date('2026-10-05T15:00:00Z')}).deliveryTime,'15:00');
+ assert.equal(rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-06'),createdAt:new Date('2026-10-05T15:00:00Z'),deliveryTime:'15:00'}).deliveryTime,'15:00');
  assert.throws(()=>rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-06'),createdAt:tuesday}),/nova compra/);
  assert.throws(()=>rules.orderInput(input,tuesday,{deliveryDate:new Date('2026-10-07'),createdAt:new Date('2026-10-05T15:00:00Z')}),/nova compra/);
- assert.throws(()=>rules.orderInput({...order(),data:'2026-10-05',horario:'10:00'},now),/fora do atendimento/);
+ assert.throws(()=>rules.orderInput({...order(),data:'2026-10-05',horario:'10:00'},now),/Segunda-feira/);
  assert.equal(rules.orderInput({...order(),data:'2026-10-05',horario:'14:00'},now).deliveryTime,'14:00');
 });
 test('compra na terça pode ir para quarta, mas chantilly exige quinta e preserva encomenda anterior',()=>{
@@ -525,15 +525,20 @@ test('empadão M/G exige 1 hora de forno no mesmo dia e não aceita perto do fec
  assert.equal(rules.orderInput({...pie,data:'2026-10-16',horario:'10:30'},thu2030).deliveryTime,'10:30');
 });
 
-test('terça entrega encomenda antecipada só das 14:00 às 20:00',()=>{
+test('horários de encomendas agendadas definidos pelos donos',()=>{
  const sat=new Date('2026-10-03T12:00:00Z');
- const tue={...order(),data:'2026-10-06',modalidade:'ENTREGA'};
- assert.equal(rules.orderInput({...tue,horario:'14:00'},sat).deliveryTime,'14:00');
- assert.equal(rules.orderInput({...tue,horario:'19:59'},sat).deliveryTime,'19:59');
- assert.throws(()=>rules.orderInput({...tue,horario:'13:00'},sat),/14:00 às 20:00/);
- assert.throws(()=>rules.orderInput({...tue,horario:'20:00'},sat),/14:00 às 20:00/);
- const sun={...order(),data:'2026-10-04',modalidade:'ENTREGA'};
- assert.equal(rules.orderInput({...sun,horario:'10:30'},sat).deliveryTime,'10:30');
+ const at=(data,horario)=>rules.orderInput({...order(),data,modalidade:'ENTREGA',horario},sat).deliveryTime;
+ // Terça 06/10: só 11:00, 14:00 ou 17:00
+ for(const h of ['11:00','14:00','17:00'])assert.equal(at('2026-10-06',h),h);
+ for(const h of ['10:00','14:30','19:00'])assert.throws(()=>at('2026-10-06',h),/11:00, 14:00 ou 17:00/);
+ // Segunda 05/10: das 11:00 às 20:00
+ assert.equal(at('2026-10-05','11:00'),'11:00');assert.equal(at('2026-10-05','20:00'),'20:00');assert.throws(()=>at('2026-10-05','10:30'),/Segunda-feira/);
+ // Quarta 07/10: 10:00 ou 14:00-20:00
+ assert.equal(at('2026-10-07','10:00'),'10:00');assert.equal(at('2026-10-07','15:00'),'15:00');assert.throws(()=>at('2026-10-07','11:00'),/Quarta-feira/);
+ // Domingo 04/10 e quinta 08/10: 10:00-20:00
+ assert.equal(at('2026-10-04','10:30'),'10:30');assert.equal(at('2026-10-08','20:00'),'20:00');assert.throws(()=>at('2026-10-08','20:30'),/10:00 às 20:00/);
+ // Para hoje (sábado) continua valendo o horário de atendimento até 21:00
+ assert.equal(at('2026-10-03','20:30'),'20:30');
 });
 
 test('Kit Mini Cumpleaños no mesmo dia só com 6 horas para imprimir as fotos',()=>{
@@ -545,4 +550,14 @@ test('Kit Mini Cumpleaños no mesmo dia só com 6 horas para imprimir as fotos',
  const thu1530=new Date('2026-10-15T19:30:00Z');// quinta 15:30, pronto 21:30 > fecha 21:00
  assert.throws(()=>rules.orderInput({...kit,horario:'20:30'},thu1530),/não fica pronto hoje/);
  assert.equal(rules.orderInput({...kit,data:'2026-10-16',horario:'11:00'},thu1530).deliveryTime,'11:00');
+});
+
+test('comprovante entre o sinal e o saldo conta como pagamento parcial válido',()=>{
+ const review=load('review',{'./rules':rules});const today=rules.dayLaPaz();
+ const base={moeda:'Bs',beneficiario:'Lazzarini Franca Matheus',bancoDestino:'Banco Ganadero',data:today};
+ assert.equal(review.receiptReview({...base,valor:100},80,today,160).alertas.length,0);
+ assert.equal(review.receiptReview({...base,valor:160},80,today,160).alertas.length,0);
+ assert.match(review.receiptReview({...base,valor:70},80,today,160).alertas.join(),/Valor diverge/);
+ assert.match(review.receiptReview({...base,valor:170},80,today,160).alertas.join(),/Valor diverge/);
+ assert.match(review.receiptReview({...base,valor:100},80,today).alertas.join(),/Valor diverge/);
 });

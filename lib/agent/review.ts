@@ -4,14 +4,15 @@ function receiptDate(value: unknown) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   try { return dateOnly(date); } catch { return null; }
 }
-export function receiptReview(r: Record<string, unknown>, expected: number | null, today: string) {
+/** expected = minimum due now (sinal or full); maxDue = open balance. Any amount in between is a valid partial payment. */
+export function receiptReview(r: Record<string, unknown>, expected: number | null, today: string, maxDue?: number | null) {
   const value = typeof r.valor === 'number' && Number.isFinite(r.valor) && r.valor >= 0 ? money(r.valor) : null;
   const currency = text(r.moeda, 20).toUpperCase();
   const issues: string[] = [];
   if (value === null) issues.push('Valor ilegível/ausente');
   if (!['BS', 'BOB', 'BS.'].includes(currency)) issues.push('Moeda diferente de Bs ou não identificada');
   if (expected === null) issues.push('Pedido/valor solicitado não identificado');
-  else if (value !== null && value !== money(expected)) issues.push(`Valor diverge: solicitado ${expected} Bs; comprovante ${value} ${currency}`);
+  else if (value !== null && !(value >= money(expected) && value <= money(Math.max(expected, maxDue ?? expected)))) issues.push(`Valor diverge: solicitado ${expected} Bs${maxDue && maxDue > expected ? ` (até ${money(maxDue)} Bs)` : ''}; comprovante ${value} ${currency}`);
   const beneficiary = text(r.beneficiario, 200);
   const normalize = (s:string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').trim();
   const names = normalize(beneficiary).split(/\s+/);

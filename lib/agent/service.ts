@@ -131,7 +131,8 @@ export async function ticket(b: Body) {
       const orderId=text((receipt as Body).pedidoId,100);
       const order=orderId?await tx.order.findFirst({where:{id:orderId,customerPhone:p}}):null;
       const expected=order?paymentPlan(Number(order.total),Number(order.paid),order.deliveryDate.toISOString().slice(0,10),order.payFull).pagarAgora:null;
-      const review=receiptReview(receipt as Body,expected,dayLaPaz());
+      const balance=order?Math.max(0,Math.round((Number(order.total)-Number(order.paid))*100)/100):null;
+      const review=receiptReview(receipt as Body,expected,dayLaPaz(),balance);
       report=receiptNotice(receipt as Body,order?presentOrder(order):null,review);
       // Missing registration must not erase the commercial context sent with the receipt.
       // This text is for human review only and never participates in payment matching.
