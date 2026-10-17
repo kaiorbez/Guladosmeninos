@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { OrderProducedButton } from "@/components/OrderProducedButton";
 import { prisma } from "@/lib/db";
 import { dayKey } from "@/lib/time";
-import { decorationPhotoUrl } from "@/lib/orders";
+import { decorationPhotoUrl, NOT_UNPAID_AI } from "@/lib/orders";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const shift = (k: string, days: number) => new Date(new Date(`${k}T00:00:00Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
@@ -16,7 +16,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
   const day = sp.dia && /^\d{4}-\d{2}-\d{2}$/.test(sp.dia) ? sp.dia : today;
 
   const orders = await prisma.order.findMany({
-    where: { status: "PENDENTE", deliveryDate: new Date(`${day}T00:00:00Z`) },
+    where: { status: "PENDENTE", deliveryDate: new Date(`${day}T00:00:00Z`), ...NOT_UNPAID_AI },
     orderBy: [{ deliveryTime: "asc" }, { number: "asc" }],
   });
 

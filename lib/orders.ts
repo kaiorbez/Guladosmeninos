@@ -75,11 +75,15 @@ export function lateLabel(min: number) {
   return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
 }
 
+/** AI orders stay out of the kitchen and pending lists until a payment is recorded (owners' request, 16/10). */
+export const UNPAID_AI: Prisma.OrderWhereInput = { agentRef: { not: null }, paid: 0 };
+export const NOT_UNPAID_AI: Prisma.OrderWhereInput = { NOT: UNPAID_AI };
+
 /** Encomendas pendentes atrasadas (para o aviso no topo do painel). */
 export async function lateOrders() {
   const { day } = nowLaPaz();
   const pending = await prisma.order.findMany({
-    where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${day}T00:00:00Z`) } },
+    where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${day}T00:00:00Z`) }, ...NOT_UNPAID_AI },
     select: { id: true, number: true, customerName: true, deliveryDate: true, deliveryTime: true, status: true },
     orderBy: [{ deliveryDate: "asc" }, { deliveryTime: "asc" }],
   });

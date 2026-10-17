@@ -106,7 +106,7 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
     if (wanted < ready) throw new AgentError(`Kit Mini Cumpleaños precisa de cerca de 6 horas para imprimir as fotos: para hoje, o horário mínimo é ${hhmm(ready)}.`);
   }
   // Empadão M and G need about one hour in the oven: same-day orders must leave that hour before the requested time and before closing.
-  const bigPie = lines.some(line => /empad[aã]o/i.test(line.descricao) && !/empadinha/i.test(line.descricao) && (/\b[MG]\b/.test(line.descricao) || /750\s*g|1[.,]?3\s*kg|1\.?300\s*g|\bm[eé]dio\b|\bgrande\b/i.test(line.descricao)));
+  const bigPie = lines.some(line => /empad[aã]o/i.test(line.descricao) && !/empadinha/i.test(line.descricao) && (/\b[MG]\b/.test(line.descricao) || /750\s*g|1[.,]?[23]\s*kg|1\.?[23]00\s*g|\bm[eé]dio\b|\bgrande\b/i.test(line.descricao)));
   if (bigPie && date === dayLaPaz(now) && weekday !== 2) {
     const local = new Date(now.getTime() - 4 * 3600000);
     const ready = local.getUTCHours() * 60 + local.getUTCMinutes() + 60;

@@ -45,7 +45,7 @@ export function followUpDecision(f: FollowUpFacts, now = new Date()) {
   if (quiet < 3 * HOUR) return 'cliente falou há menos de 3 h';
   if (quiet > 20 * HOUR) return 'fora da janela de 20 h';
   if (f.lastReplyAt <= f.lastCustomerAt) return 'última mensagem é do cliente';
-  if (!/\bBs\b/i.test(f.lastReply) || /\[SEM_RESPOSTA\]|Obrigada por escolher|Gracias por elegir|já está sendo preparado|ya se está preparando/i.test(f.lastReply)) return 'IA não passou preço';
+  if (!/\bBs\b/i.test(f.lastReply) || /\[SEM_RESPOSTA\]|Obrigada por escolher|Gracias por elegir|já está sendo preparado|ya se está preparando|em preparação|en preparación/i.test(f.lastReply)) return 'IA não passou preço';
   if (f.humanAfterCustomer) return 'equipe assumiu';
   if (f.recentOrder) return 'já tem pedido';
   if (f.openTicket) return 'pendência aberta com a equipe';
@@ -112,8 +112,6 @@ export function summaryText(s: DayStats) {
     `🛒 Encomendas registradas pela IA: ${s.aiOrders}${s.aiOrders ? ` (Bs ${money(s.aiTotal)})` : ''}`,
     `💰 Dessas, com pagamento registrado: ${s.paidOrders}`,
     `🔔 Lembretes enviados a quem sumiu: ${s.followUps}${s.followUps ? ` (viraram pedido: ${s.followUpOrders})` : ''}`,
-    `🙋 Conversas assumidas pela equipe: ${s.takeovers}`,
-    `📌 Pendências abertas agora: ${s.openTickets} (novas hoje: ${s.newTickets})`,
   ].join('\n');
 }
 

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
 import { getDailySeries, getOverview, getSalesByChannel, getTopProducts } from "@/lib/metrics";
 import { dayKey, startOfMonth } from "@/lib/time";
+import { NOT_UNPAID_AI } from "@/lib/orders";
 
 export default async function VisaoGeral() {
   const month = startOfMonth();
@@ -25,7 +26,7 @@ export default async function VisaoGeral() {
     }),
     // Pendentes até amanhã (inclui as atrasadas)
     prisma.order.findMany({
-      where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) } },
+      where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) }, ...NOT_UNPAID_AI },
       orderBy: [{ deliveryDate: "asc" }, { deliveryTime: "asc" }],
       take: 12,
     }),

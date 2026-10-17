@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
-import { decorationPhotoUrl, lateLabel, minutesLate } from "@/lib/orders";
+import { decorationPhotoUrl, lateLabel, minutesLate, NOT_UNPAID_AI, UNPAID_AI } from "@/lib/orders";
 import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
 import type { SaleChannel } from "@prisma/client";
 import { OrderFilters } from "./OrderFilters";
@@ -15,6 +15,7 @@ import { OrderActionForm } from "@/components/OrderActionForm";
 
 const TABS = {
   proximas: { label: "Próximas", status: "PENDENTE" },
+  aguardando: { label: "Aguardando pagamento", status: "PENDENTE" },
   entregues: { label: "Entregues", status: "ENTREGUE" },
   canceladas: { label: "Canceladas", status: "CANCELADA" },
 } as const;
@@ -42,7 +43,7 @@ function Detail({ label, value }: { label: string; value: string | null }) {
 export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; hora?: string; dia?: string; pgto?: string; canal?: string; producao?: string; pagina?: string }> }) {
   const sp = await searchParams;
   const tab: Tab = sp.aba && sp.aba in TABS ? (sp.aba as Tab) : "proximas";
-  const pendingTab = tab === "proximas";
+  const pendingTab = tab === "proximas" || tab === "aguardando";
   const q = sp.q?.trim();
   // Filtros: hora "12" = 12:00 a 12:59; "sem" = sem horário. dia = YYYY-MM-DD.
   const hora = sp.hora === "sem" || /^\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "";
@@ -53,6 +54,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
   const producao = sp.producao === "feito" || sp.producao === "fazer" ? sp.producao : "";
   const where = {
         status: TABS[tab].status,
+        ...(tab === "proximas" ? NOT_UNPAID_AI : tab === "aguardando" ? UNPAID_AI : {}),
         ...(producao ? { producedAt: producao === "feito" ? { not: null } : null } : {}),
         ...(pgto ? { paid: pgto === "falta" ? { lt: prisma.order.fields.total } : { gte: prisma.order.fields.total } } : {}),
         ...(hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
@@ -79,7 +81,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
       orderBy: [{ deliveryDate: pendingTab ? "asc" : "desc" }, { deliveryTime: "asc" }, { id: "asc" }],
       take: pageSize, skip: (page - 1) * pageSize,
     }),
-    prisma.order.findMany({ where: { status: "PENDENTE" }, select: { deliveryDate: true, total: true, paid: true } }),
+    prisma.order.findMany({ where: { status: "PENDENTE", ...NOT_UNPAID_AI }, select: { deliveryDate: true, total: true, paid: true } }),
     // Horários que existem nesta aba, para as opções do filtro.
     prisma.order.findMany({ where: { status: TABS[tab].status, deliveryTime: { not: null } }, select: { deliveryTime: true }, distinct: ["deliveryTime"] }),
   ]);
