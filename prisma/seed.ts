@@ -10,7 +10,7 @@ import bcrypt from "bcryptjs";
 import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed, type VariantSeed } from "./data/cardapio";
 import { PEDIDOSYA } from "./data/pedidosya";
 import { bookPayment } from "../lib/orders";
-import { POTS_PROMO } from "../lib/agent/promotions";
+import { POTS_PROMO, SLICES_PROMO } from "../lib/agent/promotions";
 
 const prisma = new PrismaClient();
 
@@ -539,6 +539,15 @@ async function main() {
     await prisma.$transaction(async tx => {
       await tx.variant.updateMany({ where: { product: { name: "Combo Bolo de Pote" } }, data: { active: false } });
       await tx.product.updateMany({ where: { name: "Combo Bolo de Pote" }, data: { active: false, onStore: false } });
+    });
+  });
+  await once("2026-10-17-promocao-duas-fatias-frutas-vermelhas", async () => {
+    await prisma.$transaction(async tx => {
+      const category=await tx.category.upsert({where:{slug:"combos"},update:{},create:{slug:"combos",name:"Combos",group:"Combos"}});
+      const existing=await tx.product.findFirst({where:{name:SLICES_PROMO}});
+      const data={name:SLICES_PROMO,categoryId:category.id,active:true,onStore:true,trackStock:false,priceOnRequest:false,description:"Somente 17 e 18/10/2026 no horário local da loja: 2 fatias (porções) de Ninho com geleia de frutas vermelhas por 60 Bs no TOTAL. Antes: 70 Bs o par. Economia: 10 Bs. Uma unidade deste SKU contém duas fatias do mesmo sabor. Promoção autorizada pela loja; não inclui bebida, empadão ou entrega. Não aplicar a outros sabores, potes, tortas inteiras ou Combo Fatia. Fatia avulsa mantém seu preço cadastrado. Não prorrogar nem repetir semanalmente. Não modificar pedidos já fechados/pagos automaticamente."};
+      const product=existing?await tx.product.update({where:{id:existing.id},data}):await tx.product.create({data});
+      await tx.variant.upsert({where:{productId_name:{productId:product.id,name:"Par (2 fatias)"}},update:{price:60,active:true},create:{productId:product.id,name:"Par (2 fatias)",price:60,active:true}});
     });
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
