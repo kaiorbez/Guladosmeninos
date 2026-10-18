@@ -10,8 +10,10 @@ import bcrypt from "bcryptjs";
 import { CARDAPIO, EXTRAS, LEGACY_SERVINGS, type CategorySeed, type ProductSeed, type VariantSeed } from "./data/cardapio";
 import { PEDIDOSYA } from "./data/pedidosya";
 import { bookPayment } from "../lib/orders";
-import { POTS_PROMO, SLICES_PROMO } from "../lib/agent/promotions";
+import { POTS_PROMO, SLICES_PROMO, RETIRED_COMBOS } from "../lib/agent/promotions";
 import { repairOwnerReceiptsOctober17 } from "../lib/agent/owner-receipt-repair";
+
+import { repairCarmichelineDuplicate } from "../lib/agent/owner-order-repair";
 
 const prisma = new PrismaClient();
 
@@ -566,6 +568,18 @@ async function main() {
         await tx.product.update({where:{id:product.id},data:{trackStock:false,description:description+" Disponibilidade permanente de todos os sabores de empadão, confirmada pelo proprietário em 17/10/2026. Venda para pronta entrega sem bloqueio por quantidade de estoque. Respeitar horários; M e G levam cerca de uma hora para assar, P sem essa espera."}});
       }
     });
+  });
+  await once("2026-10-17-fechamento-correcoes", async () => {
+    await prisma.$transaction(async tx => {
+      await tx.variant.updateMany({where:{product:{name:{in:RETIRED_COMBOS}}},data:{active:false}});
+      await tx.product.updateMany({where:{name:{in:RETIRED_COMBOS}},data:{active:false,onStore:false}});
+      console.log(JSON.stringify(await repairCarmichelineDuplicate(tx)));
+      const order=await tx.order.findUnique({where:{id:"cmvcqjbrf000kpk3cj5uu5y8c"}});
+      if(order) {
+        await tx.order.update({where:{id:order.id},data:{notes:[order.notes,"CONCILIAÇÃO PENDENTE: cliente solicitou reembolso de 20 Bs por 1 empadão faltante em 17/10. Conferir a efetivação e registrar o estorno pelo financeiro; esta observação não confirma nem executa reembolso."].filter(Boolean).join("\n")}});
+        await tx.orderActivity.create({data:{orderId:order.id,actorName:"Sistema",action:"Sinalizada conciliação do reembolso solicitado de 20 Bs; nenhum valor ou pagamento alterado."}});
+      }
+    },{timeout:30000});
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.

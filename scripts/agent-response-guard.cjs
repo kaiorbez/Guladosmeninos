@@ -1,6 +1,11 @@
 function guardResponse(output, input, previous, hasActions) {
   // Correct the observed mixed-language greeting without altering names/URLs.
   let result = String(output || '').replace(/Чем\s+posso\s+te\s+ajudar\?/gu, 'Como posso te ajudar?');
+  // Suppress observed planning prefaces, preserving the useful customer-facing answer.
+  result=result.replace(/^(?:(?:Pronto para o resumo|Vou fazer uma oferta[^.!?]*)[.!]\s*)+/iu,'');
+  // Exact repeated paragraphs add no information; preserve distinct quantities and prices.
+  const seen=new Set();
+  result=result.split(/\n\s*\n/).filter(part=>{const normalized=part.trim().replace(/\s+/g,' ');if(!normalized)return false;if(seen.has(normalized))return false;seen.add(normalized);return true;}).join('\n\n');
   // Scanned PDFs have no extractable text. Do not leave the customer waiting silently.
   if (/<TranscricaoPDF>\s*<\/TranscricaoPDF>/iu.test(String(input || ''))) {
     const es=/[¿¡]|\b(pago|env[ií]anos|quieres|necesitas|porci[oó]n)\b/iu.test(String(previous || ''));

@@ -26,3 +26,9 @@ test('empty scanned PDF always requests a readable image in customer language',(
  assert.match(guardResponse('Enviei o QR',input,'Pagamento: 65 Bs',true),/Recebi o PDF.*foto ou captura/);
  assert.equal(guardResponse('Documento recebido','<TranscricaoPDF>Valor 65</TranscricaoPDF>','',false),'Documento recebido');
 });
+
+test('planning prefaces and exact repeated paragraphs never reach customer',()=>{
+ assert.equal(guardResponse('Pronto para o resumo. Vou fazer uma oferta, que é a morango.\n\nAqui está o resumo:\nTorta: 230 Bs','Quero o resumo','',false),'Aqui está o resumo:\nTorta: 230 Bs');
+ assert.equal(guardResponse('Total: 82 Bs.\n\nTotal: 82 Bs.\n\nEntrega ou retirada?','Quero esses','',false),'Total: 82 Bs.\n\nEntrega ou retirada?');
+ assert.equal(guardResponse('1 Sprite: 6 Bs.\n\n2 Sprites: 12 Bs.','Quantos?','',false),'1 Sprite: 6 Bs.\n\n2 Sprites: 12 Bs.');
+});

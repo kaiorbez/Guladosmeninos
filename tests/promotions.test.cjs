@@ -10,3 +10,8 @@ test('duas fatias promocionais só ficam disponíveis em 17 e 18 de outubro no f
  assert.equal(out.promotionAvailable(out.POTS_PROMO,new Date('2026-10-17T16:00:00Z')),false);
  assert.equal(out.promotionAvailable('Combo Fatia',new Date('2026-10-19T04:00:00Z')),true);
 });
+
+test('retired 70 Bs combos are blocked even if reactivated in the database',()=>{
+ for(const name of out.RETIRED_COMBOS)assert.equal(out.promotionAvailable(name,new Date('2026-10-17T23:00:00Z')),false);
+ assert.equal(out.promotionAvailable('Combo Perfecto'),true);
+});

@@ -247,7 +247,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             </ConfirmButton>
                             {pendingTab && (
                               <ConfirmButton
-                                message={`Receber o restante de ${bs(missing)} na forma de pagamento selecionada e marcar como entregue?`}
+                                message={`Confira os itens separados, incluindo bebidas:\n${o.product}\n\nDecoração: ${o.decoration || "Padrão"}\nObservações: ${o.notes || "Nenhuma"}\n\nTudo conferido? Receber o restante de ${bs(missing)} na forma selecionada e marcar como entregue?`}
                                 className="btn-primary py-1.5"
                                 title={`Receber ${bs(missing)} e entregar`}
                               >
@@ -265,7 +265,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                             <input type="hidden" name="status" value="ENTREGUE" />
                             <ConfirmButton
                               message={
-                                `Marcar como entregue? O pagamento já está registrado.`
+                                `Confira os itens separados, incluindo bebidas:\n${o.product}\n\nDecoração: ${o.decoration || "Padrão"}\nObservações: ${o.notes || "Nenhuma"}\n\nTudo conferido? Marcar como entregue? O pagamento já está registrado.`
                               }
                               className="btn-primary py-1.5"
                             >

@@ -592,3 +592,17 @@ test('PDF received in current batch never triggers first billing',async()=>{
  const calls=f.calls();const r=await f.service.operate({acao:'qr',telefone:phone,messageId:'pdf',pedidoId:saved.pedido.id,geracao:1});
  assert.equal(r.motivo,'COMPROVANTE_PENDENTE');assert.equal(f.calls(),calls);
 });
+
+test('HTTP retry resumes only an unprocessed current inbox without duplicating generation',async()=>{
+ const f=fixture();const b={telefone:phone,messageId:'lost-response',momento:Date.now(),midia:'texto',texto:'Quero informações',recuperarPendente:true};
+ assert.equal((await f.service.inbound(b)).ignorar,false);const generation=f.state().agentConversation[0].generation;
+ assert.equal((await f.service.inbound(b)).ignorar,false);assert.equal(f.state().agentConversation[0].generation,generation);assert.equal(f.state().agentInbox.length,1);
+ f.state().agentInbox[0].ready=true;assert.equal((await f.service.inbound(b)).ignorar,true);
+ f.state().agentInbox[0].ready=false;f.state().agentConversation[0].pausedUntil=new Date(Date.now()+60000);assert.equal((await f.service.inbound(b)).ignorar,true);
+ f.state().agentConversation[0].pausedUntil=null;f.state().agentConversation[0].latestMoment+=1n;assert.equal((await f.service.inbound(b)).ignorar,true);
+});
+
+test('retired variant cannot be registered even if active in source table',async()=>{
+ const f=fixture();f.state().product[0].name='Combo Porção Prestígio';assert.equal((await f.service.catalog()).length,0);
+ await assert.rejects(f.service.saveOrder(body()),/Item sem preço autorizado/);
+});

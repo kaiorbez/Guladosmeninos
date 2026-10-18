@@ -55,7 +55,16 @@ export async function inbound(b: Body) {
   const duplicate = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
     const eventKey = `in:${p}:${id}`;
-    if (await tx.agentEvent.findUnique({ where: { key: eventKey } })) return true;
+    if (await tx.agentEvent.findUnique({ where: { key: eventKey } })) {
+      if (b.recuperarPendente === true && b.humano !== true) {
+        const pending=await tx.agentInbox.findUnique({where:{id:eventKey}});
+        const conversation=await tx.agentConversation.findUnique({where:{phone:p}});
+        // Resume only an unprocessed current input after a lost HTTP response. Never advance generation twice.
+        if(pending && !pending.ready && !pending.consumedAt && conversation?.latestMoment===BigInt(moment) &&
+          !(conversation.pausedUntil && conversation.pausedUntil>new Date())) return false;
+      }
+      return true;
+    }
     await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment, ...(b.anuncio && typeof b.anuncio === 'object' ? { anuncio: { id: text((b.anuncio as Body).id, 60), tipo: text((b.anuncio as Body).tipo, 30), titulo: text((b.anuncio as Body).titulo, 120) } } : {}) }) } });
     const c = await tx.agentConversation.findUnique({ where: { phone: p } });
     if (c && BigInt(moment) < c.latestMoment) return true;
