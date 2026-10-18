@@ -19,3 +19,10 @@ test('delivery acknowledgment does not reopen confirmed preparation',()=>{
  for(const [input,previous,actions] of [['Espero el delivery a las 18','Pedido en preparación.',false],['Bueno espero el delivery','¿Quieres entrega?',false],['Vou aguardar a entrega','Pedido em preparação.',true],['Espero el delivery, quanto demora?','Pedido em preparação.',false]])
  assert.equal(guardResponse('Resposta',input,previous,actions),'Resposta');
 });
+
+test('empty scanned PDF always requests a readable image in customer language',()=>{
+ const input='<ContextoPDF><TranscricaoPDF> \n </TranscricaoPDF></ContextoPDF>';
+ assert.match(guardResponse('[SEM_RESPOSTA]',input,'Pago: 65 Bs. Envíanos el comprobante para revisión.',false),/Recibí el PDF.*foto o captura/);
+ assert.match(guardResponse('Enviei o QR',input,'Pagamento: 65 Bs',true),/Recebi o PDF.*foto ou captura/);
+ assert.equal(guardResponse('Documento recebido','<TranscricaoPDF>Valor 65</TranscricaoPDF>','',false),'Documento recebido');
+});

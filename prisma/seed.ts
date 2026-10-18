@@ -556,6 +556,17 @@ async function main() {
       console.log(JSON.stringify(await repairOwnerReceiptsOctober17(tx)));
     }, { timeout: 30000 });
   });
+  await once("2026-10-17-empadoes-disponibilidade-permanente", async () => {
+    await prisma.$transaction(async tx => {
+      const products = await tx.product.findMany({where:{category:{slug:"empadoes"},name:{startsWith:"Empadão"}}});
+      for (const product of products) {
+        const description = product.name === "Empadão de Calabresa"
+          ? "Empadão de calabresa. Tamanho P: 25 Bs; tamanho M: 75 Bs. Não presumir peso ou inclusão/substituição em combos."
+          : product.description || "";
+        await tx.product.update({where:{id:product.id},data:{trackStock:false,description:description+" Disponibilidade permanente de todos os sabores de empadão, confirmada pelo proprietário em 17/10/2026. Venda para pronta entrega sem bloqueio por quantidade de estoque. Respeitar horários; M e G levam cerca de uma hora para assar, P sem essa espera."}});
+      }
+    });
+  });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
   await once("2026-10-limpeza-testes-autorizada-kaio", async () => {

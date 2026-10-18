@@ -440,8 +440,29 @@ export async function operate(b: Body) {
       }
       const plan = paymentPlan(Number(order.total), Number(order.paid), order.deliveryDate.toISOString().slice(0, 10), order.payFull);
       if (!plan.pagarAgora) return { ok: true, enviado: false, motivo: 'Nenhum valor pendente agora.', ...plan };
+      const billingKey=`qr-bill:${order.id}:${plan.pagarAgora}:${Number(order.paid)}`;
+      const previousBilling=await prisma.agentDelivery.findUnique({where:{key:billingKey}});
+      const deliveries=await prisma.agentDelivery.findMany({where:{phone:p,status:'SENT'},orderBy:{createdAt:'desc'},take:100});
+      const legacyKey=order.agentRef?.startsWith(`order:${p}:`)?`qr:${p}:${order.agentRef.slice(`order:${p}:`.length)}`:null;
+      const prior=previousBilling?.status==='SENT'?previousBilling:deliveries.find(d=>{
+        const body=d.body as Body;
+        return (body.orderId===order.id && body.pagarAgora===plan.pagarAgora && body.pagoConfirmado===Number(order.paid)) ||
+          (d.key===legacyKey && String(body.message||'').includes(`${plan.pagarAgora} Bs`));
+      });
+      const currentMessage=batchResult?.messageId===b.messageId?complaint:'';
+      const currentReceipt=/<ContextoPDF>|COMPROVANTE_BANCARIO|PDF_RECEBIDO_SEM_TEXTO/i.test(currentMessage);
+      const pdfs=prior && Number(order.paid)===0?await prisma.agentInbox.findMany({where:{phone:p,mediaKind:'pdf'},orderBy:{createdAt:'desc'},take:30}):[];
+      const unreadPdf=pdfs.some(m=>m.createdAt>=prior!.createdAt && /<TranscricaoPDF>\s*<\/TranscricaoPDF>/i.test(m.content||''));
+      if(currentReceipt || unreadPdf) return {ok:true,enviado:false,motivo:'COMPROVANTE_PENDENTE',orientacao:'Há documento/comprovante recebido para conferir. Não reenvie QR nem peça novo pagamento. Se o PDF estiver sem texto, peça uma foto ou captura legível do documento.',...plan};
+      const explicitResend=/\b(?:reenv[ií]a(?:me)?|reenvi[ae]|reenviar|env[ií]a(?:me)?|envie|manda(?:me)?|mande|pasa(?:me)?|passe)\b[^\n?]{0,60}\bqr\b|\bqr\b[^\n?]{0,40}(?:de novo|otra vez|novamente|reenvi)/i.test(currentMessage);
+      if(prior && !explicitResend) return {ok:true,enviado:false,motivo:'QR_JA_ENVIADO',messageId:prior.messageId,orientacao:'O QR deste pedido e valor já foi enviado. Responda à dúvida atual; interrogação, espera e cobrança de status não autorizam nova cobrança.',...plan};
       const caption = b.idioma === 'es' ? `Pago: ${plan.pagarAgora} Bs. Envíanos el comprobante para revisión.` : `Pagamento: ${plan.pagarAgora} Bs. Envie o comprovante para conferência.`;
-      const sent = await sendOnce(`qr:${p}:${key(b.messageId)}`, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
+      const deliveryKey=prior && explicitResend?`qr:${p}:${key(b.messageId)}`:billingKey;
+      const sent = await sendOnce(deliveryKey, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
+      if(sent.enviado) {
+        const delivery=await prisma.agentDelivery.findUnique({where:{key:deliveryKey}});
+        if(delivery) await prisma.agentDelivery.update({where:{key:deliveryKey},data:{body:json({...delivery.body as Body,orderId:order.id,pagarAgora:plan.pagarAgora,pagoConfirmado:Number(order.paid)})}});
+      }
       return { ok: sent.enviado, ...sent, ...plan };
     }
     case 'enviar': {

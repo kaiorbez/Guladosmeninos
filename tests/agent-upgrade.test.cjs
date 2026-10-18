@@ -561,3 +561,34 @@ test('comprovante entre o sinal e o saldo conta como pagamento parcial válido',
  assert.match(review.receiptReview({...base,valor:170},80,today,160).alertas.join(),/Valor diverge/);
  assert.match(review.receiptReview({...base,valor:100},80,today).alertas.join(),/Valor diverge/);
 });
+
+test('QR is not resent for status requests; explicit resend remains available',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());
+ const q={acao:'qr',telefone:phone,messageId:'first',pedidoId:saved.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'};
+ assert.equal((await f.service.operate(q)).enviado,true);const calls=f.calls();
+ for(const [messageId,message] of [['status','?'],['late','Bro paso una hora, aún no?']]) {
+  f.state().agentEvent=f.state().agentEvent.filter(e=>e.kind!=='BATCH');
+  await f.prisma.agentEvent.create({data:{key:messageId,phone,kind:'BATCH',result:{messageId,message}}});
+  assert.equal((await f.service.operate({...q,messageId})).motivo,'QR_JA_ENVIADO');
+ }
+ assert.equal(f.calls(),calls);
+ f.state().agentEvent=f.state().agentEvent.filter(e=>e.kind!=='BATCH');
+ await f.prisma.agentEvent.create({data:{key:'explicit',phone,kind:'BATCH',result:{messageId:'resend',message:'Me envia o QR de novo'}}});
+ assert.equal((await f.service.operate({...q,messageId:'resend'})).enviado,true);assert.equal(f.calls(),calls+1);
+});
+
+test('unread PDF prevents another QR even when customer requests it',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());
+ const q={acao:'qr',telefone:phone,messageId:'first',pedidoId:saved.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'};
+ await f.service.operate(q);const calls=f.calls();
+ await f.prisma.agentInbox.create({data:{phone,messageId:'pdf',mediaKind:'pdf',content:'<TranscricaoPDF></TranscricaoPDF>'}});
+ await f.prisma.agentEvent.create({data:{key:'explicit',phone,kind:'BATCH',result:{messageId:'resend',message:'Me envia o QR de novo'}}});
+ assert.equal((await f.service.operate({...q,messageId:'resend'})).motivo,'COMPROVANTE_PENDENTE');assert.equal(f.calls(),calls);
+});
+
+test('PDF received in current batch never triggers first billing',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());
+ await f.prisma.agentEvent.create({data:{key:'pdf-batch',phone,kind:'BATCH',result:{messageId:'pdf',message:'<ContextoPDF><TranscricaoPDF></TranscricaoPDF></ContextoPDF>'}}});
+ const calls=f.calls();const r=await f.service.operate({acao:'qr',telefone:phone,messageId:'pdf',pedidoId:saved.pedido.id,geracao:1});
+ assert.equal(r.motivo,'COMPROVANTE_PENDENTE');assert.equal(f.calls(),calls);
+});
