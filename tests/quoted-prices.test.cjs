@@ -22,3 +22,8 @@ test('bloqueia sabor ausente e estoque zero controlado sem bloquear produto sob 
  assert.equal(exp.quotedPriceIssues('Fatia Maracujá: 30 Bs',[{...items[0],controlaEstoque:false,estoque:0}]).length,0);
  assert.equal(issues('2 potes Maracuyá con chocolate: 40 Bs').length,0);
 });
+test('totais de linha com quantidade numérica ou por extenso não viram falso preço unitário',()=>{
+ const p=[{produto:'Pote Ninho com Chocolate',preco:20,precoSobConsulta:false,controlaEstoque:true,estoque:5}];
+ for(const text of ['2 bolos de pote Ninho com chocolate: 40 Bs','dois potes Ninho com chocolate: 40 Bs','dos potes Nido con chocolate: 40 Bs','Pote Ninho com Chocolate x 2: 40 Bs'])assert.equal(exp.quotedPriceIssues(text,p).length,0,text);
+ assert.equal(exp.quotedPriceIssues('dois potes Ninho com chocolate: 50 Bs',p)[0].precoAtual,40);
+});

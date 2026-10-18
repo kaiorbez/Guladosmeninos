@@ -644,3 +644,13 @@ test('envio valida preço atual de fatia antes de enviar e abre pendência sem c
  assert.equal(r.enviado,true);assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/citado 35 Bs; painel atual 30 Bs/);
  const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.match(reply.body.message,/30 Bs/);assert.doesNotMatch(reply.body.message,/35 Bs/);assert.equal(f.state().order.length,0);
 });
+test('registro bloqueia quantidade sem estoque e preserva produtos sem controle de estoque',async()=>{
+ const f=fixture();f.state().product[0].trackStock=true;f.state().product[0].variants[0].stock=1;
+ const b=body();b.pedido.itens[0].quantidade=2;await assert.rejects(f.service.saveOrder(b),/Estoque insuficiente/);assert.equal(f.state().order.length,0);
+ f.state().product[0].trackStock=false;assert.equal((await f.service.saveOrder(b)).registrado,true);
+});
+test('PDF ilegível registra uma única pendência sem pagamento nem confirmação de preparo',async()=>{
+ const f=fixture();await f.service.inbound({telefone:phone,messageId:'pdf',midia:'pdf',texto:'comprovante',momento:Date.now()});
+ const b={acao:'falhaAnalise',telefone:phone,messageId:'pdf',geracao:2,etapa:'pdf',idioma:'pt'};
+ await f.service.operate(b);await f.service.operate(b);assert.equal(f.state().agentTicket.length,1);assert.equal(f.state().order.length,0);assert.equal(f.receiptPayments(),0);assert.equal(f.calls(),1);
+});
