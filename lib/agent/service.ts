@@ -106,8 +106,10 @@ export async function saveOrder(b: Body) {
     if(unchanged) return {ok:true,registrado:true,semAlteracao:true,pedido:presentOrder(existing),pagamentoConfirmado:false};
     for (const line of raw.itens as Body[]) {
     const variant=prices.find(v=>v.variantId===line.variantId);
-    if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual: encaminhe orçamento à equipe.');
-    if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError('Preço mudou no painel: consulte catálogo e confirme novo resumo.');
+    if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual. Consulte consultar_cardapio para obter o variantId exato; não invente SKU nem repita a tentativa com o mesmo ID. Se for preço sob consulta, encaminhe orçamento à equipe.');
+    if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError(`Preço mudou no painel: ${variant.produto} ${variant.tamanho} custa ${variant.preco} Bs. Confirme o novo resumo com o cliente antes de registrar.`);
+    const sameSku=(raw.itens as Body[]).filter(i=>i.variantId===line.variantId).reduce((sum,i)=>sum+Number(i.quantidade),0);
+    if(!existing && variant.controlaEstoque && sameSku>variant.estoque)throw new AgentError(`Estoque insuficiente no painel: ${variant.produto}, disponível ${variant.estoque}; solicitado ${sameSku}. Não registrar nem cobrar; consulte alternativas ou equipe.`);
     }
     let order;
     if (orderId) {
@@ -329,7 +331,7 @@ function receiptNoticeWithoutOrder(receipt: Body, review: ReturnType<typeof rece
 export async function analysisFailure(b: Body) {
   const p=phone(b.telefone), id=key(b.messageId);
   const stage=String(b.etapa);
-  if (!['imagem','audio','ia'].includes(stage)) throw new AgentError('Etapa de análise inválida.');
+  if (!['imagem','pdf','audio','ia'].includes(stage)) throw new AgentError('Etapa de análise inválida.');
   const failureKey=`analysis-failure:${p}:${id}`;
   const claim=await prisma.$transaction(async tx=>{
     await lockConversation(tx,p);
@@ -521,9 +523,9 @@ export async function operate(b: Body) {
       }
       const priceIssues=/\bbs\b/i.test(message)?quotedPriceIssues(message,await catalog()):[];
       if(priceIssues.length){
-        const details=priceIssues.map(x=>`${x.produto}: citado ${x.precoCitado} Bs; painel atual ${x.precoAtual} Bs.`).join('\n');
+        const details=priceIssues.map(x=>x.precoAtual===null?`${x.produto}: oferta bloqueada (${x.motivo}); conferir disponibilidade no painel.`:`${x.produto}: citado ${x.precoCitado} Bs; painel atual ${x.precoAtual} Bs.`).join('\n');
         await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nPreço na resposta divergia do painel e foi bloqueado antes do envio.\n\n'+details+'\n\n👉 *Ação da equipe*\nConferir o resumo com os preços atuais antes de cobrar. Não criar pagamento ou pedido duplicado.'});
-        message=priceIssues.map(x=>`${x.produto}: ${x.precoAtual} Bs`).join('\n')+(b.idioma==='es'?'\n\nNecesito revisar el resumen antes de cobrar.':'\n\nPreciso conferir o resumo antes de cobrar.');
+        message=priceIssues.map(x=>x.precoAtual===null?(b.idioma==='es'?`Necesito confirmar la disponibilidad de ${x.produto}.`:`Preciso confirmar a disponibilidade de ${x.produto}.`):`${x.produto}: ${x.precoAtual} Bs`).join('\n')+(b.idioma==='es'?'\n\nNecesito revisar el resumen antes de cobrar.':'\n\nPreciso conferir o resumo antes de cobrar.');
       }
       const sent = await sendOnce(`reply:${p}:${key(b.messageId)}:${key(b.parte)}`, p, message, undefined, Number(b.geracao));
       return { ok: sent.enviado, ...sent };

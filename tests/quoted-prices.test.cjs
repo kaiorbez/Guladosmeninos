@@ -16,3 +16,9 @@ test('não confunde total, frete, promoção, múltiplas unidades ou tamanho amb
  for(const t of ['Total: 35 Bs','Envío: 35 Bs','2 porciones de maracuyá: 60 Bs','Promo 2 fatias Maracujá: 55 Bs','Pote e fatia no combo: 55 Bs'])assert.equal(issues(t).length,0,t);
  assert.equal(exp.quotedPriceIssues('Porção Maracujá: 35 Bs',[{...items[0],preco:30},{...items[0],preco:35}]).length,0);
 });
+test('bloqueia sabor ausente e estoque zero controlado sem bloquear produto sob encomenda',()=>{
+ assert.equal(issues('Porción de Nido con frutos rojos: 30 Bs')[0].motivo,'FORA_CATALOGO');
+ assert.equal(exp.quotedPriceIssues('Fatia Maracujá: 30 Bs',[{...items[0],controlaEstoque:true,estoque:0}])[0].motivo,'SEM_ESTOQUE');
+ assert.equal(exp.quotedPriceIssues('Fatia Maracujá: 30 Bs',[{...items[0],controlaEstoque:false,estoque:0}]).length,0);
+ assert.equal(issues('2 potes Maracuyá con chocolate: 40 Bs').length,0);
+});
