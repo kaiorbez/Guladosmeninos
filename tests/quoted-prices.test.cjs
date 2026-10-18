@@ -31,3 +31,10 @@ test('não compara total de cesta mista ao preço dos potes',()=>{
  const p=[{produto:'Pote Ninho com Chocolate',preco:20,precoSobConsulta:false}];
  for(const s of ['Dois potes Ninho com brigadeiro de chocolate e seis docinhos, total 61 Bs','Dois potes Ninho com chocolate + três brigadeiros de paçoca + três de Ninho: 61 Bs','Seu pedido de dois potes Ninho com chocolate fica no total de 61 Bs','Dois potes Ninho com chocolate e docinhos: 50 Bs'])assert.equal(exp.quotedPriceIssues(s,p).length,0,s);
 });
+test('lista de sabores sem preço em cada linha exclui estoque zero sem bloquear encomenda autorizada',()=>{
+ const catalog=[{produto:'Pote Ninho com Chocolate',preco:20,controlaEstoque:true,estoque:5},{produto:'Pote Ninho com Frutas Vermelhas',preco:25,controlaEstoque:true,estoque:0},{produto:'Pote Cenoura com Chocolate',preco:25,controlaEstoque:true,estoque:0}];
+ const text='Temos bolos de pote clássicos por 20 Bs cada:\n- Ninho com chocolate\n\nE os premium por 25 Bs cada:\n- Ninho com frutas vermelhas\n- Cenoura com chocolate\n\nQual você gostaria?';
+ const result=exp.filterAvailableProductLists(text,catalog);assert.match(result,/Ninho com chocolate/);assert.doesNotMatch(result,/frutas vermelhas|Cenoura|premium/);assert.match(result,/sem estoque/);
+ assert.equal(exp.filterAvailableProductLists('Pedido antigo: Pote Ninho com Frutas Vermelhas pago 25 Bs',catalog),'Pedido antigo: Pote Ninho com Frutas Vermelhas pago 25 Bs');
+ assert.match(exp.filterAvailableProductLists('Temos bolos de pote:\n- Ninho com frutas vermelhas',[{...catalog[1],controlaEstoque:false}]),/frutas vermelhas/);
+});

@@ -6,7 +6,7 @@ import { importHistory } from './history';
 import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
 import { unsettledReceiptMedia } from './receipt-carry';
-import { quotedPriceIssues } from './quoted-prices';
+import { quotedPriceIssues, filterAvailableProductLists } from './quoted-prices';
 import { receiptReview, receiptNotice, closeMessage, deliveryFee } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
@@ -521,7 +521,9 @@ export async function operate(b: Body) {
           message=/\b(te agendo|te he agendado|queda agendad[oa])\b/i.test(message)?'La solicitud de horario está pendiente de confirmación por el equipo 😊':'A solicitação de horário está pendente de confirmação pela equipe 😊';
         }
       }
-      const priceIssues=/\bbs\b/i.test(message)?quotedPriceIssues(message,await catalog()):[];
+      const currentCatalog=/\bbs\b|temos|tenemos|dispon[ií]ve|disponible|sabores/i.test(message)?await catalog():[];
+      message=filterAvailableProductLists(message,currentCatalog);
+      const priceIssues=/\bbs\b/i.test(message)?quotedPriceIssues(message,currentCatalog):[];
       if(priceIssues.length){
         const details=priceIssues.map(x=>x.precoAtual===null?`${x.produto}: oferta bloqueada (${x.motivo}); conferir disponibilidade no painel.`:`${x.produto}: citado ${x.precoCitado} Bs; painel atual ${x.precoAtual} Bs.`).join('\n');
         await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nPreço na resposta divergia do painel e foi bloqueado antes do envio.\n\n'+details+'\n\n👉 *Ação da equipe*\nConferir o resumo com os preços atuais antes de cobrar. Não criar pagamento ou pedido duplicado.'});

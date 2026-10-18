@@ -42,3 +42,24 @@ export function quotedPriceIssues(message:string, items:Item[]) {
  }
  return issues;
 }
+
+/** Availability lists use names without prices on each bullet; zero-stock items must not be offered from chat memory. */
+export function filterAvailableProductLists(message:string,items:Item[]) {
+ if(!/temos|tenemos|dispon[ií]ve|disponible|sabores/i.test(message))return message;
+ let section:string|null=null,removed=false;
+ const lines=message.split('\n').filter(raw=>{
+  const n=normalize(raw.replace(/\*/g,''));
+  if(!/^\s*[-•]/.test(n)) {if(family(n))section=family(n);return true;}
+  if(!section||/^\s*[-•]\s*\d/.test(n))return true;
+  const possible=items.filter(p=>productFamily(normalize(p.produto))===section).map(p=>({p,tokens:normalize(p.produto).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!noise.has(t))})).filter(x=>x.tokens.length&&x.tokens.every(t=>new RegExp('\\b'+t+'\\b').test(n)));
+  const score=Math.max(0,...possible.map(x=>x.tokens.length)),best=possible.filter(x=>x.tokens.length===score);
+  if(best.length && best.every(x=>x.p.controlaEstoque===true&&Number(x.p.estoque)<=0)){removed=true;return false;}
+  return true;
+ });
+ if(!removed)return message;
+ const cleaned=lines.filter((line,index)=>{
+  if(!/:\s*$/.test(line))return true;
+  const next=lines.slice(index+1).find(l=>l.trim());return !!next&&/^\s*[-•]/.test(next);
+ }).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+ return cleaned+'\n\n'+(/tenemos|gustar|cu[aá]l|disponibles/i.test(message)?'Los demás sabores consultados están sin stock ahora.':'Os demais sabores consultados estão sem estoque agora.');
+}
