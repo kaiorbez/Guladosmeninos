@@ -2,7 +2,11 @@ function failedCommercialTools(steps, output, current = {}) {
   const allowed = ['avisar_equipe', 'registrar_encomenda'];
   const pending = new Map();
   let receiptRegistered = false;
-  let orderRegistered = false;
+  // A status reply may describe a real order from the authenticated customer context.
+  // It does not require another write in this turn, and must not erase an actual failed write below.
+  const statusGreeting=/^(?:h[oó]l+a+|o+i+|ol[aá]+|bom dia|boa tarde|boa noite|buenos dias|buenas tardes|buenas noches)[\s!?.😊👍]*$/iu.test(String(current.message||'').trim());
+  const persisted=Array.isArray(current.pedidos)?current.pedidos.filter(p=>p&&p.id&&p.situacao==='PENDENTE'):[];
+  let orderRegistered = statusGreeting && persisted.length===1;
   for (const step of steps || []) {
     const name = step.action?.tool;
     if (!allowed.includes(name)) continue;

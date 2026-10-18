@@ -30,3 +30,11 @@ test('aviso confirmado depois de tentativa falha resolve somente o mesmo tipo de
  const other={action:{tool:'avisar_equipe',toolInput:{tipo:'DUVIDA'}},observation:JSON.stringify({ok:true,registrado:true,notificacaoEnviada:true})};
  assert.equal(failedCommercialTools([step('avisar_equipe',{ok:false}),other],'').length,1);
 });
+
+test('saudação de acompanhamento pode afirmar pedido já existente sem gravar de novo',()=>{
+ const current={message:'holaaa?',pedidos:[{id:'order192',situacao:'PENDENTE'}]};
+ assert.equal(failedCommercialTools([],'Tu pedido está registrado y pendiente de revisión',current).length,0);
+ assert.equal(failedCommercialTools([],'Tu pedido está registrado',{...current,pedidos:[]}).length,1);
+ assert.equal(failedCommercialTools([],'Pedido registrado',{...current,message:'Quero mais quatro potes'}).length,1);
+ assert.equal(failedCommercialTools([step('registrar_encomenda',{ok:false})],'Pedido registrado',current).length,1);
+});

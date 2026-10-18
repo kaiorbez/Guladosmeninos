@@ -16,13 +16,13 @@ export function catalogForPrompt(items: Item[], query: unknown, search?: unknown
   if(/^docinh/.test(name))return 'docinhos';
   if(/^empad|^torta pao/.test(name))return 'salgados';
   if(/^coca|^fanta|^sprite/.test(name))return 'bebidas';
-  if(/^kit|^combo/.test(name))return 'kits';
+  if(/^kit|^combo|^promo|^oferta/.test(name))return 'kits';
   if(item.precoSobConsulta===true)return 'personalizados';
   if(/^torta\b/.test(name))return 'bolos';
   return 'adicionais';
  };
  // Numbered catalog designs must remain discoverable even if the customer calls them customized.
- const selected=all?items:items.filter(item=>families.includes(family(item)) || (families.includes('personalizados') && /^torta em acetato modelo \d+$/.test(normalize(item.produto))));
+ const selected=all?items:items.filter(item=>families.includes(family(item)) || (families.includes('fatias') && /^promo.*(?:fatia|porcao)/.test(normalize(item.produto))) || (families.includes('personalizados') && /^torta em acetato modelo \d+$/.test(normalize(item.produto))));
  const terms=[...new Set(normalize(search).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!STOP.has(t)).map(t=>SYN[t]||t))];
  if(terms.length){
   const has=(value:string,t:string)=>value.includes(t)||(t.length>4&&t.endsWith('s')&&value.includes(t.slice(0,-1)));

@@ -83,11 +83,6 @@ export async function saveOrder(b: Body) {
   if (!name) throw new AgentError('Nome do cliente obrigatório.');
   if (!Array.isArray(raw.itens) || !raw.itens.length) throw new AgentError('Informe os itens da encomenda.');
   const prices=await catalog();
-  for (const line of raw.itens as Body[]) {
-    const variant=prices.find(v=>v.variantId===line.variantId);
-    if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual: encaminhe orçamento à equipe.');
-    if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError('Preço mudou no painel: consulte catálogo e confirme novo resumo.');
-  }
   const eventKey = `order:${p}:${source}`;
   const result = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
@@ -97,6 +92,22 @@ export async function saveOrder(b: Body) {
     const existing = orderId ? await tx.order.findFirst({ where: { id: orderId, customerPhone: p, status: 'PENDENTE' } }) : null;
     if (orderId && !existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);
     const data = orderInput(raw, new Date(), existing || undefined);
+    // A repeated save of the exact persisted order is a read, not another update.
+    // Receipt processing must not invalidate a valid payment because the model repeated stale SKU ids.
+    const unchanged=existing && Number(raw.versao)===existing.agentVersion && name===existing.customerName && Object.entries(data).every(([field,value])=>{
+      const previous=(existing as unknown as Body)[field];
+      if(field==='total')return Number(previous)===Number(value);
+      if(value instanceof Date)return previous instanceof Date&&previous.getTime()===value.getTime();
+      if(value===null||value===undefined)return previous===null||previous===undefined;
+      if(typeof value==='object')return JSON.stringify(previous)===JSON.stringify(value);
+      return previous===value;
+    });
+    if(unchanged) return {ok:true,registrado:true,semAlteracao:true,pedido:presentOrder(existing),pagamentoConfirmado:false};
+    for (const line of raw.itens as Body[]) {
+    const variant=prices.find(v=>v.variantId===line.variantId);
+    if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual: encaminhe orçamento à equipe.');
+    if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError('Preço mudou no painel: consulte catálogo e confirme novo resumo.');
+    }
     let order;
     if (orderId) {
       if (!existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);

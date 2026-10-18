@@ -631,3 +631,10 @@ test('falha comercial abre pendência durável e aviso antes da resposta sem fal
  assert.equal(f.state().order.length,0);
  const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.match(reply.body.message,/equipe confira/);assert.doesNotMatch(reply.body.message,/pedido foi registrado/);
 });
+
+test('salvar pedido idêntico novamente após comprovante não valida SKU inventado nem altera pagamento',async()=>{
+ const f=fixture();const b=body();const saved=await f.service.saveOrder(b);const existing=f.state().order[0];existing.paid=130;
+ const request={...b,messageId:'receipt-repeat',pedido:{...b.pedido,id:saved.pedido.id,versao:1,itens:b.pedido.itens.map(v=>({...v,variantId:'inventado-mas-sem-alteracao'}))}};
+ const result=await f.service.saveOrder(request);assert.equal(result.registrado,true);assert.equal(result.semAlteracao,true);assert.equal(f.state().order.length,1);assert.equal(f.state().order[0].paid,130);assert.equal(f.state().order[0].agentVersion,1);
+ request.messageId='receipt-changed';request.pedido.itens[0].quantidade=2;await assert.rejects(f.service.saveOrder(request),/Item sem preço/);assert.equal(f.state().order[0].paid,130);
+});

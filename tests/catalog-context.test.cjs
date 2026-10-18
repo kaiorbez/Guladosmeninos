@@ -77,3 +77,9 @@ test('nova porção premium de nozes aparece como fatia também em espanhol',()=
  assert.deepEqual(restore(select([n,pot],'fatias','nuez')).map(x=>[x.variantId,x.preco,x.estoque]),[['n',35,7]]);
  assert.deepEqual(restore(select([n,pot],'fatias')).map(x=>x.variantId),['n']);
 });
+
+test('promo de duas fatias aparece em kits e fatias com seu SKU real, junto da fatia avulsa',()=>{
+ const promo=item('Promo 2 Fatias Ninho com Frutas Vermelhas - 17 e 18 outubro 2026','promo-real',60,{controlaEstoque:false});const mar=item('Fatia Maracujá','mar-real',30);const combo=item('Combo Fatia','combo-real',55,{descricao:'Ninho frutas vermelhas maracujá'});
+ for(const family of ['kits,fatias','fatias'])assert.deepEqual(restore(select([promo,mar,combo],family,'Ninho frutas vermelhas maracujá')).map(x=>x.variantId),['promo-real','mar-real']);
+ assert.deepEqual(restore(select([promo,mar,combo],'kits','Promo 2 Fatias Ninho')).map(x=>x.variantId),['promo-real']);
+});
