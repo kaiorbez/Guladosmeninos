@@ -9,3 +9,6 @@ test('comprovante de 50 gera pagamento e financeiro na encomenda existente',asyn
 test('repetição concorrente do mesmo comprovante não duplica recebimento',async()=>{const f=fixture();await Promise.all([f.pay(50),f.pay(50)]);assert.equal(f.state().payments.length,1);assert.equal(f.state().sales.length,1);});
 test('sinal entra somente pelo valor recebido, sem faturar o total futuro',async()=>{const f=fixture(100);await f.pay(50);assert.equal(f.state().order.paid,50);assert.equal(f.state().sales[0].amount,50);});
 test('outro cliente ou valor acima do saldo não gera pagamento',async()=>{const f=fixture();await assert.rejects(f.pay(50,'image','59111111111'),/não encontrada/);await assert.rejects(f.pay(60),/maior que o saldo/);assert.equal(f.state().payments.length,0);assert.equal(f.state().sales.length,0);});
+
+
+test('265 Bs com recibo de 200 Bs registra 200 e preserva saldo 65 sem duplicação',async()=>{const f=fixture(265);await Promise.all([f.pay(200),f.pay(200)]);assert.equal(f.state().order.paid,200);assert.equal(f.state().order.total-f.state().order.paid,65);assert.equal(f.state().payments.length,1);assert.equal(f.state().sales[0].amount,200);});

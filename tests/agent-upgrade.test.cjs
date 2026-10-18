@@ -17,6 +17,7 @@ function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  if(k==='NOT')return !matches(o,v);
  const x=o[k];if(v&&typeof v==='object'&&!(v instanceof Date)&&!Array.isArray(v)) {
  if('startsWith' in v)return typeof x==='string'&&x.startsWith(v.startsWith);
+ if('gte'in v)return x>=v.gte;if('gt'in v)return x>v.gt;
  if('in' in v)return v.in.includes(x);if('lt'in v)return x<v.lt;if('lte'in v)return x<=v.lte;
  }
  if(v instanceof Date)return +x===+v;return x===v;
@@ -37,7 +38,7 @@ function fixture({network='ok',yangoFee=null}={}) {
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
  let receiptPayments=0;
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./catalog-context':load('catalog-context'),'./yango':{lookupYangoFee:async()=>yangoFee},'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./receipt-carry':load('receipt-carry'),'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./catalog-context':load('catalog-context'),'./yango':{lookupYangoFee:async()=>yangoFee},'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,receiptPayments:()=>receiptPayments,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
@@ -605,4 +606,28 @@ test('HTTP retry resumes only an unprocessed current inbox without duplicating g
 test('retired variant cannot be registered even if active in source table',async()=>{
  const f=fixture();f.state().product[0].name='Combo Porção Prestígio';assert.equal((await f.service.catalog()).length,0);
  await assert.rejects(f.service.saveOrder(body()),/Item sem preço autorizado/);
+});
+
+
+test('comprovante consumido sobrevive à geração de Aquí está e não volta depois do pagamento',async()=>{
+ const f=fixture();
+ await f.service.inbound({telefone:phone,messageId:'receipt-carry',momento:Date.now(),midia:'imagem',midiaUrl:'https://example.com/receipt.png'});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'receipt-carry',texto:'Tipo: COMPROVANTE_BANCARIO\nValor: 200 Bs'});
+ const first=await f.service.prepare({telefone:phone,execucao:'image-batch'});assert.equal(first.mediaIds[0],'receipt-carry');
+ await f.service.inbound({telefone:phone,messageId:'here',momento:Date.now()+1,midia:'texto',texto:'Aquí está'});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'here',texto:'Aquí está'});
+ const next=await f.service.prepare({telefone:phone,execucao:'text-batch'});assert.equal(next.messageId,'here');assert(next.mediaIds.includes('receipt-carry'));assert.match(next.message,/Valor: 200 Bs/);
+ await f.prisma.agentEvent.create({data:{key:'payment-carry',phone,kind:'RECEIPT_PAYMENT',payload:{mediaId:'receipt-carry'}}});
+ await f.service.inbound({telefone:phone,messageId:'thanks',momento:Date.now()+2,midia:'texto',texto:'Gracias'});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'thanks',texto:'Gracias'});
+ const last=await f.service.prepare({telefone:phone,execucao:'thanks-batch'});assert.equal(last.mediaIds.length,0);
+});
+test('falha comercial abre pendência durável e aviso antes da resposta sem falsa confirmação',async()=>{
+ const f=fixture();const b={telefone:phone,messageId:'failed-order',geracao:1,acao:'enviar',parte:'0',texto:'Seu pedido foi registrado',idioma:'pt',falhasFerramentas:[{ferramenta:'registrar_encomenda'}]};
+ await f.prisma.agentEvent.create({data:{key:`in:${phone}:failed-order`,phone,kind:'INBOUND',payload:{text:'Quero encomendar um bolo para amanhã'}}});
+ await f.service.operate(b);await f.service.operate(b);
+ assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/encomendar um bolo/);
+ assert.equal(f.state().agentDelivery.filter(d=>d.key.startsWith('ticket:')).length,1);
+ assert.equal(f.state().order.length,0);
+ const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.match(reply.body.message,/equipe confira/);assert.doesNotMatch(reply.body.message,/pedido foi registrado/);
 });

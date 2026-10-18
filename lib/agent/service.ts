@@ -5,6 +5,7 @@ import { lockConversation, sendOnce } from './transport';
 import { importHistory } from './history';
 import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
+import { unsettledReceiptMedia } from './receipt-carry';
 import { receiptReview, receiptNotice, closeMessage, deliveryFee } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
@@ -123,16 +124,20 @@ export async function ticket(b: Body) {
   if (!question) throw new AgentError('Informe a dúvida ou os dados do comprovante.');
   let receiptMedia: Array<{id:string;url:string;kind:string}>=[];
   let report=question;
+  let receiptKey:string|null=null;
   const t = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
     await current(tx, p, b);
     if (kind === 'COMPROVANTE') {
       const ids = Array.isArray(b.mediaIds) ? b.mediaIds.slice(0, 20).map(key) : [];
       if (!ids.length) throw new AgentError('Sem imagem/PDF recebido neste lote.');
+      receiptKey=`ticket:${p}:COMPROVANTE:${[...new Set(ids)].sort().join('|')}`;
+      const priorReceipt=await tx.agentTicket.findUnique({where:{sourceKey:receiptKey}});
       const media = await tx.agentEvent.findMany({ where: { key: { in: ids.map(m => `in:${p}:${m}`) }, phone: p, kind: 'INBOUND' } });
       const recent = media.some(m => { const payload = m.payload as Body; return ['imagem', 'pdf'].includes(String(payload.media)) && payload.fromMe === false && m.createdAt.getTime() > Date.now() - 10 * 60000; });
       if (!recent) throw new AgentError('Localização, texto ou mídia antiga não é comprovante atual.');
       receiptMedia=media.filter(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;}).map(m=>({id:m.key,url:text((m.payload as Body).sourceUrl,3000),kind:String((m.payload as Body).media)})).filter(m=>m.url);
+      if(priorReceipt) return priorReceipt;
       const analyzed=await tx.agentInbox.findMany({where:{phone:p,messageId:{in:ids},ready:true}});
       if(analyzed.some(m=>/Tipo\s*:\s*(OUTRA_IMAGEM|REFERENCIA_BOLO)|[\"']tipo[\"']\s*:\s*[\"'](OUTRA_IMAGEM|REFERENCIA_BOLO)/i.test(m.content||''))) throw new AgentError('Analisador identificou mídia que não é comprovante: não confirmar recebimento de pagamento.');
       const receipt=b.comprovante;
@@ -156,7 +161,7 @@ export async function ticket(b: Body) {
         await recordReceiptPayment(tx,order.id,p,mediaId,review.valorVisivel);
       }
     }
-    const sourceKey = `ticket:${p}:${kind}:${id}`;
+    const sourceKey = receiptKey || `ticket:${p}:${kind}:${id}`;
     return tx.agentTicket.upsert({ where: { sourceKey }, create: { sourceKey, phone: p, customerName: text(b.cliente, 120) || p, question:report, kind, nextReminderAt: new Date(Date.now() + 10 * 60000) }, update: {} });
   });
   let sent: { enviado: boolean; estado: string; messageId: string | null };
@@ -280,7 +285,14 @@ export async function prepare(b: Body) {
     if(!c || (c.pausedUntil && c.pausedUntil>new Date())) return {ok:true,processar:false};
     const messages=await tx.agentInbox.findMany({where:{phone:p,consumedAt:null},orderBy:[{moment:'asc'},{createdAt:'asc'}],take:101});
     if(!messages.length || messages.length>100 || messages.some(m=>!m.ready)) return {ok:true,processar:false};
-    const result={ok:true,processar:true,geracao:c.generation,message:messages.map(m=>m.content||'').join('\n\n'),mediaIds:messages.filter(m=>['imagem','pdf'].includes(m.mediaKind)).map(m=>m.messageId),messageId:messages[messages.length-1].messageId};
+    // A later text can supersede an image's generation after its batch was consumed.
+    // Carry only recent, analyzed, actual receipts that have not produced a payment yet.
+    const recentMedia=await tx.agentInbox.findMany({where:{phone:p,ready:true,mediaKind:{in:['imagem','pdf']},createdAt:{gte:new Date(Date.now()-10*60000)}},orderBy:{createdAt:'desc'},take:20});
+    const receiptEvents=recentMedia.length?await tx.agentEvent.findMany({where:{phone:p,kind:{in:['INBOUND','RECEIPT_PAYMENT']},createdAt:{gte:new Date(Date.now()-10*60000)}}}):[];
+    const carried=unsettledReceiptMedia(p,recentMedia,receiptEvents).filter(m=>!messages.some(x=>x.messageId===m.messageId));
+    const mediaIds=[...new Set([...messages.filter(m=>['imagem','pdf'].includes(m.mediaKind)).map(m=>m.messageId),...carried.map(m=>m.messageId)])];
+    const carriedText=carried.length?'\n\n[Comprovante real recente ainda sem registro de pagamento; mensagem posterior não substitui a mídia recebida.]\n'+carried.map(m=>m.content||'').join('\n\n'):'';
+    const result={ok:true,processar:true,geracao:c.generation,message:messages.map(m=>m.content||'').join('\n\n')+carriedText,mediaIds,messageId:messages[messages.length-1].messageId};
     await tx.agentInbox.updateMany({where:{id:{in:messages.map(m=>m.id)}},data:{consumedAt:new Date()}});
     await tx.agentEvent.create({data:{key:`batch:${p}:${execution}`,phone:p,kind:'BATCH',payload:{},result:json(result)}});
     return result;
@@ -478,6 +490,15 @@ export async function operate(b: Body) {
     case 'enviar': {
       const p = phone(b.telefone); let message = text(b.texto, 6000);
       if (!message || !Number.isInteger(b.geracao)) throw new AgentError('Texto e geração obrigatórios.');
+      const failures=Array.isArray(b.falhasFerramentas)?b.falhasFerramentas.slice(0,4).filter(v=>v&&typeof v==='object'&&['avisar_equipe','registrar_encomenda'].includes(String((v as Body).ferramenta))):[];
+      if(failures.length) {
+        const input=await prisma.agentEvent.findUnique({where:{key:`in:${p}:${key(b.messageId)}`}});
+        const original=text((input?.payload as Body|undefined)?.text,1200);
+        const operations=[...new Set(failures.map(v=>String((v as Body).ferramenta)))].join(', ');
+        const notice=await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nFalha ao concluir uma operação do atendimento: '+operations+'.\n\n📝 *Mensagem do cliente*\n'+(original||'Consultar a conversa e as mídias recebidas no painel.')+'\n\n👉 *Ação da equipe*\nConferir a ficha, o comprovante e os resultados da operação. Registrar somente o que estiver comprovado, sem duplicar pedido ou pagamento.'});
+        const es=b.idioma==='es';
+        message=notice.notificacaoEnviada?(es?'Necesito que el equipo revise tu solicitud. Ya envié el aviso para que puedan continuar por aquí 😊':'Preciso que a equipe confira sua solicitação. Já enviei o aviso para continuarem por aqui 😊'):(es?'Tu solicitud quedó pendiente de revisión. El envío del aviso al equipo todavía no está confirmado.':'Sua solicitação ficou pendente de revisão. O envio do aviso à equipe ainda não foi confirmado.');
+      }
       // A conversational promise is not a persisted scheduling operation.
       if (/\b(te agendo|te he agendado|queda agendad[oa]|agendei|est[aá] agendad[oa]|ficou agendad[oa]|entrega confirmada|entrega est[aá] confirmada)\b/i.test(message)) {
         const registered=await prisma.agentEvent.findUnique({where:{key:`order:${p}:${key(b.messageId)}`}});
@@ -492,4 +513,5 @@ export async function operate(b: Body) {
     default: throw new AgentError('Operação desconhecida.');
   }
 }
+
 

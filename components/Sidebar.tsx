@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   BikeIcon,
   CakeSliceIcon,
+  ClockIcon,
   ChevronRightIcon,
   ContactIcon,
   LandmarkIcon,
@@ -29,6 +30,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
     title: "Vendas",
     items: [
       { href: "/painel/vendas", label: "Vendas", icon: ReceiptIcon },
+      { href: "/painel/encomendas?aba=hoje", label: "Pedidos de hoje", icon: ClockIcon },
       { href: "/painel/encomendas", label: "Encomendas", icon: CakeSliceIcon },
       { href: "/painel/pedidosya", label: "PedidosYa", icon: BikeIcon },
       { href: "/painel/clientes", label: "Clientes", icon: ContactIcon },
@@ -72,7 +74,11 @@ export function SidebarContent({
   const isOpen = (g: string) => openGroups.includes(g);
 
   const isActive = (href: string) =>
-    href === "/painel"
+    href === "/painel/encomendas?aba=hoje"
+      ? pathname === "/painel/encomendas" && params.get("aba") === "hoje"
+      : href === "/painel/encomendas"
+      ? pathname.startsWith(href) && params.get("aba") !== "hoje"
+      : href === "/painel"
       ? pathname === "/painel"
       : href === "/painel/estoque"
         ? pathname.startsWith(href) && !activeCategory
@@ -149,4 +155,5 @@ export function SidebarContent({
     </div>
   );
 }
+
 

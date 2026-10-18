@@ -21,7 +21,7 @@ export function OrderFilters({
 }) {
   const form = useRef<HTMLFormElement>(null);
   const submit = () => form.current?.requestSubmit();
-  const active = Boolean(values.q || values.hora || values.dia || values.pgto || values.canal || values.producao);
+  const active = Boolean(values.q || values.hora || (values.aba !== "hoje" && values.dia) || values.pgto || values.canal || values.producao);
   const isDate = /^\d{4}-\d{2}-\d{2}$/.test(values.dia) && values.dia !== today && values.dia !== tomorrow;
 
   const select = (name: keyof OrderFilterValues, label: string, options: [string, string][]) => (
@@ -42,6 +42,7 @@ export function OrderFilters({
         <span className="text-[11px] font-medium uppercase tracking-wide text-cacau-500">Número, cliente, produto ou celular</span>
         <input name="q" defaultValue={values.q} placeholder="Ex.: #44, Maria, empadão..." className={`input py-1.5 text-sm ${values.q ? "border-dourado-500" : ""}`} />
       </label>
+      {values.aba === "hoje" ? <input type="hidden" name="dia" value={today} /> : <>
       {select("dia", "Dia", [
         ["", "Todos os dias"],
         [today, "Hoje"],
@@ -64,7 +65,8 @@ export function OrderFilters({
           className="input w-auto py-1.5 text-sm"
         />
       </label>
-      {select("hora", "Horário", [["", "Todos os horários"], ...hours.map((h): [string, string] => [h, `${h}h`]), ["sem", "Sem horário"]])}
+      </>}
+      {select("hora", "Horário", [["", "Todos os horários"], ["agora", "Agora"], ...hours.map((h): [string, string] => [h, `${h}h`]), ["sem", "Sem horário"]])}
       {select("pgto", "Pagamento", [["", "Todos"], ["falta", "Falta receber"], ["pago", "Pago"]])}
       {select("producao", "Produção", [["", "Todas"], ["fazer", "A produzir"], ["feito", "Produzidos"]])}
       {select("canal", "Canal", [["", "Todos"], ...channels.map(([v, l]): [string, string] => [v, l])])}
@@ -77,3 +79,4 @@ export function OrderFilters({
     </form>
   );
 }
+

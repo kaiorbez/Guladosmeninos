@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
+import { compareOrderQueue, groupOrderQueue } from "@/lib/order-queue";
 import { decorationPhotoUrl, lateLabel, minutesLate, NOT_UNPAID_AI, UNPAID_AI } from "@/lib/orders";
 import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
 import type { SaleChannel } from "@prisma/client";
@@ -14,6 +15,7 @@ import { OrderFilters } from "./OrderFilters";
 import { OrderActionForm } from "@/components/OrderActionForm";
 
 const TABS = {
+  hoje: { label: "Pedidos de hoje", status: "PENDENTE" },
   proximas: { label: "Próximas", status: "PENDENTE" },
   aguardando: { label: "Aguardando pagamento", status: "PENDENTE" },
   entregues: { label: "Entregues", status: "ENTREGUE" },
@@ -43,21 +45,22 @@ function Detail({ label, value }: { label: string; value: string | null }) {
 export default async function EncomendasPage({ searchParams }: { searchParams: Promise<{ aba?: string; q?: string; hora?: string; dia?: string; pgto?: string; canal?: string; producao?: string; pagina?: string }> }) {
   const sp = await searchParams;
   const tab: Tab = sp.aba && sp.aba in TABS ? (sp.aba as Tab) : "proximas";
-  const pendingTab = tab === "proximas" || tab === "aguardando";
+  const pendingTab = tab === "hoje" || tab === "proximas" || tab === "aguardando";
+  const today = dayKey(new Date());
   const q = sp.q?.trim();
   // Filtros: hora "12" = 12:00 a 12:59; "sem" = sem horário. dia = YYYY-MM-DD.
-  const hora = sp.hora === "sem" || /^\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "";
-  const dia = /^\d{4}-\d{2}-\d{2}$/.test(sp.dia ?? "") ? sp.dia! : "";
+  const hora = sp.hora === "agora" || sp.hora === "sem" || /^\d{2}$/.test(sp.hora ?? "") ? sp.hora! : "";
+  const dia = tab === "hoje" ? today : /^\d{4}-\d{2}-\d{2}$/.test(sp.dia ?? "") ? sp.dia! : "";
   const pgto = sp.pgto === "falta" || sp.pgto === "pago" ? sp.pgto : "";
   const canal = ORDER_CHANNELS.some(([v]) => v === sp.canal) ? (sp.canal as SaleChannel) : "";
 
   const producao = sp.producao === "feito" || sp.producao === "fazer" ? sp.producao : "";
   const where = {
         status: TABS[tab].status,
-        ...(tab === "proximas" ? NOT_UNPAID_AI : tab === "aguardando" ? UNPAID_AI : {}),
+        ...((tab === "proximas" || tab === "hoje") ? NOT_UNPAID_AI : tab === "aguardando" ? UNPAID_AI : {}),
         ...(producao ? { producedAt: producao === "feito" ? { not: null } : null } : {}),
         ...(pgto ? { paid: pgto === "falta" ? { lt: prisma.order.fields.total } : { gte: prisma.order.fields.total } } : {}),
-        ...(hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
+        ...(hora === "agora" ? { deliveryTime: "AGORA" } : hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
         ...(dia ? { deliveryDate: new Date(`${dia}T00:00:00Z`) } : {}),
         ...(canal ? { channel: canal } : {}),
         ...(q
@@ -71,24 +74,33 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
             }
           : {}),
       };
-  const total = await prisma.order.count({ where });
+  const queueRows = pendingTab ? await prisma.order.findMany({
+    where,
+    select: { id: true, number: true, deliveryDate: true, deliveryTime: true, createdAt: true, paid: true,
+      payments: { select: { amount: true, paidAt: true } } },
+  }) : null;
+  const sortedQueue = queueRows?.sort(compareOrderQueue);
+  const total = sortedQueue ? sortedQueue.length : await prisma.order.count({ where });
   const pageSize = 30, pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(pages, Math.max(1, Math.floor(Number(sp.pagina) || 1)));
   const pageHref = (p: number) => { const params = new URLSearchParams({aba:tab, q:q || "", hora, dia, pgto, canal, producao, pagina:String(p)});return `/painel/encomendas?${params}`; };
   const [orders, pending, timeRows] = await Promise.all([
     prisma.order.findMany({
-      where,
-      orderBy: [{ deliveryDate: pendingTab ? "asc" : "desc" }, { deliveryTime: "asc" }, { id: "asc" }],
-      take: pageSize, skip: (page - 1) * pageSize,
+      where: sortedQueue ? { ...where, id: { in: sortedQueue.slice((page - 1) * pageSize, page * pageSize).map(o => o.id) } } : where,
+      orderBy: [{ deliveryDate: "desc" }, { deliveryTime: "asc" }, { id: "asc" }],
+      ...(sortedQueue ? {} : { take: pageSize, skip: (page - 1) * pageSize }),
     }),
     prisma.order.findMany({ where: { status: "PENDENTE", ...NOT_UNPAID_AI }, select: { deliveryDate: true, total: true, paid: true } }),
     // Horários que existem nesta aba, para as opções do filtro.
     prisma.order.findMany({ where: { status: TABS[tab].status, deliveryTime: { not: null } }, select: { deliveryTime: true }, distinct: ["deliveryTime"] }),
   ]);
+  if (sortedQueue) {
+    const positions = new Map(sortedQueue.map((order, index) => [order.id, index]));
+    orders.sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
+  }
   const hours = [...new Set(timeRows.map((r) => r.deliveryTime!.slice(0, 2)).filter((h) => /^\d{2}$/.test(h)))].sort();
-  const filtering = Boolean(q || hora || dia || pgto || canal || producao);
+  const filtering = Boolean(q || hora || (tab !== "hoje" && dia) || pgto || canal || producao);
 
-  const today = dayKey(new Date());
   const tomorrow = dayKey(new Date(Date.now() + DAY_MS));
   const weekEnd = dayKey(new Date(Date.now() + 6 * DAY_MS));
   const key = (d: Date) => d.toISOString().slice(0, 10);
@@ -110,13 +122,13 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <PageHeader title="Encomendas" subtitle="O que produzir, para quando e quanto falta receber">
+      <PageHeader title={tab === "hoje" ? "Pedidos de hoje" : "Encomendas"} subtitle="Agora por ordem de pagamento, depois os horários agendados">
         <Link href="/painel/encomendas/cozinha" className="btn-ghost">Folha da cozinha</Link>
         <Link href="/painel/encomendas/nova" className="btn-accent">＋ Nova encomenda</Link>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Kpi tone="accent" label="Para hoje" value={String(forToday)} hint="encomenda(s) pendente(s)" />
+        <Link href="/painel/encomendas?aba=hoje" className="block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-dourado-500"><Kpi tone="accent" label="Para hoje" value={String(forToday)} hint="Abrir pedidos de hoje" /></Link>
         <Kpi label="Próximos 7 dias" value={String(forWeek)} hint="contando hoje" />
         <Kpi label="Falta receber" value={bs(toReceive)} hint={`${pending.length} encomenda(s) pendente(s)`} />
       </div>
@@ -172,8 +184,12 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                 </span>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                {list.map((o) => {
+              <div className="space-y-5">
+                {groupOrderQueue(list, pendingTab).map(group => (
+                  <div key={group.key}>
+                    {group.label && <h3 className="mb-3 text-sm font-semibold text-cacau-700">{group.label}</h3>}
+                    <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                {group.orders.map((o) => {
                   const missing = Number(o.total) - Number(o.paid);
                   const lateMin = minutesLate(o);
                   const wa = o.customerPhone ? whatsappUrl(o.customerPhone) : null;
@@ -309,6 +325,9 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                     </article>
                   );
                 })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           );
@@ -324,4 +343,5 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
     </>
   );
 }
+
 
