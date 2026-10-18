@@ -58,3 +58,22 @@ test('regra de disponibilidade permanente vai uma vez só e cada torta aponta pa
  assert.equal(select([c],'bolos').regrasDisponibilidade,undefined);
  const found=select([a,b,c],'bolos','modelo 02');assert.deepEqual(restore(found).map(x=>x.variantId),['p']);assert.deepEqual(restore(select([a,b,c],'bolos','naked')).map(x=>x.variantId),['n','p']);assert.deepEqual(found.regrasDisponibilidade,{R1:rule});
 });
+
+
+test('busca de vários sabores mantém os avulsos e não retorna só combos com descrição extensa',()=>{
+ const prestige=item('Pote Prestígio','prestigio',20);const red=item('Pote Ninho com Frutas Vermelhas','ninho-fv',25);const chocolate=item('Pote Ninho com Chocolate','ninho-chocolate',20);
+ const combo=item('Combo Perfecto','combo',45,{descricao:'Prestígio, Ninho com Frutas Vermelhas e chocolate'});
+ const r=select([prestige,red,chocolate,combo],'potes','Prestígio Ninho frutas vermelhas');
+ assert.deepEqual(restore(r).map(x=>x.variantId),['prestigio','ninho-fv']);
+ assert.deepEqual(restore(select([prestige,red,chocolate,combo],'potes','Prestígio')).map(x=>x.variantId),['prestigio']);
+});
+test('busca mista respeita famílias e encontra todos os nomes em vez da descrição do combo',()=>{
+ const p=item('Pote Prestígio','p'),m=item('Pote Maracujá com Chocolate','m'),c=item('Pote Cenoura com Chocolate','c'),e=item('Empadão Frango com Requeijão','e',45);
+ const combo=item('Combo múltiplo','combo',100,{descricao:'prestígio maracujá cenoura empadão frango requeijão'});
+ assert.deepEqual(restore(select([p,m,c,e,combo],'potes,salgados','prestígio maracujá cenoura empadão frango requeijón')).map(x=>x.variantId),['p','m','c','e']);
+});
+test('nova porção premium de nozes aparece como fatia também em espanhol',()=>{
+ const n=item('Porção de torta premium de nozes','n',35,{estoque:7});const pot=item('Pote Ninho','p');
+ assert.deepEqual(restore(select([n,pot],'fatias','nuez')).map(x=>[x.variantId,x.preco,x.estoque]),[['n',35,7]]);
+ assert.deepEqual(restore(select([n,pot],'fatias')).map(x=>x.variantId),['n']);
+});

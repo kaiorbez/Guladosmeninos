@@ -2,27 +2,17 @@ type Item = Record<string, unknown>;
 /** Explicit families, with an unfiltered fallback for unknown queries. Never infer stock. */
 const STOP=new Set(['de','da','do','das','dos','com','e','a','o','as','os','para','por','um','uma','y','con','el','la','los','las','en','del','al','sabor','sabores']);
 // Customers often write in Spanish; catalog names are in Portuguese.
-const SYN:Record<string,string>={maracuya:'maracuja',frutilla:'morango',frutillas:'morango',nido:'ninho',zanahoria:'cenoura',porcion:'fatia',porciones:'fatia',cuchareable:'pote',cuchareables:'pote',queque:'torta',dulce:'doce',leche:'leite',avellana:'avela',cereza:'cereja',limon:'limao',mani:'amendoim',empanadita:'empadinha'};
+const SYN:Record<string,string>={maracuya:'maracuja',frutilla:'morango',frutillas:'morango',nido:'ninho',zanahoria:'cenoura',porcion:'fatia',porciones:'fatia',cuchareable:'pote',cuchareables:'pote',queque:'torta',dulce:'doce',leche:'leite',avellana:'avela',cereza:'cereja',limon:'limao',mani:'amendoim',empanadita:'empadinha',nuez:'nozes',nueces:'nozes',requeijon:'requeijao'};
 /** Optional name search: returns the products matching the most search terms; falls back to families when nothing matches. */
 export function catalogForPrompt(items: Item[], query: unknown, search?: unknown) {
  const normalize=(v:unknown)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
- const terms=normalize(search).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!STOP.has(t)).map(t=>SYN[t]||t);
- if(terms.length){
-  const has=(text:string,t:string)=>text.includes(t)||(t.length>4&&t.endsWith('s')&&text.includes(t.slice(0,-1)));
-  const full=(item:Item)=>normalize(item.produto)+' '+normalize(item.descricao);
-  const score=(item:Item)=>terms.filter(t=>has(full(item),t)).length;
-  const best=Math.max(0,...items.map(score));
-  const found=best?items.filter(item=>score(item)===best):[];
-  if(found.length){ const r=catalogForPrompt(found,'todos') as Item; return {...r,escopo:'busca',busca:String(search),totalCatalogo:items.length}; }
-  const r=catalogForPrompt(items,query) as Item; return {...r,busca:String(search),buscaSemResultado:true};
- }
  const families=normalize(query).split(/[,;]+/).map(x=>x.trim()).filter(Boolean);
  const known=['bolos','personalizados','potes','fatias','docinhos','salgados','bebidas','kits','adicionais','todos'];
  const all=!families.length||families.includes('todos')||families.some(x=>!known.includes(x));
  const family=(item:Item)=>{
   const name=normalize(item.produto);
   if(/^pote\b/.test(name))return 'potes';
-  if(/^fatia\b/.test(name))return 'fatias';
+  if(/^fatia\b|^porcao\b.*\btorta\b/.test(name))return 'fatias';
   if(/^docinh/.test(name))return 'docinhos';
   if(/^empad|^torta pao/.test(name))return 'salgados';
   if(/^coca|^fanta|^sprite/.test(name))return 'bebidas';
@@ -33,6 +23,19 @@ export function catalogForPrompt(items: Item[], query: unknown, search?: unknown
  };
  // Numbered catalog designs must remain discoverable even if the customer calls them customized.
  const selected=all?items:items.filter(item=>families.includes(family(item)) || (families.includes('personalizados') && /^torta em acetato modelo \d+$/.test(normalize(item.produto))));
+ const terms=[...new Set(normalize(search).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!STOP.has(t)).map(t=>SYN[t]||t))];
+ if(terms.length){
+  const has=(value:string,t:string)=>value.includes(t)||(t.length>4&&t.endsWith('s')&&value.includes(t.slice(0,-1)));
+  // Apply the requested family before search: descriptions of combos mention many standalone flavors.
+  // Keep every non-dominated name match, so a multi-flavor query does not hide an individually requested item.
+  const names=selected.map(item=>({item,hits:terms.filter(t=>has(normalize(item.produto),t))})).filter(m=>m.hits.length);
+  const named=names.filter(m=>!names.some(other=>other.hits.length>m.hits.length&&m.hits.every(t=>other.hits.includes(t)))).map(m=>m.item);
+  const score=(item:Item)=>terms.filter(t=>has(normalize(item.descricao),t)).length;
+  const best=named.length?0:Math.max(0,...selected.map(score));
+  const found=named.length?named:best?selected.filter(item=>score(item)===best):[];
+  if(found.length){const r=catalogForPrompt(found,'todos') as Item;return {...r,escopo:'busca',busca:String(search),totalCatalogo:items.length};}
+  const r=catalogForPrompt(items,query) as Item;return {...r,busca:String(search),buscaSemResultado:true};
+ }
  const columns=['variantId','tamanho','preco','estoque'];
  const common=['produto','descricao','controlaEstoque','precoSobConsulta'];
  const supported=selected.every(item=>Object.keys(item).length===8&&[...columns,...common].every(k=>Object.keys(item).includes(k)));
@@ -62,3 +65,4 @@ function shareRules(groups: Item[]) {
  }
  return texts.length?{regrasDisponibilidade:Object.fromEntries(texts.map((t,i)=>[`R${i+1}`,t]))}:{};
 }
+
