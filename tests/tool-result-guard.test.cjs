@@ -14,3 +14,5 @@ test('aviso sem confirmação de envio e recibo sem ferramenta são sinalizados'
   assert.equal(failedCommercialTools([], 'Recebi o comprovante').length, 1);
   assert.equal(failedCommercialTools([], '¿Qué sabor prefieres?').length, 0);
 });
+
+test('registro sem ferramenta é bloqueado; negação e condição não viram falha',()=>{assert.equal(failedCommercialTools([], 'Seu pedido foi registrado').length,1);assert.equal(failedCommercialTools([], 'Ainda não registrei seu pedido').length,0);assert.equal(failedCommercialTools([], 'Quando registrar seu pedido, envio o QR').length,0);});
