@@ -357,12 +357,13 @@ export async function operate(b: Body) {
       if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||day>dayLaPaz()) throw new AgentError('Dia de auditoria inválido.');
       const from=new Date(day+'T04:00:00Z'), to=new Date(from.getTime()+86400000);
       if(!Number.isFinite(from.getTime())||from.toISOString().slice(0,10)!==day) throw new AgentError('Data inválida.');
-      const [sales,orders,tickets]=await Promise.all([
+      const [sales,orders,tickets,expenses]=await Promise.all([
         prisma.sale.findMany({where:{createdAt:{gte:from,lt:to}},include:{items:true},orderBy:{createdAt:'asc'}}),
         prisma.order.findMany({where:{OR:[{deliveryDate:new Date(day+'T00:00:00Z')},{createdAt:{gte:from,lt:to}},{payments:{some:{paidAt:{gte:from,lt:to}}}}]},include:{payments:true}}),
         prisma.agentTicket.findMany({where:{OR:[{createdAt:{gte:from,lt:to}},{updatedAt:{gte:from,lt:to}}]},orderBy:{createdAt:'asc'}}),
+        prisma.expense.findMany({where:{date:new Date(day+'T00:00:00Z')},orderBy:{createdAt:'asc'}}),
       ]);
-      return {ok:true,dia:day,vendas:sales,encomendas:orders,pendencias:tickets};
+      return {ok:true,dia:day,vendas:sales,encomendas:orders,pendencias:tickets,despesas:expenses};
     }
 
     case 'reiniciarAtendimento': {

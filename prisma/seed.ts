@@ -15,6 +15,8 @@ import { repairOwnerReceiptsOctober17 } from "../lib/agent/owner-receipt-repair"
 
 import { repairCarmichelineDuplicate } from "../lib/agent/owner-order-repair";
 
+import { reconcileBiozentRefund } from "../lib/agent/owner-refund-repair";
+
 const prisma = new PrismaClient();
 
 async function ensureAdmin() {
@@ -580,6 +582,11 @@ async function main() {
         await tx.orderActivity.create({data:{orderId:order.id,actorName:"Sistema",action:"Sinalizada conciliação do reembolso solicitado de 20 Bs; nenhum valor ou pagamento alterado."}});
       }
     },{timeout:30000});
+  });
+  await once("2026-10-17-biozent-devolucao-1000645286", async () => {
+    await prisma.$transaction(async tx => {
+      console.log(JSON.stringify(await reconcileBiozentRefund(tx)));
+    }, {timeout:30000});
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.
