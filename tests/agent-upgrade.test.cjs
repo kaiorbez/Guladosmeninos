@@ -38,7 +38,7 @@ function fixture({network='ok',yangoFee=null}={}) {
  const env=['ZAPI_INSTANCE','ZAPI_TOKEN','ZAPI_CLIENT_TOKEN','WHATSAPP_EQUIPE'];for(const e of env)process.env[e]='test';
  const transport=load('transport',{'@/lib/db':{prisma},'./rules':rules,fetch:async()=>{calls++;if(network==='timeout')throw Error('timeout');return {ok:network==='ok',status:network==='ok'?200:400,json:async()=>network==='ok'?{messageId:'sent-'+calls}:{error:'failed'}};}});
  let receiptPayments=0;
- const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./receipt-carry':load('receipt-carry'),'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./catalog-context':load('catalog-context'),'./yango':{lookupYangoFee:async()=>yangoFee},'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
+ const service=load('service',{'@/lib/db':{prisma},'./rules':rules,'./receipt-carry':load('receipt-carry'),'./quoted-prices':load('quoted-prices'),'./review':load('review',{'./rules':rules}),'./notices':load('notices'),'./conversation-context':load('conversation-context'),'./catalog-context':load('catalog-context'),'./yango':{lookupYangoFee:async()=>yangoFee},'./transport':transport,'./identity':load('identity',{'@/lib/db':{prisma},'./transport':transport}),'./history':{importHistory:async()=>{}},'./payments':{recordReceiptPayment:async()=>{receiptPayments++;return {ok:true};}}});
  return {prisma,service,transport,state:()=>state,calls:()=>calls,receiptPayments:()=>receiptPayments,failWrite:()=>{failWrite=true;}};
 }
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
@@ -637,4 +637,10 @@ test('salvar pedido idêntico novamente após comprovante não valida SKU invent
  const request={...b,messageId:'receipt-repeat',pedido:{...b.pedido,id:saved.pedido.id,versao:1,itens:b.pedido.itens.map(v=>({...v,variantId:'inventado-mas-sem-alteracao'}))}};
  const result=await f.service.saveOrder(request);assert.equal(result.registrado,true);assert.equal(result.semAlteracao,true);assert.equal(f.state().order.length,1);assert.equal(f.state().order[0].paid,130);assert.equal(f.state().order[0].agentVersion,1);
  request.messageId='receipt-changed';request.pedido.itens[0].quantidade=2;await assert.rejects(f.service.saveOrder(request),/Item sem preço/);assert.equal(f.state().order[0].paid,130);
+});
+test('envio valida preço atual de fatia antes de enviar e abre pendência sem cobrar valor incorreto',async()=>{
+ const f=fixture();await f.prisma.product.create({data:{id:'fatia',name:'Fatia Maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:true,variants:[{id:'mar',name:'Único',price:30,active:true,stock:7}]}});
+ const r=await f.service.operate({acao:'enviar',telefone:phone,messageId:'wrong-price',geracao:1,parte:'0',texto:'1 porción de maracuyá con chocolate: 35 Bs',idioma:'es'});
+ assert.equal(r.enviado,true);assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/citado 35 Bs; painel atual 30 Bs/);
+ const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.match(reply.body.message,/30 Bs/);assert.doesNotMatch(reply.body.message,/35 Bs/);assert.equal(f.state().order.length,0);
 });

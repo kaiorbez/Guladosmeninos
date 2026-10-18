@@ -49,3 +49,12 @@ test('relógio oficial distingue 18:59 local de 22:59 UTC e não oferece próxim
  const text=exportsObject.formatLeanAgentContext({estadoAtendimento:clock,message:'pago por qr pfv',historico:[{papel:'cliente',texto:'sim',data:'2026-10-05T22:59:03Z'}]});
  assert.match(text,/18:59.*UTC-4/);assert.match(text,/ABERTO AGORA/);assert.match(text,/histórico com Z estão em UTC/);assert.equal(payload(text).historico.mensagens[0][2],'2026-10-05T22:59:03Z');
 });
+
+
+test('preço atual do painel aparece no contexto e prevalece sobre valor antigo da conversa',()=>{
+ const item={variantId:'mar-real',produto:'Fatia Maracujá',tamanho:'Único',preco:30,estoque:7,precoSobConsulta:false};
+ const context={message:'Aquí falta la porción de maracuyá',catalogo:[item,{...item,variantId:'outro',produto:'Torta inteira'}],historico:[{papel:'atendente',texto:'Porción de maracuyá 35 Bs'}]};
+ const out=payload(exportsObject.formatLeanAgentContext(context));
+ assert.equal(out.precosAtuaisDoPainel.itens.length,1);assert.equal(out.precosAtuaisDoPainel.itens[0][3],30);assert.equal(out.precosAtuaisDoPainel.itens[0][0],'mar-real');
+ assert.match(out.precosAtuaisDoPainel.fonte,/prevalecem/);assert.equal(out.catalogo,undefined);
+});

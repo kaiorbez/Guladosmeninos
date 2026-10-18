@@ -29,6 +29,8 @@ function failedCommercialTools(steps, output, current = {}) {
     return claim && !denied;
   });
   if (orderClaim && !orderRegistered && !failed.some(f => f.ferramenta === 'registrar_encomenda')) failed.push({ ferramenta: 'registrar_encomenda', motivo: 'A resposta afirmava registro de pedido, mas não houve gravação confirmada.' });
+  const promisesQr=String(output||'').split(/[.!\n]+/).some(sentence=>!/[?¿]/.test(sentence)&&/\b(?:te env[ií]o|voy a enviar|vou enviar|enviarei|estou enviando)\b.{0,60}\bqr\b/iu.test(sentence));
+  if(promisesQr&&!orderRegistered&&!persisted.length&&!failed.some(f=>f.ferramenta==='registrar_encomenda'))failed.push({ferramenta:'registrar_encomenda',motivo:'A resposta prometia cobrança por QR, mas não há encomenda registrada no contexto nem gravação confirmada.'});
   return failed;
 }
 

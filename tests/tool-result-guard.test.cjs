@@ -38,3 +38,9 @@ test('saudação de acompanhamento pode afirmar pedido já existente sem gravar 
  assert.equal(failedCommercialTools([],'Pedido registrado',{...current,message:'Quero mais quatro potes'}).length,1);
  assert.equal(failedCommercialTools([step('registrar_encomenda',{ok:false})],'Pedido registrado',current).length,1);
 });
+
+test('promessa de QR sem ficha registrada não substitui a ferramenta de registro',()=>{
+ assert.equal(failedCommercialTools([],'Te envío el QR para pagar los 90 Bs.',{pedidos:[]}).length,1);
+ assert.equal(failedCommercialTools([],'Posso te enviar o QR?',{pedidos:[]}).length,0);
+ assert.equal(failedCommercialTools([step('registrar_encomenda',{ok:true,registrado:true})],'Te envío el QR',{pedidos:[]}).length,0);
+});

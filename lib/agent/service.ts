@@ -6,6 +6,7 @@ import { importHistory } from './history';
 import { linkLegacyOrders } from './identity';
 import { recordReceiptPayment } from './payments';
 import { unsettledReceiptMedia } from './receipt-carry';
+import { quotedPriceIssues } from './quoted-prices';
 import { receiptReview, receiptNotice, closeMessage, deliveryFee } from './review';
 import { pendingNotice, compatibleReceipt } from './notices';
 import { conversationFacts, currentReminderDetails, recoveredText } from './conversation-context';
@@ -517,6 +518,12 @@ export async function operate(b: Body) {
           await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nSolicitação de agendamento precisa de confirmação da equipe: não houve registro da alteração neste atendimento.\n\n📝 *Observações / pendências*\nConsultar a conversa e a ficha do cliente antes de confirmar horário ou entrega.'});
           message=/\b(te agendo|te he agendado|queda agendad[oa])\b/i.test(message)?'La solicitud de horario está pendiente de confirmación por el equipo 😊':'A solicitação de horário está pendente de confirmação pela equipe 😊';
         }
+      }
+      const priceIssues=/\bbs\b/i.test(message)?quotedPriceIssues(message,await catalog()):[];
+      if(priceIssues.length){
+        const details=priceIssues.map(x=>`${x.produto}: citado ${x.precoCitado} Bs; painel atual ${x.precoAtual} Bs.`).join('\n');
+        await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nPreço na resposta divergia do painel e foi bloqueado antes do envio.\n\n'+details+'\n\n👉 *Ação da equipe*\nConferir o resumo com os preços atuais antes de cobrar. Não criar pagamento ou pedido duplicado.'});
+        message=priceIssues.map(x=>`${x.produto}: ${x.precoAtual} Bs`).join('\n')+(b.idioma==='es'?'\n\nNecesito revisar el resumen antes de cobrar.':'\n\nPreciso conferir o resumo antes de cobrar.');
       }
       const sent = await sendOnce(`reply:${p}:${key(b.messageId)}:${key(b.parte)}`, p, message, undefined, Number(b.geracao));
       return { ok: sent.enviado, ...sent };
