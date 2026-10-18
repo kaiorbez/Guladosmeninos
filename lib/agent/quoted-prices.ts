@@ -16,7 +16,9 @@ export function quotedPriceIssues(message:string, items:Item[]) {
   let start=0;
   for(const price of prices){
    const clause=line.slice(start,price.index);start=(price.index||0)+price[0].length;
-   if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause)&&!/(?:porcao|porcion|fatia|pote|cuchareable)/.test(clause))continue;
+   // A combined basket total is not an individual product price, even when its description names a pot/slice.
+   if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause))continue;
+   if(/docinh|brigadeiros|pacoca|\bdoces\b/.test(clause))continue;
    if(/\b(?:combo|promo|promocion|par de|par promocional)\b/.test(clause))continue;
    const quantity=/\b(\d+|um|uma|uno|una|dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez)\s*(?:[x×]\s*)?(?:bolos? (?:de|no) )?(?:porc|fatia|pote|cuchareable)/.exec(clause) || /(?:pote|fatia|porcion)[^:;]*?\b[x×]\s*(\d+)\b/.exec(clause) || /\b(\d+)\s*unidades?\b/.exec(clause);
    const numbers:Record<string,number>={um:1,uma:1,uno:1,una:1,dois:2,duas:2,dos:2,tres:3,quatro:4,cuatro:4,cinco:5,seis:6,sete:7,siete:7,oito:8,ocho:8,nove:9,nueve:9,dez:10,diez:10};

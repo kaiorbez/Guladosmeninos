@@ -27,3 +27,7 @@ test('totais de linha com quantidade numérica ou por extenso não viram falso p
  for(const text of ['2 bolos de pote Ninho com chocolate: 40 Bs','dois potes Ninho com chocolate: 40 Bs','dos potes Nido con chocolate: 40 Bs','Pote Ninho com Chocolate x 2: 40 Bs'])assert.equal(exp.quotedPriceIssues(text,p).length,0,text);
  assert.equal(exp.quotedPriceIssues('dois potes Ninho com chocolate: 50 Bs',p)[0].precoAtual,40);
 });
+test('não compara total de cesta mista ao preço dos potes',()=>{
+ const p=[{produto:'Pote Ninho com Chocolate',preco:20,precoSobConsulta:false}];
+ for(const s of ['Dois potes Ninho com brigadeiro de chocolate e seis docinhos, total 61 Bs','Dois potes Ninho com chocolate + três brigadeiros de paçoca + três de Ninho: 61 Bs','Seu pedido de dois potes Ninho com chocolate fica no total de 61 Bs','Dois potes Ninho com chocolate e docinhos: 50 Bs'])assert.equal(exp.quotedPriceIssues(s,p).length,0,s);
+});
