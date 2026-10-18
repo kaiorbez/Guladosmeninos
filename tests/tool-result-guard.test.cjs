@@ -16,3 +16,17 @@ test('aviso sem confirmação de envio e recibo sem ferramenta são sinalizados'
 });
 
 test('registro sem ferramenta é bloqueado; negação e condição não viram falha',()=>{assert.equal(failedCommercialTools([], 'Seu pedido foi registrado').length,1);assert.equal(failedCommercialTools([], 'Ainda não registrei seu pedido').length,0);assert.equal(failedCommercialTools([], 'Quando registrar seu pedido, envio o QR').length,0);});
+
+test('erro de preço corrigido e pedido salvo na mesma execução não gera aviso falso',()=>{
+ const attempts=[step('registrar_encomenda',{ok:false,error:'Preço não autorizado'}),step('registrar_encomenda',{ok:true,registrado:true})];
+ assert.equal(failedCommercialTools(attempts,'[SEM_RESPOSTA]').length,0);
+ assert.equal(failedCommercialTools(attempts,'Pedido registrado').length,0);
+ attempts.push(step('registrar_encomenda',{ok:false,error:'Conflito posterior'}));
+ assert.equal(failedCommercialTools(attempts,'Pedido registrado').length,1);
+});
+test('aviso confirmado depois de tentativa falha resolve somente o mesmo tipo de operação',()=>{
+ const attempts=[step('avisar_equipe',{ok:false}),step('avisar_equipe',{ok:true,registrado:true,notificacaoEnviada:true})];
+ assert.equal(failedCommercialTools(attempts,'').length,0);
+ const other={action:{tool:'avisar_equipe',toolInput:{tipo:'DUVIDA'}},observation:JSON.stringify({ok:true,registrado:true,notificacaoEnviada:true})};
+ assert.equal(failedCommercialTools([step('avisar_equipe',{ok:false}),other],'').length,1);
+});
