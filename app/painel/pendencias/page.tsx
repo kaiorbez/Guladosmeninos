@@ -7,10 +7,8 @@ export default async function Pendencias({searchParams}:{searchParams:Promise<{a
   await requireSession();
   const archived=(await searchParams).arquivo==='1';
   const tickets = await prisma.agentTicket.findMany({ where: {status:archived?'RESOLVIDA':{in:['ABERTA','ASSUMIDA']}}, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], take: 200 });
-  const deliveries = await prisma.agentDelivery.findMany({ where: { status: { in: ['FAILED', 'UNKNOWN', 'SENDING'] } }, orderBy: { createdAt: 'desc' }, take: 30 });
   return <main className="space-y-6">
     <div><h1 className="text-2xl font-semibold">Pendências do atendimento</h1><p className="text-cacau-600">Dúvidas e comprovantes aguardando a equipe. Resolver libera a IA para a próxima mensagem do cliente.</p></div>
-    {deliveries.length > 0 && <section className="rounded-lg border border-amber-300 bg-amber-50 p-4"><h2 className="font-semibold">Envios sem confirmação</h2><p>Confira o WhatsApp antes de repetir um envio para evitar mensagens duplicadas.</p>{deliveries.map(d => <p key={d.key}>{d.phone}: {d.status} — {d.error || 'Sem confirmação de envio'}</p>)}</section>}
     <nav className="flex gap-4"><Link className={!archived?'font-semibold underline':''} href="/painel/pendencias">Pendentes</Link><Link className={archived?'font-semibold underline':''} href="/painel/pendencias?arquivo=1">Resolvidas / arquivo</Link></nav>
     {!tickets.length && <p>Nenhuma pendência registrada.</p>}
     {tickets.map(t => <article key={t.id} className="space-y-3 rounded-lg border border-creme-300 bg-white p-4">
