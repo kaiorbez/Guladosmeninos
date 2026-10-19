@@ -43,7 +43,7 @@ export function paymentPlan(total: number, paid: number, date: string, full = fa
 export function yangoUrl(v: unknown) {
   const s = text(v, 2000); let u: URL;
   try { u = new URL(s); } catch { throw new AgentError('Link Yango inválido.'); }
-  if (u.protocol !== 'https:' || u.hostname !== 'delivery.yango.com' || !u.pathname.startsWith('/route/')) throw new AgentError('Use o link de acompanhamento da Yango.');
+  if (u.protocol !== 'https:' || !(u.hostname === 'yango.com' || u.hostname.endsWith('.yango.com')) || !!u.username || !!u.password || !!u.port) throw new AgentError('Use um link HTTPS de acompanhamento em um domínio yango.com.');
   return u.toString();
 }
 export function resolvedCommand(v: unknown) {

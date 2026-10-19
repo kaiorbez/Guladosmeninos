@@ -1,3 +1,4 @@
+import { YangoForm } from '@/components/YangoForm';
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderForm } from "@/components/OrderForm";
@@ -23,6 +24,9 @@ export default async function EditarEncomenda({ params }: { params: Promise<{ id
         <Link href={`/painel/encomendas/nova?cliente=${order.id}`} className="btn-ghost">＋ Pedido p/ este cliente</Link>
       </PageHeader>
       <div className="space-y-4">
+        {order.dispatchedAt&&<p className="font-semibold text-emerald-700">Saiu para entrega</p>}
+        {(order.deliveryLinkSentAt||(order.status==='PENDENTE'&&order.deliveryMode==='ENTREGA'&&Number(order.paid)>0))&&<YangoForm orderId={order.id} sentAt={order.deliveryLinkSentAt?.toISOString()}/>}
+
         <section className="card">
           <h2>Histórico do pedido</h2>
           {order.activities.length ? <ul className="mt-2 space-y-2 text-sm">{order.activities.map(a=><li key={a.id}>{dateTime(a.createdAt)} · {a.action} · {a.actorName}</li>)}</ul> : <p className="mt-2 text-sm text-cacau-500">Sem alterações registradas. O histórico passa a registrar as ações a partir desta atualização.</p>}

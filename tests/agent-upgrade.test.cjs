@@ -23,7 +23,7 @@ function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  if(v instanceof Date)return +x===+v;return x===v;
 });}
 function fixture({network='ok',yangoFee=null}={}) {
- let state={product:[{id:'torta',name:'Torta maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:false,variants:[{id:'v-torta',name:'P',price:130,active:true,stock:0}]}],agentEvent:[],agentConversation:[{phone,generation:1,latestMoment:0n,pausedUntil:null}],agentInbox:[],agentTicket:[],agentDelivery:[],order:[]};let q=Promise.resolve(),calls=0,failWrite=false;
+ let state={product:[{id:'torta',name:'Torta maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:false,variants:[{id:'v-torta',name:'P',price:130,active:true,stock:0}]}],agentEvent:[],agentConversation:[{phone,generation:1,latestMoment:0n,pausedUntil:null}],agentInbox:[],agentTicket:[],agentDelivery:[],order:[],orderActivity:[]};let q=Promise.resolve(),calls=0,failWrite=false;
  function db(s){const out={$executeRaw:async()=>0};for(const table of Object.keys(s))out[table]={
   findUnique:async({where})=>s[table].find(o=>matches(o,where))||null,
   findUniqueOrThrow:async({where})=>{const o=s[table].find(o=>matches(o,where));if(!o)throw Error('not found');return o;},
@@ -668,4 +668,60 @@ test('blocked quote keeps diagnostics in team notice and sends only natural cust
   assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/Preço na resposta divergia/);
   const customer=f.state().agentDelivery.filter(d=>d.phone===phone);assert.equal(customer.length,1);assert.equal(customer[0].body.message,'Voy a confirmar esa información con el equipo.');assert(!/FORA_CATALOGO|SEM_ESTOQUE|painel|catalog|diverg|resumen|conferencia/i.test(customer[0].body.message));
  }
+});
+
+async function paidDelivery(f,messageId='dispatch-order') {
+ const saved=await f.service.saveOrder({...body(),messageId});
+ await f.prisma.order.update({where:{id:saved.pedido.id},data:{paid:130}});
+ return saved.pedido.id;
+}
+test('panel and group share one delivery claim, close notices and preserve order money',async()=>{
+ const f=fixture(),id=await paidDelivery(f);const t=await f.service.ticket({telefone:phone,messageId:'shipping',geracao:1,pergunta:'Entrega',cliente:'Cliente'});
+ await f.prisma.agentTicket.update({where:{id:t.ticketId},data:{orderId:id,kind:'COMPROVANTE',question:'📌 *Resumo*\n✅ CONFERE: pagamento compatível'}});
+ await f.prisma.agentConversation.update({where:{phone},data:{pausedUntil:new Date(Date.now()+60000)}});
+ const [panel,group]=await Promise.all([
+  f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#panel',fee:9.5,source:'painel'}),
+  f.service.team({grupo:'test',referenceMessageId:t.messageId,messageId:'group-shipping',texto:'https://delivery.yango.com/route/#group'})
+ ]);
+ const customer=f.state().agentDelivery.filter(d=>d.phone===phone&&/Acompanhe|Sigue/.test(d.body.message));assert.equal(customer.length,1);assert(customer[0].body.message.includes('Instagram:'));assert(customer[0].body.message.includes('TikTok:'));assert(customer[0].body.message.includes('chat.whatsapp.com'));
+ const o=f.state().order[0];assert(o.deliveryLinkSentAt);assert(o.dispatchedAt);assert.equal(o.status,'PENDENTE');assert.equal(o.paid,130);assert.equal(o.total,130);assert.equal(f.receiptPayments(),0);assert.equal(f.state().agentConversation[0].pausedUntil,null);assert.equal(f.state().agentTicket.find(x=>x.id===t.ticketId).status,'RESOLVIDA');
+ const calls=f.calls();const repeat=await f.service.sendYangoLink({orderId:id,link:'https://go.yango.com/another-link',source:'painel'});assert.equal(repeat.jaEnviado,true);assert.equal(f.calls(),calls);assert.equal(repeat.link,o.deliveryLink);
+ const notices=f.state().agentDelivery.filter(d=>d.key.startsWith('yango-panel-notice:'));assert(notices.length<=1);
+});
+test('panel shipment is sent once with optional fee and a short team notice',async()=>{
+ const f=fixture(),id=await paidDelivery(f);const r=await f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#one',fee:12.5,source:'painel'});assert.equal(r.ok,true);assert.equal(r.groupNoticeSent,true);
+ const customer=f.state().agentDelivery.find(d=>d.phone===phone);assert.match(customer.body.message,/Valor da entrega: 12,50 Bs/);
+ const notice=f.state().agentDelivery.find(d=>d.key.startsWith('yango-panel-notice:'));assert.equal(notice.body.message,'Link da Yango enviado para Cliente pelo painel.');assert.equal(f.state().orderActivity.length,1);
+});
+test('unpaid, pickup and cancelled orders cannot dispatch; domains and fees are validated',async()=>{
+ for(const change of [{paid:0},{deliveryMode:'RETIRADA'},{status:'CANCELADA'}]){const f=fixture(),id=await paidDelivery(f);await f.prisma.order.update({where:{id},data:change});const before=f.calls();await assert.rejects(f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#one',source:'painel'}),/pagamento confirmado/);assert.equal(f.calls(),before);}
+ for(const link of ['https://delivery.yango.com.evil.test/route/x','http://delivery.yango.com/route/x','https://yango.com@evil.test/','https://user:pass@delivery.yango.com/route/x','https://delivery.yango.com:8443/route/x'])assert.throws(()=>rules.yangoUrl(link));
+ assert.equal(rules.yangoUrl('https://go.yango.com/track'),'https://go.yango.com/track');
+ const f=fixture(),id=await paidDelivery(f);await assert.rejects(f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#one',fee:-5,source:'painel'}),/Valor da entrega/);
+});
+test('uncertain delivery send is not repeated across panel requests and never marks dispatch or resumes AI',async()=>{
+ const f=fixture({network:'timeout'}),id=await paidDelivery(f);f.state().agentConversation[0].pausedUntil=new Date(Date.now()+60000);
+ const q={orderId:id,link:'https://delivery.yango.com/route/#one',source:'painel'};
+ const first=await f.service.sendYangoLink(q);assert.equal(first.enviado,false);assert.equal(f.calls(),1);
+ const second=await f.service.sendYangoLink({...q,link:'https://delivery.yango.com/route/#two'});assert.equal(second.enviado,false);assert.equal(f.calls(),1);assert(!f.state().order[0].deliveryLinkSentAt);assert(f.state().agentConversation[0].pausedUntil);assert.equal(f.state().agentTicket.length,0);
+});
+test('different orders of one customer may each receive tracking; same order notices cannot resend',async()=>{
+ const f=fixture(),one=await paidDelivery(f,'one');const b={...body(),messageId:'two',pedido:{...order(),novoPedidoSeparado:true}};const second=await f.service.saveOrder(b);await f.prisma.order.update({where:{id:second.pedido.id},data:{paid:130}});
+ await f.service.sendYangoLink({orderId:one,link:'https://delivery.yango.com/route/#one',source:'painel'});await f.service.sendYangoLink({orderId:second.pedido.id,link:'https://delivery.yango.com/route/#two',source:'painel'});
+ assert.equal(f.state().agentDelivery.filter(d=>d.phone===phone&&/Acompanhe/.test(d.body.message)).length,2);
+});
+test('legacy receipt references recover exact order and a historical sent link is not sent again',async()=>{
+ const f=fixture(),id=await paidDelivery(f);await f.prisma.agentEvent.create({data:{key:`receipt-payment:${phone}:receipt`,phone,kind:'RECEIPT_PAYMENT',payload:{orderId:id}}});
+ const t=await f.prisma.agentTicket.create({data:{sourceKey:`ticket:${phone}:COMPROVANTE:receipt`,phone,customerName:'Cliente',kind:'COMPROVANTE',question:'📌 *Resumo*\n✅ CONFERE: pagamento',status:'RESOLVIDA'}});
+ await f.prisma.agentDelivery.create({data:{key:`yango:${t.id}:old`,phone,ticketId:t.id,status:'SENT',messageId:'old-message',body:{message:'Acompanhe:\nhttps://delivery.yango.com/route/#old'}}});
+ const r=await f.service.sendYangoLink({ticketId:t.id,link:'https://delivery.yango.com/route/#new',source:'painel'});assert.equal(r.enviado,true);assert.equal(r.link,'https://delivery.yango.com/route/#old');assert.equal(f.state().agentDelivery.filter(d=>d.phone===phone).length,1);assert.equal(f.state().order[0].deliveryLink,'https://delivery.yango.com/route/#old');
+});
+
+test('panel uses customer language and group notification failure does not repeat customer send',async()=>{
+ const f=fixture(),id=await paidDelivery(f);
+ await f.prisma.agentInbox.create({data:{phone,messageId:'spanish',ready:true,content:'Hola, quiero el envío, gracias',moment:BigInt(Date.now())}});
+ const original=f.transport.sendOnce;f.transport.sendOnce=async(...args)=>{if(args[0].startsWith('yango-panel-notice:'))throw Error('group unavailable');return original(...args);};
+ const r=await f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#spanish',source:'painel'});
+ assert.equal(r.enviado,true);assert.equal(r.groupNoticeSent,false);assert.match(f.state().agentDelivery.find(d=>d.phone===phone).body.message,/Sigue tu entrega/);assert(f.state().order[0].deliveryLinkSentAt);
+ const calls=f.calls();await f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#new',source:'painel'});assert.equal(f.calls(),calls);
 });

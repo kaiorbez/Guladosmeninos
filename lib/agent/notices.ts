@@ -40,7 +40,7 @@ export function pendingNotice(kind: string, name: string, phone: string, questio
     : (reminder ? '⏰ LEMBRETE — DÚVIDA AINDA PENDENTE' : '❓ DÚVIDA SEM RESPOSTA');
   const originalAction = question.includes('👉 *Ação da equipe*') ? question.split('👉 *Ação da equipe*').slice(1).join('👉 *Ação da equipe*').trim() : '';
   const action = receipt
-    ? compatible ? 'Pagamento compatível com o pedido. Quando sair para entrega, responda ESTA mensagem com o link da Yango: ele vai direto para o cliente.' : originalAction || 'Confira o crédito no banco antes de confirmar. Depois, responda ESTA mensagem com “Resolvido”.'
+    ? compatible ? 'Pagamento compatível. Quando sair, envie o link da Yango pelo painel (botão Enviar ao cliente) ou responda esta mensagem com o link.' : originalAction || 'Confira o crédito no banco antes de confirmar. Depois, responda ESTA mensagem com “Resolvido”.'
     : 'Atenda o cliente no WhatsApp. Ao terminar, responda ESTA mensagem com “Resolvido”.';
   return groupNotice(title, name, phone, noticeDetails(question), action);
 }

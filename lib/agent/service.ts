@@ -20,8 +20,8 @@ const moneyValue=(v:unknown)=>typeof v==='number'?Math.round(v*100)/100:NaN;
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const destination=(b:Body)=>b.destinoTeste==='59175678921' && b.telefone==='59175678921' && (text(b.cliente).startsWith('[TESTE]') || text((b.pedido as Body)?.cliente).startsWith('[TESTE]'))?'59175678921':group();
 const group = () => { const g = process.env.WHATSAPP_EQUIPE; if (!g) throw new AgentError('Grupo da equipe não configurado.', 503); return g; };
-function presentOrder(o: { id: string; number: number; customerName: string; product: string; total: unknown; paid: unknown; deliveryDate: Date; payFull: boolean; [k: string]: unknown }) {
-  return { id: o.id, numero: o.number, cliente: o.customerName, produto: o.product, itens: o.agentItems, data: o.deliveryDate.toISOString().slice(0, 10), horario: o.deliveryTime, modalidade: o.deliveryMode, endereco: o.deliveryAddress, situacao: o.status, versao: o.agentVersion, observacoes: o.notes, massa:o.dough,recheio:o.filling,cobertura:o.topping,decoracao:o.decoration, ...paymentPlan(Number(o.total), Number(o.paid), o.deliveryDate.toISOString().slice(0, 10), o.payFull) };
+function presentOrder(o: { id: string; number: number; customerName: string; product: string; total: unknown; paid: unknown; deliveryDate: Date; payFull: boolean; deliveryLink?:string|null; deliveryLinkSentAt?:Date|null; dispatchedAt?:Date|null; [k: string]: unknown }) {
+  return { id: o.id, numero: o.number, cliente: o.customerName, produto: o.product, itens: o.agentItems, data: o.deliveryDate.toISOString().slice(0, 10), horario: o.deliveryTime, modalidade: o.deliveryMode, endereco: o.deliveryAddress, situacao: o.status, rastreio:o.deliveryLink||null,linkEnviadoEm:o.deliveryLinkSentAt?.toISOString()||null,saiuParaEntregaEm:o.dispatchedAt?.toISOString()||null, versao: o.agentVersion, observacoes: o.notes, massa:o.dough,recheio:o.filling,cobertura:o.topping,decoracao:o.decoration, ...paymentPlan(Number(o.total), Number(o.paid), o.deliveryDate.toISOString().slice(0, 10), o.payFull) };
 }
 export async function catalog() {
  const products=await prisma.product.findMany({where:{active:true,onStore:true},include:{variants:{where:{active:true}}}});
@@ -140,6 +140,7 @@ export async function ticket(b: Body) {
   let receiptMedia: Array<{id:string;url:string;kind:string}>=[];
   let report=question;
   let receiptKey:string|null=null;
+  let linkedOrderId:string|null=null;
   const t = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
     await current(tx, p, b);
@@ -159,6 +160,7 @@ export async function ticket(b: Body) {
       if(!receipt || typeof receipt!=='object' || (receipt as Body).tipo!=='COMPROVANTE_BANCARIO') throw new AgentError('Classifique a mídia atual e informe campos visíveis do comprovante.');
       const orderId=text((receipt as Body).pedidoId,100);
       const order=orderId?await tx.order.findFirst({where:{id:orderId,customerPhone:p}}):null;
+      linkedOrderId=order?.id||null;
       const expected=order?paymentPlan(Number(order.total),Number(order.paid),order.deliveryDate.toISOString().slice(0,10),order.payFull).pagarAgora:null;
       const balance=order?Math.max(0,Math.round((Number(order.total)-Number(order.paid))*100)/100):null;
       const review=receiptReview(receipt as Body,expected,dayLaPaz(),balance);
@@ -177,7 +179,7 @@ export async function ticket(b: Body) {
       }
     }
     const sourceKey = receiptKey || `ticket:${p}:${kind}:${id}`;
-    return tx.agentTicket.upsert({ where: { sourceKey }, create: { sourceKey, phone: p, customerName: text(b.cliente, 120) || p, question:report, kind, nextReminderAt: new Date(Date.now() + 10 * 60000) }, update: {} });
+    return tx.agentTicket.upsert({ where: { sourceKey }, create: { sourceKey, orderId:linkedOrderId, phone: p, customerName: text(b.cliente, 120) || p, question:report, kind, nextReminderAt: new Date(Date.now() + 10 * 60000) }, update: {} });
   });
   let sent: { enviado: boolean; estado: string; messageId: string | null };
   try { sent = await sendOnce(`ticket:${t.id}`, destination(b), pendingNotice(t.kind,t.customerName,t.phone,t.question), t.id); }
@@ -221,7 +223,7 @@ export async function team(b: Body) {
     if(sent.enviado) {retomado=(await resolveTicket(t.id,'Equipe confirmou início do preparo.','grupo')).retomado;await prisma.agentEvent.upsert({where:{key:`preparing:${t.id}`},create:{key:`preparing:${t.id}`,phone:t.phone,kind:'PREPARING',payload:{confirmadoPelaEquipe:true},result:{enviado:true}},update:{}});}
     return {ok:sent.enviado,preparoConfirmado:sent.enviado,retomado,telefone:t.phone,...sent};
   }
-  if (!/https?:\/\/delivery\.yango\.com\//i.test(message) && !/^\s*yango\b/i.test(message)) {
+  if (!/https:\/\/(?:[a-z0-9-]+\.)*yango\.com(?:[/:?#]|$)/i.test(message) && !/^\s*yango\b/i.test(message)) {
     if (!message) return { ok: true, ignorar: true };
     return prisma.$transaction(async tx => {
       await lockConversation(tx, group());
@@ -235,20 +237,92 @@ export async function team(b: Body) {
       return { ok: true, assumido: true, lembretesSuspensos: true };
     });
   }
-  const link = yangoUrl(message.match(/https:\/\/\S+/)?.[0]);
-  const quotedFee=deliveryFee(message);
-  const fetchedFee=await lookupYangoFee(link);
-  const fee=fetchedFee??quotedFee;
-  const ctx=await context(t.phone);
-  const messages=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).reverse();
+  return sendYangoLink({ticketId:t.id,link:message.match(/https:\/\/\S+/)?.[0],fee:deliveryFee(message),source:'grupo'});
+
+}
+
+/** Resolve old receipt notices through the persisted receipt/payment event, never by customer name or amount. */
+export async function deliveryOrderForTicket(t:{id:string;phone:string;sourceKey:string;orderId?:string|null}) {
+ let id=t.orderId||'';
+ if(!id && t.sourceKey.startsWith(`ticket:${t.phone}:COMPROVANTE:`)) {
+  const ids=new Set<string>();
+  for(const media of t.sourceKey.slice(`ticket:${t.phone}:COMPROVANTE:`.length).split('|')) {
+   const event=await prisma.agentEvent.findUnique({where:{key:`receipt-payment:${t.phone}:${media}`}});
+   const orderId=text((event?.payload as Body|undefined)?.orderId,100);if(orderId)ids.add(orderId);
+  }
+  if(ids.size===1)id=[...ids][0];
+ }
+ return id?prisma.order.findFirst({where:{id,customerPhone:t.phone}}):null;
+}
+
+export async function sendYangoLink(input:{orderId?:string;ticketId?:string;link:unknown;fee?:number|null;source:'painel'|'grupo'}) {
+ const requestedLink=yangoUrl(input.link);
+ if(input.fee!==undefined&&input.fee!==null&&(!Number.isFinite(input.fee)||input.fee<0||input.fee>10000))throw new AgentError('Valor da entrega inválido.');
+ const t=input.ticketId?await prisma.agentTicket.findUnique({where:{id:input.ticketId}}):null;
+ if(input.ticketId&&!t)throw new AgentError('Pendência não encontrada.',404);
+ const order=input.orderId?await prisma.order.findUnique({where:{id:input.orderId}}):t?await deliveryOrderForTicket(t):null;
+ if(input.source==='painel'&&!order)throw new AgentError('Abra a ficha do pedido para enviar: esta pendência ainda não tem pedido vinculado.');
+ if(order && (order.status==='CANCELADA'||order.deliveryMode!=='ENTREGA'||Number(order.paid)<=0))throw new AgentError('O pedido precisa ser de entrega e ter pagamento confirmado.');
+ if(order&&t&&order.customerPhone!==t.phone)throw new AgentError('Pendência e pedido são de clientes diferentes.');
+ if(order&&t){const linked=await deliveryOrderForTicket(t);if(linked&&linked.id!==order.id)throw new AgentError('A pendência pertence a outro pedido.');}
+ const p=phone(order?.customerPhone||t?.phone);
+ const scope=order?`order:${order.id}`:`ticket:${t!.id}`;
+ const planKey=`yango-plan:${scope}`;
+ const previous=await prisma.agentEvent.findUnique({where:{key:planKey}});
+ if(order?.deliveryLinkSentAt) {
+  const result=previous?.result as Body|undefined;
+  const resolved=t&&t.status!=='RESOLVIDA'?await resolveTicket(t.id,`Link Yango já enviado: ${order.deliveryLink}`,input.source):null;
+  return {ok:true,enviado:true,jaEnviado:true,telefone:p,orderId:order.id,link:order.deliveryLink,sentAt:order.deliveryLinkSentAt.toISOString(),resumeTicketId:t?.id||text(result?.resumeTicketId,100)||undefined,retomado:resolved?.retomado||false};
+ }
+ let plan=previous?.payload as Body|undefined;
+ if(!plan) {
+  const old=await prisma.agentDelivery.findMany({where:{phone:p,status:'SENT',key:{startsWith:'yango:'}},orderBy:{createdAt:'asc'},take:100});
+  const related=order?await prisma.agentTicket.findMany({where:{phone:p,orderId:order.id}}):[];
+  const relatedIds=new Set([...related.map(x=>x.id),...(t?[t.id]:[])]);
+  const legacy=old.find(d=>d.ticketId&&relatedIds.has(d.ticketId));
+  const oldLink=legacy?String((legacy.body as Body).message||'').match(/https:\/\/[^\s]+/)?.[0]:undefined;
+  const link=oldLink?yangoUrl(oldLink):requestedLink;
+  const fetchedFee=await lookupYangoFee(link);const fee=fetchedFee??input.fee??null;
+  const ctx=await context(p);const messages=ctx.historico.filter(m=>m.papel==='cliente').slice(-20).reverse();
   const detected=messages.find(m=>/\b(hola|quiero|gracias|buenas|mañana|puedes|quero|obrigad[oa]|amanhã|você)\b|[ãõ]/i.test(String(m.texto)));
   const lang=/\b(hola|quiero|gracias|buenas|mañana|puedes)\b/i.test(String(detected?.texto||''))?'es':'pt';
-  const sent = await sendOnce(`yango:${t.id}:${link}`, t.phone, closeMessage(lang,link,fee), t.id);
-  if (!sent.enviado) return { ok: false, telefone: t.phone, ...sent, error: 'Envio não confirmado; verificar antes de repetir.' };
-  const resolved=await resolveTicket(t.id, `Link Yango enviado: ${link}${fee!==null?`; entrega: ${fee} Bs`:''}`, 'grupo');
-  await prisma.agentEvent.upsert({ where: { key: `team:${id}` }, create: { key: `team:${id}`, phone: t.phone, kind: 'DELIVERY_LINK', payload: { link, valorEntrega:fee, moeda:'Bs', fonteValor:fetchedFee!==null?'YANGO':quotedFee!==null?'EQUIPE':'NAO_DISPONIVEL' }, result: { enviado: true } }, update: {} });
-  return { ok: true, telefone: t.phone, enviado: true, encerrado: true, retomado: resolved.retomado };
+  plan=await prisma.$transaction(async tx=>{
+   await lockConversation(tx,p);const existing=await tx.agentEvent.findUnique({where:{key:planKey}});if(existing)return existing.payload as Body;
+   const payload={link,fee,lang,source:input.source,customerKey:legacy?.key||`yango-${scope}`,orderId:order?.id||null,ticketId:t?.id||null,fonteValor:fetchedFee!==null?'YANGO':input.fee!==undefined&&input.fee!==null?'EQUIPE':'NAO_DISPONIVEL'};
+   await tx.agentEvent.create({data:{key:planKey,phone:p,kind:'YANGO_PLAN',payload}});return payload;
+  });
+ }
+ const link=String(plan.link),fee=typeof plan.fee==='number'?plan.fee:null;
+ const sent=await sendOnce(String(plan.customerKey),p,closeMessage(plan.lang==='es'?'es':'pt',link,fee),t?.id);
+ if(!sent.enviado)return {ok:false,telefone:p,...sent,error:'Envio não confirmado. Confira o WhatsApp antes de tentar novamente.'};
+ const delivery=await prisma.agentDelivery.findUnique({where:{key:String(plan.customerKey)}});
+ const sentAt=delivery?.updatedAt||new Date();
+ const finalized=await prisma.$transaction(async tx=>{
+  await lockConversation(tx,p);
+  let anchorId=t?.id;
+  if(order) {
+   const actual=await tx.order.findUniqueOrThrow({where:{id:order.id}});
+   if(!actual.deliveryLinkSentAt) {
+    await tx.order.update({where:{id:order.id},data:{deliveryLink:link,deliveryLinkSentAt:sentAt,dispatchedAt:sentAt}});
+    await tx.orderActivity.create({data:{orderId:order.id,actorName:input.source==='painel'?'Painel':'Equipe no grupo',action:`Saiu para entrega. Link da Yango enviado: ${link}. Frete separado do pagamento do pedido.`}});
+   }
+   const anchor=await tx.agentTicket.upsert({where:{sourceKey:`yango-dispatch:${order.id}`},create:{sourceKey:`yango-dispatch:${order.id}`,orderId:order.id,phone:p,customerName:order.customerName,kind:'ENTREGA',question:`Rastreio da entrega do pedido #${order.number}.`,nextReminderAt:new Date()},update:{}});
+   anchorId=anchor.id;
+   if(t)await tx.agentTicket.update({where:{id:t.id},data:{orderId:order.id}});
+   const receipts=await tx.agentTicket.findMany({where:{phone:p,orderId:order.id,status:{in:['ABERTA','ASSUMIDA']}}});
+   for(const receipt of receipts)if(compatibleReceipt(receipt.kind,receipt.question)||receipt.id===t?.id)await resolveTicketInTransaction(tx,receipt.id,`Link Yango enviado: ${link}`,input.source);
+  }
+  const resolved=anchorId?await resolveTicketInTransaction(tx,anchorId,`Link Yango enviado: ${link}${fee!==null?`; entrega: ${fee} Bs`:''}`,input.source):null;
+  const result={enviado:true,orderId:order?.id||null,resumeTicketId:anchorId||null,sentAt:sentAt.toISOString()};
+  await tx.agentEvent.update({where:{key:planKey},data:{result}});
+  await tx.agentEvent.upsert({where:{key:`yango-sent:${scope}`},create:{key:`yango-sent:${scope}`,phone:p,kind:'DELIVERY_LINK',payload:{link,orderId:order?.id||null,valorEntrega:fee,moeda:'Bs',fonteValor:String(plan!.fonteValor)},result},update:{}});
+  return {resumeTicketId:anchorId,retomado:resolved?.retomado||false};
+ });
+ let groupNoticeSent:boolean|undefined;
+ if(plan.source==='painel') {try{const notice=await sendOnce(`yango-panel-notice:${scope}`,group(),`Link da Yango enviado para ${order?.customerName||t?.customerName||p} pelo painel.`,finalized.resumeTicketId);groupNoticeSent=notice.enviado;}catch{groupNoticeSent=false;}}
+ return {ok:true,enviado:true,telefone:p,orderId:order?.id,link,sentAt:sentAt.toISOString(),encerrado:true,...finalized,groupNoticeSent};
 }
+
 export async function reminders(testTarget?: string) {
   const due = await prisma.agentTicket.findMany({ where: { ...(testTarget==='59175678921'?{phone:testTarget,customerName:{startsWith:'[TESTE]'}}:{}), status: 'ABERTA', kind: { in: ['DUVIDA','COMPROVANTE'] }, NOT: { kind: 'COMPROVANTE', question: { startsWith: '📌 *Resumo*\n✅ CONFERE:' } }, reminderCount: { lt: 3 }, nextReminderAt: { lte: new Date() } }, take: 30 });
   const results = [];

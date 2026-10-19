@@ -191,6 +191,9 @@ model Order {
   agentVersion  Int @default(1)
   deliveryMode  String?
   deliveryAddress String?
+  deliveryLink String?
+  deliveryLinkSentAt DateTime?
+  dispatchedAt DateTime?
   agentItems    Json?
   payFull       Boolean @default(false)
   id            String      @id @default(cuid())
@@ -311,6 +314,7 @@ model AgentConversation {
 }
 
 model AgentTicket {
+  orderId         String?
   id              String   @id @default(cuid())
   sourceKey       String   @unique
   phone           String

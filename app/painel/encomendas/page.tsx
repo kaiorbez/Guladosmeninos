@@ -1,3 +1,4 @@
+import { YangoForm } from '@/components/YangoForm';
 import Link from "next/link";
 import { ClockIcon, MessageCircleIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -229,6 +230,9 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
 
                       <div className="px-5 py-4">
                         <p className="whitespace-pre-line text-[15px] font-medium">{o.product}</p>
+                        {o.dispatchedAt&&<p className="mt-2 text-sm font-semibold text-emerald-700">Saiu para entrega</p>}
+                        {(o.deliveryLinkSentAt||(o.status==='PENDENTE'&&o.deliveryMode==='ENTREGA'&&Number(o.paid)>0))&&<YangoForm orderId={o.id} sentAt={o.deliveryLinkSentAt?.toISOString()}/>}
+
                         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <Detail label="Massa" value={o.dough} />
                           <Detail label="Recheio" value={o.filling} />
