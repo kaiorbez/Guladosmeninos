@@ -526,7 +526,9 @@ export async function operate(b: Body) {
       if(priceIssues.length){
         const details=priceIssues.map(x=>x.precoAtual===null?`${x.produto}: oferta bloqueada (${x.motivo}); conferir disponibilidade no painel.`:`${x.produto}: citado ${x.precoCitado} Bs; painel atual ${x.precoAtual} Bs.`).join('\n');
         await ticket({...b,tipo:'DUVIDA',pergunta:'📌 *Resumo*\nPreço na resposta divergia do painel e foi bloqueado antes do envio.\n\n'+details+'\n\n👉 *Ação da equipe*\nConferir o resumo com os preços atuais antes de cobrar. Não criar pagamento ou pedido duplicado.'});
-        message=priceIssues.map(x=>x.precoAtual===null?(b.idioma==='es'?`Necesito confirmar la disponibilidad de ${x.produto}.`:`Preciso confirmar a disponibilidade de ${x.produto}.`):`${x.produto}: ${x.precoAtual} Bs`).join('\n')+(b.idioma==='es'?'\n\nNecesito revisar el resumen antes de cobrar.':'\n\nPreciso conferir o resumo antes de cobrar.');
+        // Diagnostics stay in the team notice. Never echo normalized clauses, codes or panel checks to the customer.
+        const spanish=b.idioma==='es'||(b.idioma!=='pt'&&/[¿¡]|\b(?:un|una|con|porci[oó]n|cuchareables?|cucharables?|nido|zanahoria|maracuy[aá]|dulce de leche)\b/iu.test(message));
+        message=spanish?'Voy a confirmar esa información con el equipo.':'Vou confirmar essa informação com a equipe.';
       }
       const sent = await sendOnce(`reply:${p}:${key(b.messageId)}:${key(b.parte)}`, p, message, undefined, Number(b.geracao));
       return { ok: sent.enviado, ...sent };

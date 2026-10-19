@@ -38,3 +38,39 @@ test('lista de sabores sem preço em cada linha exclui estoque zero sem bloquear
  assert.equal(exp.filterAvailableProductLists('Pedido antigo: Pote Ninho com Frutas Vermelhas pago 25 Bs',catalog),'Pedido antigo: Pote Ninho com Frutas Vermelhas pago 25 Bs');
  assert.match(exp.filterAvailableProductLists('Temos bolos de pote:\n- Ninho com frutas vermelhas',[{...catalog[1],controlaEstoque:false}]),/frutas vermelhas/);
 });
+
+const synonymCatalog=[
+ {produto:'Pote Ninho com Frutas Vermelhas',preco:25,precoSobConsulta:false,controlaEstoque:true,estoque:5},
+ {produto:'Pote Ninho com Morango',preco:25,precoSobConsulta:false},
+ {produto:'Pote Cenoura com Chocolate',preco:25,precoSobConsulta:false},
+ {produto:'Pote Maracujá com Chocolate',preco:20,precoSobConsulta:false},
+ {produto:'Pote Doce de Leite com Chocolate',preco:20,precoSobConsulta:false},
+ {produto:'Fatia Ninho com Frutas Vermelhas',preco:35,precoSobConsulta:false}
+];
+test('required cuchareable example matches the actual 25 Bs pot, preserving family and flavor',()=>{
+ assert.equal(exp.quotedPriceIssues('un cuchareable de ninho con frutas rojas: 25 Bs',synonymCatalog).length,0);
+ const wrong=exp.quotedPriceIssues('un cuchareable de ninho con frutas rojas: 20 Bs',synonymCatalog);
+ assert.equal(wrong.length,1);assert.equal(wrong[0].produto,'Pote Ninho com Frutas Vermelhas');assert.equal(wrong[0].precoAtual,25);
+});
+test('all requested pot aliases match without case or accent differences',()=>{
+ for(const alias of ['cuchareable','cuchareables','cucharable','postre de cuchara','bolo de pote','bolo no copo','torta en pote']) {
+  for(const flavor of ['ninho con frutas rojas','NIDO CON FRUTOS ROJOS','NÍNHO COM FRÚTAS VERMÉLHAS']) {
+   const text=`un ${alias} de ${flavor}: 25 Bs`;
+   assert.equal(exp.quotedPriceIssues(text,synonymCatalog).length,0,text);
+   const mismatch=exp.quotedPriceIssues(text.replace('25 Bs','24 Bs'),synonymCatalog);assert.equal(mismatch[0].precoAtual,25,text);
+  }
+ }
+});
+test('Spanish flavor and slice synonyms keep canonical price, stock and absent flavor checks',()=>{
+ for(const text of ['Cucharable de Nido con frutilla: 25 Bs','Torta en pote Nido con fresa: 25 Bs','Bolo no copo de zanahoria con chocolate: 25 Bs','Postre de cuchara de maracuyá con chocolate: 20 Bs','Cuchareable de dulce de leche con chocolate: 20 Bs','Una porción de Nido con frutos rojos: 35 Bs'])assert.equal(exp.quotedPriceIssues(text,synonymCatalog).length,0,text);
+ assert.equal(exp.quotedPriceIssues('Porción Nido con frutas rojas: 25 Bs',synonymCatalog)[0].precoAtual,35);
+ assert.equal(exp.quotedPriceIssues('Cuchareable Nido con frutas rojas: 25 Bs',[{...synonymCatalog[0],estoque:0}])[0].motivo,'SEM_ESTOQUE');
+ assert.equal(exp.quotedPriceIssues('Cuchareable Nido con frutas rojas: 25 Bs',[synonymCatalog[1]])[0].motivo,'FORA_CATALOGO');
+ assert.equal(exp.quotedPriceIssues('dos postres de cuchara de Nido con frutos rojos: 50 Bs',synonymCatalog).length,0);
+});
+
+test('Spanish aliases in availability lists still filter sold-out flavors',()=>{
+ const text='Tenemos cuchareables:\n- Nido con frutas rojas\n- Nido con fresa\n\n¿Cuál deseas?';
+ const result=exp.filterAvailableProductLists(text,[{...synonymCatalog[0],estoque:0},{...synonymCatalog[1],controlaEstoque:true,estoque:2}]);
+ assert(!result.includes('- Nido con frutas rojas'));assert(result.includes('- Nido con fresa'));
+});

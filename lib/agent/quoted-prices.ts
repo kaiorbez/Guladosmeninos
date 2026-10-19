@@ -1,8 +1,15 @@
 type Item = { produto: string; preco: number; precoSobConsulta: boolean; controlaEstoque?: boolean; estoque?: number };
+// Canonical product vocabulary is shared by response text and catalog names.
+// Normalize accents/case first so Spanish aliases do not become false missing-product alerts.
 const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
- .replace(/\bmaracuya\b/g,'maracuja').replace(/\bnido\b/g,'ninho').replace(/\bzanahoria\b/g,'cenoura')
- .replace(/\bfrutos\b/g,'frutas').replace(/\brojos\b/g,'vermelhas').replace(/\bfrutillas?\b/g,'morango').replace(/\bnueces|\bnuez\b/g,'nozes');
-const family=(s:string)=>/porc(?:ion|iones|ao|oes)|fatia/.test(s)?'fatias':/pote|cuchareable/.test(s)?'potes':null;
+ .replace(/\b(?:cuchareables?|cucharables?|postres? de cuchara|bolos? de pote|bolos? no copo|tortas? en pote|potes?)\b/g,'pote')
+ .replace(/\b(?:porci(?:on|ones)|porcao|porcoes|fatias?)\b/g,'fatia')
+ .replace(/\bnido\b/g,'ninho').replace(/\bzanahoria\b/g,'cenoura').replace(/\bmaracuya\b/g,'maracuja')
+ .replace(/\bdulce de leche\b/g,'doce de leite')
+ .replace(/\bfrut(?:as|os) roj(?:as|os)\b/g,'frutas vermelhas')
+ .replace(/\bfrutos\b/g,'frutas').replace(/\broj[oa]s\b/g,'vermelhas')
+ .replace(/\b(?:frutillas?|fresas?)\b/g,'morango').replace(/\b(?:nueces|nuez)\b/g,'nozes');
+const family=(s:string)=>/\bfatia\b/.test(s)?'fatias':/\bpote\b/.test(s)?'potes':null;
 const productFamily=(s:string)=>/^fatia\b|^porcao\b.*torta/.test(s)?'fatias':/^pote\b/.test(s)?'potes':null;
 const noise=new Set(['fatia','porcao','pote','torta','premium','especial','de','com','e','do','da','um','uma']);
 /** Conservative validation of unambiguous individual ready-product prices. Totals, freight, combos and multi-unit offers are not unit quotes. */
@@ -20,8 +27,8 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause))continue;
    if(/docinh|brigadeiros|pacoca|\bdoces\b/.test(clause))continue;
    if(/\b(?:combo|promo|promocion|par de|par promocional)\b/.test(clause))continue;
-   const quantity=/\b(\d+|um|uma|uno|una|dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez)\s*(?:[x×]\s*)?(?:bolos? (?:de|no) )?(?:porc|fatia|pote|cuchareable)/.exec(clause) || /(?:pote|fatia|porcion)[^:;]*?\b[x×]\s*(\d+)\b/.exec(clause) || /\b(\d+)\s*unidades?\b/.exec(clause);
-   const numbers:Record<string,number>={um:1,uma:1,uno:1,una:1,dois:2,duas:2,dos:2,tres:3,quatro:4,cuatro:4,cinco:5,seis:6,sete:7,siete:7,oito:8,ocho:8,nove:9,nueve:9,dez:10,diez:10};
+   const quantity=/\b(\d+|um|uma|un|uno|una|dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez)\s*(?:[x×]\s*)?(?:bolos? (?:de|no) )?(?:porc|fatia|pote|cuchareable)/.exec(clause) || /(?:pote|fatia|porcion)[^:;]*?\b[x×]\s*(\d+)\b/.exec(clause) || /\b(\d+)\s*unidades?\b/.exec(clause);
+   const numbers:Record<string,number>={um:1,uma:1,un:1,uno:1,una:1,dois:2,duas:2,dos:2,tres:3,quatro:4,cuatro:4,cinco:5,seis:6,sete:7,siete:7,oito:8,ocho:8,nove:9,nueve:9,dez:10,diez:10};
    const count=quantity?(numbers[quantity[1]]||Number(quantity[1])):1;
    const multiplier=/cada|por unidade|por unidad|c\/u/.test(clause)?1:count;
    const kind=family(clause)||section;if(!kind)continue;

@@ -642,7 +642,7 @@ test('envio valida preço atual de fatia antes de enviar e abre pendência sem c
  const f=fixture();await f.prisma.product.create({data:{id:'fatia',name:'Fatia Maracujá',active:true,onStore:true,priceOnRequest:false,trackStock:true,variants:[{id:'mar',name:'Único',price:30,active:true,stock:7}]}});
  const r=await f.service.operate({acao:'enviar',telefone:phone,messageId:'wrong-price',geracao:1,parte:'0',texto:'1 porción de maracuyá con chocolate: 35 Bs',idioma:'es'});
  assert.equal(r.enviado,true);assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/citado 35 Bs; painel atual 30 Bs/);
- const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.match(reply.body.message,/30 Bs/);assert.doesNotMatch(reply.body.message,/35 Bs/);assert.equal(f.state().order.length,0);
+ const reply=f.state().agentDelivery.find(d=>d.key.startsWith('reply:'));assert.equal(reply.body.message,'Voy a confirmar esa información con el equipo.');assert.doesNotMatch(reply.body.message,/35 Bs|painel|divergia|FORA_CATALOGO/);assert.equal(f.state().order.length,0);
 });
 test('registro bloqueia quantidade sem estoque e preserva produtos sem controle de estoque',async()=>{
  const f=fixture();f.state().product[0].trackStock=true;f.state().product[0].variants[0].stock=1;
@@ -653,4 +653,19 @@ test('PDF ilegível registra uma única pendência sem pagamento nem confirmaç�
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'pdf',midia:'pdf',texto:'comprovante',momento:Date.now()});
  const b={acao:'falhaAnalise',telefone:phone,messageId:'pdf',geracao:2,etapa:'pdf',idioma:'pt'};
  await f.service.operate(b);await f.service.operate(b);assert.equal(f.state().agentTicket.length,1);assert.equal(f.state().order.length,0);assert.equal(f.receiptPayments(),0);assert.equal(f.calls(),1);
+});
+
+test('sending a Spanish pot synonym passes catalog validation and preserves customer text',async()=>{
+ const f=fixture();Object.assign(f.state().product[0],{name:'Pote Ninho com Frutas Vermelhas'});f.state().product[0].variants[0].price=25;
+ const texto='un cuchareable de ninho con frutas rojas: 25 Bs';
+ const r=await f.service.operate({acao:'enviar',telefone:phone,messageId:'pot-alias',parte:'0',geracao:1,texto,idioma:'es'});
+ assert.equal(r.enviado,true);assert.equal(f.state().agentTicket.length,0);assert.equal(f.state().agentDelivery.find(d=>d.phone===phone).body.message,texto);
+});
+test('blocked quote keeps diagnostics in team notice and sends only natural customer fallback',async()=>{
+ for(const [name,texto] of [['Pote Ninho com Frutas Vermelhas','Cucharable Nido con frutas rojas: 20 Bs'],['Pote Ninho com Morango','Cucharable Nido con frutas rojas: 25 Bs']]) {
+  const f=fixture();f.state().product[0].name=name;f.state().product[0].variants[0].price=25;
+  await f.service.operate({acao:'enviar',telefone:phone,messageId:'blocked',parte:'0',geracao:1,texto,idioma:'es'});
+  assert.equal(f.state().agentTicket.length,1);assert.match(f.state().agentTicket[0].question,/Preço na resposta divergia/);
+  const customer=f.state().agentDelivery.filter(d=>d.phone===phone);assert.equal(customer.length,1);assert.equal(customer[0].body.message,'Voy a confirmar esa información con el equipo.');assert(!/FORA_CATALOGO|SEM_ESTOQUE|painel|catalog|diverg|resumen|conferencia/i.test(customer[0].body.message));
+ }
 });
