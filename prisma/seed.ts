@@ -17,6 +17,8 @@ import { repairCarmichelineDuplicate } from "../lib/agent/owner-order-repair";
 
 import { reconcileBiozentRefund } from "../lib/agent/owner-refund-repair";
 
+import { cleanupPanelOctober19 } from "../lib/agent/owner-panel-cleanup";
+
 const prisma = new PrismaClient();
 
 async function ensureAdmin() {
@@ -587,6 +589,9 @@ async function main() {
     await prisma.$transaction(async tx => {
       console.log(JSON.stringify(await reconcileBiozentRefund(tx)));
     }, {timeout:30000});
+  });
+  await once("2026-10-19-encerrar-pendencias-e-testes-claude", async () => {
+    await prisma.$transaction(async tx => {console.log(JSON.stringify(await cleanupPanelOctober19(tx)));},{timeout:60000});
   });
   // Limpeza única solicitada pelo proprietário. Apenas fixtures do telefone de teste autorizado,
   // sem pagamento, venda ou alteração de estoque. Auditoria de envios permanece preservada.

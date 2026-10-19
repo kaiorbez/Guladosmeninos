@@ -1,3 +1,4 @@
+import { resolveTicketInTransaction } from './ticket-resolution';
 import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { AgentError, dateOnly, dayLaPaz, key, orderInput, paymentPlan, phone, resolvedCommand, text, yangoUrl } from './rules';
@@ -186,16 +187,9 @@ export async function ticket(b: Body) {
   return { midiaEnviada:mediaSent, ok: true, registrado: true, ticketId: t.id, tipo: t.kind, notificacaoEnviada: sent.enviado, estadoEnvio: sent.estado, messageId: sent.messageId };
 }
 export async function resolveTicket(id: string, answer: string, who: string) {
-  return prisma.$transaction(async tx => {
-    const t = await tx.agentTicket.findUnique({ where: { id } });
-    if (!t) throw new AgentError('Aviso não encontrado.', 404);
-    await lockConversation(tx, t.phone);
-    const changed = await tx.agentTicket.updateMany({ where: { id, status: { in: ['ABERTA', 'ASSUMIDA'] } }, data: { status: 'RESOLVIDA', answer: answer || null, resolvedBy: who, resolvedAt: new Date() } });
-    if (!changed.count) return { ok: true, telefone: t.phone, retomado: false, motivo: 'AVISO_JA_RESOLVIDO' };
-    await tx.agentConversation.updateMany({ where: { phone: t.phone }, data: { pausedUntil: null, generation: { increment: 1 } } });
-    return { ok: true, telefone: t.phone, retomado: true };
-  });
+  return prisma.$transaction(tx => resolveTicketInTransaction(tx,id,answer,who));
 }
+
 export async function team(b: Body) {
   if (String(b.grupo) !== group()) throw new AgentError('Grupo não autorizado.', 403);
   if (b.fromApi === true) return { ok: true, ignorar: true, motivo: 'MENSAGEM_AUTOMATICA' };
@@ -431,6 +425,11 @@ export async function operate(b: Body) {
       if(b.telefone!=='59175678921'||b.destinoTeste!==b.telefone) throw new AgentError('Teste restrito ao contato autorizado.');
       const r=await prisma.agentTicket.updateMany({where:{phone:b.telefone,customerName:{startsWith:'[TESTE]'},status:'ABERTA',kind:{in:['DUVIDA','COMPROVANTE']}},data:{nextReminderAt:new Date()}});
       return {ok:true,atualizados:r.count};
+    }
+    case 'statusLimpezaPainel19': {
+      const audit=await prisma.agentEvent.findUnique({where:{key:'owner-cleanup:2026-10-19:panel-pendencias-test-213-215'}});
+      const open=await prisma.agentTicket.findMany({where:{status:{in:['ABERTA','ASSUMIDA']},createdAt:{lte:new Date('2026-10-19T14:15:19Z')}},select:{id:true}});
+      return {ok:true,audit:audit?.result||null,remaining:open.length};
     }
     case 'catalogo': { const items=await catalog(); return b.compacto===true?catalogForPrompt(items,b.familias,b.busca):{ok:true,itens:items}; }
     case 'finalizarTeste': {
