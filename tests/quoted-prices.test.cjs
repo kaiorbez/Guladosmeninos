@@ -74,3 +74,29 @@ test('Spanish aliases in availability lists still filter sold-out flavors',()=>{
  const result=exp.filterAvailableProductLists(text,[{...synonymCatalog[0],estoque:0},{...synonymCatalog[1],controlaEstoque:true,estoque:2}]);
  assert(!result.includes('- Nido con frutas rojas'));assert(result.includes('- Nido con fresa'));
 });
+
+test('short flavor name matches the unique product in its family without a false missing-product alert',()=>{
+ assert.deepEqual(issues('1 pote de Maracuyá: 20 Bs'),[]);
+ assert.deepEqual(issues('1 pote de Maracuyá: 25 Bs'),[{produto:'Pote Maracujá com Chocolate',precoCitado:25,precoAtual:20}]);
+ assert.equal(issues('2 potes de Maracuyá: 40 Bs').length,0);
+ assert.equal(exp.quotedPriceIssues('1 pote de Maracuyá: 20 Bs',[items[0]])[0].motivo,'FORA_CATALOGO');
+ assert.equal(exp.quotedPriceIssues('1 pote de Maracuyá: 20 Bs',[{...items[3],controlaEstoque:true,estoque:0}])[0].motivo,'SEM_ESTOQUE');
+});
+
+test('partial names never choose a flavor by price and ambiguous matches are not outside the catalog',()=>{
+ const catalog=[items[3],{produto:'Pote Maracujá com Coco',preco:25,precoSobConsulta:false}];
+ assert.equal(exp.quotedPriceIssues('1 pote de Maracuyá: 20 Bs',catalog).length,0);
+ assert.equal(exp.quotedPriceIssues('1 pote de Maracuyá: 25 Bs',catalog).length,0);
+ assert.equal(issues('1 pote de Maracuyá con fresa: 20 Bs')[0].motivo,'FORA_CATALOGO');
+ assert.equal(issues('1 pote de baunilha: 20 Bs')[0].motivo,'FORA_CATALOGO');
+ assert.equal(exp.quotedPriceIssues('1 pote de Maracuyá: 20 Bs',[{...items[3],precoSobConsulta:true}]).length,0);
+});
+
+test('mermelada normalizes to geleia for matching names and checking real prices',()=>{
+ const catalog=[{produto:'Fatia Ninho com Geleia de Frutas Vermelhas',preco:35,precoSobConsulta:false}];
+ assert.equal(exp.quotedPriceIssues('porción Nido con mermelada de frutos rojos: 35 Bs',catalog).length,0);
+ assert.equal(exp.quotedPriceIssues('PORCIÓN NIDO CON MERMELADA DE FRUTOS ROJOS: 35 BS',catalog).length,0);
+ assert.equal(exp.quotedPriceIssues('porción Nido con mermelada de frutos rojos: 30 Bs',catalog)[0].precoAtual,35);
+ assert.equal(exp.quotedPriceIssues('porción Nido con frutos rojos: 35 Bs',catalog).length,0);
+ assert.equal(exp.quotedPriceIssues('porción Nido con mermelada de frutos rojos: 35 Bs',synonymCatalog).length,0);
+});

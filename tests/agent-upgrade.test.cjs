@@ -44,6 +44,18 @@ function fixture({network='ok',yangoFee=null}={}) {
 const order=()=>({cliente:'Cliente',data:future,horario:'17:00',modalidade:'ENTREGA',endereco:'Torre, 13D',itens:[{variantId:'v-torta',descricao:'Torta maracujá P',quantidade:1,precoUnitario:130}]});
 const body=()=>({telefone:phone,messageId:'m1',geracao:1,pedido:order()});
 
+test('valid short flavor and mermelada prices reach the customer unchanged without a confirmation fallback',async()=>{
+ for(const [product,price,message] of [
+  ['Pote Maracujá com Chocolate',20,'1 pote de Maracuyá: 20 Bs'],
+  ['Fatia Ninho com Geleia de Frutas Vermelhas',35,'porción Nido con mermelada de frutos rojos: 35 Bs'],
+ ]) {
+  const f=fixture();f.state().product=[{id:'p',name:product,active:true,onStore:true,priceOnRequest:false,trackStock:true,variants:[{id:'v',name:'Único',price,active:true,stock:3}]}];
+  const result=await f.service.operate({acao:'enviar',telefone:phone,messageId:'valid-flavor',parte:'0',geracao:1,idioma:'es',texto:message});
+  assert.equal(result.enviado,true);assert.equal(f.state().agentTicket.length,0);assert.equal(f.calls(),1);
+  assert.equal(f.state().agentDelivery[0].body.message,message);
+ }
+});
+
 test('quitação antecipada cobra saldo real sem alterar pagamentos e é idempotente',async()=>{
  const f=fixture();const saved=await f.service.saveOrder(body());const id=saved.pedido.id;
  await f.prisma.order.update({where:{id},data:{paid:65}});

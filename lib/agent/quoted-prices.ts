@@ -6,12 +6,15 @@ const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').to
  .replace(/\b(?:porci(?:on|ones)|porcao|porcoes|fatias?)\b/g,'fatia')
  .replace(/\bnido\b/g,'ninho').replace(/\bzanahoria\b/g,'cenoura').replace(/\bmaracuya\b/g,'maracuja')
  .replace(/\bdulce de leche\b/g,'doce de leite')
+ .replace(/\bmermelada\b/g,'geleia')
  .replace(/\bfrut(?:as|os) roj(?:as|os)\b/g,'frutas vermelhas')
  .replace(/\bfrutos\b/g,'frutas').replace(/\broj[oa]s\b/g,'vermelhas')
  .replace(/\b(?:frutillas?|fresas?)\b/g,'morango').replace(/\b(?:nueces|nuez)\b/g,'nozes');
 const family=(s:string)=>/\bfatia\b/.test(s)?'fatias':/\bpote\b/.test(s)?'potes':null;
 const productFamily=(s:string)=>/^fatia\b|^porcao\b.*torta/.test(s)?'fatias':/^pote\b/.test(s)?'potes':null;
 const noise=new Set(['fatia','porcao','pote','torta','premium','especial','de','com','e','do','da','um','uma']);
+const flavorWords=new Set('ninho prestigio maracuja brigadeiro cenoura morango nozes frutas vermelhas chocolate beijinho churros cafe pistache amendoim coco limao abacaxi banana baunilha oreo nutella doce leite'.split(' '));
+const productTokens=(s:string)=>normalize(s).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!noise.has(t));
 /** Conservative validation of unambiguous individual ready-product prices. Totals, freight, combos and multi-unit offers are not unit quotes. */
 export function quotedPriceIssues(message:string, items:Item[]) {
  const issues:Array<{produto:string;precoCitado:number;precoAtual:number|null;motivo?:string}>=[];
@@ -32,12 +35,19 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    const count=quantity?(numbers[quantity[1]]||Number(quantity[1])):1;
    const multiplier=/cada|por unidade|por unidad|c\/u/.test(clause)?1:count;
    const kind=family(clause)||section;if(!kind)continue;
-   const candidates=items.filter(p=>!p.precoSobConsulta&&productFamily(normalize(p.produto))===kind).map(p=>({p,tokens:normalize(p.produto).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!noise.has(t))})).filter(x=>x.tokens.length&&x.tokens.every(t=>new RegExp('\\b'+t+'\\b').test(clause)));
+   const familyItems=items.filter(p=>productFamily(normalize(p.produto))===kind).map(p=>({p,tokens:productTokens(p.produto)}));
+   const candidates=familyItems.filter(x=>!x.p.precoSobConsulta&&x.tokens.length&&x.tokens.every(t=>new RegExp('\\b'+t+'\\b').test(clause)));
    const best=Math.max(0,...candidates.map(x=>x.tokens.length));
-   const found=candidates.filter(x=>x.tokens.length===best);
+   let found=candidates.filter(x=>x.tokens.length===best);
+   // Customers may omit part of the catalog name (Maracujá vs Maracujá com Chocolate).
+   // Match all flavors they DID name within this family; price never chooses the flavor.
+   const vocabulary=new Set([...flavorWords,...familyItems.flatMap(x=>x.tokens)]);
+   const cited=[...new Set(productTokens(clause).filter(t=>vocabulary.has(t)))];
+   const partial=cited.length?familyItems.filter(x=>cited.every(t=>x.tokens.includes(t))):[];
+   if(!found.length) found=partial.filter(x=>!x.p.precoSobConsulta);
    if(!found.length){
     // Do not invent a price for a named flavor absent from this product family.
-    if(/\b(ninho|prestigio|maracuja|brigadeiro|cenoura|morango|nozes|frutas)\b/.test(clause)&&!/[?]|\b(?:nao|no tenemos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/.test(clause))issues.push({produto:clause.trim().replace(/^[-•\s]+/,''),precoCitado:Number((price[1]||price[2]).replace(',','.')),precoAtual:null,motivo:'FORA_CATALOGO'});
+    if(cited.length&&!partial.length&&!/[?]|\b(?:nao|no tenemos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/.test(clause))issues.push({produto:clause.trim().replace(/^[-•\s]+/,''),precoCitado:Number((price[1]||price[2]).replace(',','.')),precoAtual:null,motivo:'FORA_CATALOGO'});
     continue;
    }
    if(new Set(found.map(x=>x.p.produto)).size!==1||new Set(found.map(x=>x.p.preco)).size!==1)continue;
