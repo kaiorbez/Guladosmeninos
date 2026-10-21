@@ -19,7 +19,19 @@ export async function sendOnce(id: string, target: string, message: string, tick
   const claim = await prisma.$transaction(async tx => {
     await lockConversation(tx, target);
     const old = await tx.agentDelivery.findUnique({ where: { key: id } });
-    if (old) return { enviado: old.status === 'SENT', estado: old.status, messageId: old.messageId };
+    if (old) {
+      if (old.phone !== target) throw new AgentError('Chave de envio pertence a outro destinatário.', 409);
+      if (!['SUPERADA', 'FAILED', 'CANCELLED'].includes(old.status)) {
+        return { enviado: old.status === 'SENT', estado: old.status, messageId: old.messageId };
+      }
+      // Only definite non-deliveries may be claimed again. The current generation
+      // and reminder state are checked below, under the same lock used to send.
+      await tx.agentDelivery.update({ where: { key: id }, data: {
+        status: 'SENDING', ticketId: ticketId ?? null, messageId: null, error: null,
+        body: { message, media: media || 'text' },
+      } });
+      return null;
+    }
     await tx.agentDelivery.create({ data: { key: id, phone: target, ticketId, status: 'SENDING', body: { message, media: media || 'text' } } });
     return null;
   });

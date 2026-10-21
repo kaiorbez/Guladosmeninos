@@ -296,6 +296,48 @@ test('envio concorrente é feito uma só vez',async()=>{
 test('timeout é incerto e nunca reenvia automaticamente',async()=>{
  const f=fixture({network:'timeout'});const r=await f.transport.sendOnce('reply:x',phone,'Olá',undefined,1);assert.equal(r.estado,'UNKNOWN');await f.transport.sendOnce('reply:x',phone,'Olá',undefined,1);assert.equal(f.calls(),1);
 });
+
+test('QR superado pode usar a mesma chave com a geração atual',async()=>{
+ const f=fixture();f.state().agentConversation[0].generation=2;
+ const send=g=>f.transport.sendOnce('qr:225',phone,'Pagamento do pedido 225',undefined,g,'qr','https://example.com/qr.png');
+ assert.equal((await send(1)).estado,'SUPERADA');assert.equal(f.calls(),0);
+ assert.equal((await send(1)).estado,'SUPERADA');assert.equal(f.calls(),0);
+ await Promise.all([send(2),send(2)]);
+ assert.equal(f.calls(),1);assert.equal(f.state().agentDelivery.length,1);assert.equal(f.state().agentDelivery[0].status,'SENT');
+ await send(2);assert.equal(f.calls(),1);
+});
+
+for(const status of ['SUPERADA','FAILED','CANCELLED']) {
+ test(`nova chamada recupera ${status} e atualiza os dados do envio`,async()=>{
+  const f=fixture();
+  await f.prisma.agentDelivery.create({data:{key:'retry',phone,status,messageId:'old',error:'old error',ticketId:'old-ticket',body:{message:'old'}}});
+  const r=await f.transport.sendOnce('retry',phone,'Texto atual',undefined,1);
+  assert.equal(r.estado,'SENT');assert.equal(f.calls(),1);
+  const d=f.state().agentDelivery[0];assert.equal(d.error,null);assert.equal(d.ticketId,null);assert.equal(d.body.message,'Texto atual');assert.equal(d.messageId,'sent-1');
+ });
+ test(`${status} não ignora pausa ou geração antiga`,async()=>{
+  const f=fixture();await f.prisma.agentDelivery.create({data:{key:'retry',phone,status}});
+  assert.equal((await f.transport.sendOnce('retry',phone,'Texto',undefined,0)).estado,'SUPERADA');assert.equal(f.calls(),0);
+  f.state().agentConversation[0].pausedUntil=new Date(Date.now()+60000);
+  assert.equal((await f.transport.sendOnce('retry',phone,'Texto',undefined,1)).estado,'SUPERADA');assert.equal(f.calls(),0);
+ });
+}
+
+test('lembrete cancelado revalida a pendência antes de tentar novamente',async()=>{
+ const f=fixture();const t=await f.prisma.agentTicket.create({data:{phone,status:'RESOLVIDA'}});
+ const send=()=>f.transport.sendOnce('reminder:retry',phone,'Lembrete',t.id,1);
+ assert.equal((await send()).estado,'CANCELLED');assert.equal((await send()).estado,'CANCELLED');assert.equal(f.calls(),0);
+ await f.prisma.agentTicket.update({where:{id:t.id},data:{status:'ABERTA'}});
+ assert.equal((await send()).estado,'SENT');assert.equal(f.calls(),1);
+});
+
+test('SENT, SENDING e UNKNOWN continuam protegidos contra reenvio',async()=>{
+ for(const status of ['SENT','SENDING','UNKNOWN']) {
+  const f=fixture();await f.prisma.agentDelivery.create({data:{key:'protected',phone,status,messageId:'prior'}});
+  const r=await f.transport.sendOnce('protected',phone,'Texto',undefined,1);
+  assert.equal(r.estado,status);assert.equal(r.enviado,status==='SENT');assert.equal(f.calls(),0);
+ }
+});
 test('falha de persistência impede envio',async()=>{
  const f=fixture();f.failWrite();await assert.rejects(f.transport.sendOnce('reply:x',phone,'Olá',undefined,1));assert.equal(f.calls(),0);
 });
