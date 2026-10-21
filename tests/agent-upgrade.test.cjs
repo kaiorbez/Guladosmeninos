@@ -642,7 +642,35 @@ test('HTTP retry resumes only an unprocessed current inbox without duplicating g
  assert.equal((await f.service.inbound(b)).ignorar,false);assert.equal(f.state().agentConversation[0].generation,generation);assert.equal(f.state().agentInbox.length,1);
  f.state().agentInbox[0].ready=true;assert.equal((await f.service.inbound(b)).ignorar,true);
  f.state().agentInbox[0].ready=false;f.state().agentConversation[0].pausedUntil=new Date(Date.now()+60000);assert.equal((await f.service.inbound(b)).ignorar,true);
- f.state().agentConversation[0].pausedUntil=null;f.state().agentConversation[0].latestMoment+=1n;assert.equal((await f.service.inbound(b)).ignorar,true);
+ f.state().agentConversation[0].pausedUntil=null;f.state().agentConversation[0].generation+=1;assert.equal((await f.service.inbound(b)).ignorar,true);
+});
+
+test('new out-of-order location is buffered once and keeps the timestamp high-water mark',async()=>{
+ const f=fixture(),now=Date.now();
+ await f.service.inbound({telefone:phone,messageId:'latest-text',momento:now,midia:'texto',texto:'Entregar aqui'});
+ const generation=f.state().agentConversation[0].generation;
+ const location={telefone:phone,messageId:'delayed-location',momento:now-4000,midia:'localizacao',texto:'[Localização: https://maps.google.com/?q=-17.7,-63.1]'};
+ const results=await Promise.all([f.service.inbound(location),f.service.inbound(location)]);
+ assert.equal(results.filter(r=>!r.ignorar).length,1);assert.equal(f.state().agentInbox.length,2);
+ assert.equal(f.state().agentConversation[0].generation,generation+1);assert.equal(f.state().agentConversation[0].latestMoment,BigInt(now));
+ assert.equal((await f.service.inbound({...location,recuperarPendente:true})).ignorar,false);
+ assert.equal(f.state().agentConversation[0].generation,generation+1);
+ await assert.rejects(f.service.saveOrder({...body(),geracao:generation}),/Nova mensagem/);
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'delayed-location',texto:location.texto});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'latest-text',texto:'Entregar aqui'});
+ const batch=await f.service.prepare({telefone:phone,execucao:'out-of-order'});
+ assert.match(batch.message,/q=-17.7,-63.1/);assert.match(batch.message,/Entregar aqui/);
+ assert.equal((await f.service.inbound({...location,recuperarPendente:true})).ignorar,true);
+});
+
+test('quoted location coordinates reach the analysis batch without repetition',async()=>{
+ const f=fixture();const {quotedText}=require('../scripts/quoted-location-n8n.cjs');
+ const quote=quotedText({caption:'Recepção',location:{latitude:-17.7,longitude:-63.1}});
+ await f.service.inbound({telefone:phone,messageId:'quoted-location',momento:Date.now(),midia:'texto',texto:'É nesse endereço',citacao:quote});
+ await f.service.operate({acao:'conteudo',telefone:phone,messageId:'quoted-location',texto:'É nesse endereço'});
+ const batch=await f.service.prepare({telefone:phone,execucao:'quoted-location'});
+ assert.match(batch.message,/Recepção/);assert.match(batch.message,/q=-17.7,-63.1/);
+ assert.equal(batch.message.split('q=-17.7,-63.1').length,2);
 });
 
 test('retired variant cannot be registered even if active in source table',async()=>{

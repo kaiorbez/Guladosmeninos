@@ -58,22 +58,28 @@ export async function inbound(b: Body) {
   const duplicate = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
     const eventKey = `in:${p}:${id}`;
-    if (await tx.agentEvent.findUnique({ where: { key: eventKey } })) {
+    const previous = await tx.agentEvent.findUnique({ where: { key: eventKey } });
+    if (previous) {
       if (b.recuperarPendente === true && b.humano !== true) {
         const pending=await tx.agentInbox.findUnique({where:{id:eventKey}});
         const conversation=await tx.agentConversation.findUnique({where:{phone:p}});
         // Resume only an unprocessed current input after a lost HTTP response. Never advance generation twice.
-        if(pending && !pending.ready && !pending.consumedAt && conversation?.latestMoment===BigInt(moment) &&
+        const registeredGeneration=(previous.payload as Body)?.generation;
+        const isCurrent=registeredGeneration===undefined ? conversation?.latestMoment===BigInt(moment) : conversation?.generation===registeredGeneration;
+        if(pending && !pending.ready && !pending.consumedAt && conversation && isCurrent &&
           !(conversation.pausedUntil && conversation.pausedUntil>new Date())) return false;
       }
       return true;
     }
-    await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment, ...(b.anuncio && typeof b.anuncio === 'object' ? { anuncio: { id: text((b.anuncio as Body).id, 60), tipo: text((b.anuncio as Body).tipo, 30), titulo: text((b.anuncio as Body).titulo, 120) } } : {}) }) } });
     const c = await tx.agentConversation.findUnique({ where: { phone: p } });
-    if (c && BigInt(moment) < c.latestMoment) return true;
+    await tx.agentEvent.create({ data: { key: eventKey, phone: p, kind: 'INBOUND', payload: json({ sourceUrl, generation:(c?.generation ?? 0)+1, quoted:text(b.citacao,4000), text: text(b.texto, 12000)+(text(b.citacao,4000)?'\n[Mensagem citada: '+text(b.citacao,4000)+']':''), media: ['imagem', 'pdf', 'localizacao', 'texto', 'audio'].includes(String(b.midia)) ? b.midia : 'outro', fromMe: b.humano === true, moment, ...(b.anuncio && typeof b.anuncio === 'object' ? { anuncio: { id: text((b.anuncio as Body).id, 60), tipo: text((b.anuncio as Body).tipo, 30), titulo: text((b.anuncio as Body).titulo, 120) } } : {}) }) } });
+    // A new client ID is new input, even when webhooks arrive out of order.
+    // Old human callbacks still must not take over a newer conversation.
+    if (b.humano === true && c && BigInt(moment) < c.latestMoment) return true;
     if (b.humano === true) await tx.agentTicket.updateMany({ where: { phone: p, status: 'ABERTA' }, data: { status: 'ASSUMIDA' } });
     if (b.humano !== true) await tx.agentInbox.create({ data: { id:eventKey, phone:p, messageId:id, mediaKind:String(b.midia || 'outro'), moment:BigInt(moment) } });
-    await tx.agentConversation.upsert({ where: { phone: p }, create: { phone: p, generation: 1, latestMoment: BigInt(moment), pausedUntil: b.humano === true ? new Date(Date.now() + 30 * 60000) : null }, update: { generation: { increment: 1 }, latestMoment: BigInt(moment), ...(b.humano === true ? { pausedUntil: new Date(Date.now() + 30 * 60000) } : {}) } });
+    const latestMoment=c && c.latestMoment>BigInt(moment) ? c.latestMoment : BigInt(moment);
+    await tx.agentConversation.upsert({ where: { phone: p }, create: { phone: p, generation: 1, latestMoment, pausedUntil: b.humano === true ? new Date(Date.now() + 30 * 60000) : null }, update: { generation: { increment: 1 }, latestMoment, ...(b.humano === true ? { pausedUntil: new Date(Date.now() + 30 * 60000) } : {}) } });
     return false;
   });
   return { ...(await context(p)), ignorar: duplicate };
