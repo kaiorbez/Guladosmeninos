@@ -107,3 +107,13 @@ test('basket amount is not the unit price of the longest named pot (Nicky)',()=>
  assert.equal(exp.quotedPriceIssues('1 pote Brigadeiro: 20 Bs y 1 pote Dulce de leche con Chocolate: 40 Bs',catalog).length,1);
  assert.equal(exp.quotedPriceIssues('1 pote Brigadeiro y 1 pote Dulce de leche con Chocolate, cada: 40 Bs',catalog).length,1);
 });
+
+test('unit qualifier after amount does not multiply the price (En tu tiempo)',()=>{
+ const catalog=[{produto:'Pote Brigadeiro',preco:20,precoSobConsulta:false},{produto:'Pote Doce de Leite com Chocolate',preco:20,precoSobConsulta:false}];
+ const actual='Para dejar el pedido bien anotado: los 2 potes de chocolate intenso son los de brigadeiro de chocolate (20 Bs cada uno) y el de chocolate con relleno es el de dulce de leche con chocolate (20 Bs). ¿Confirmas esos sabores?';
+ assert.equal(exp.quotedPriceIssues(actual,catalog).length,0);
+ for(const t of ['2 potes Brigadeiro: 20 Bs cada uno','2 potes Brigadeiro: Bs 20 c/u','2 potes Brigadeiro: 20 Bs por unidade','2 potes Brigadeiro: 20 Bs por unidad'])assert.equal(exp.quotedPriceIssues(t,catalog).length,0,t);
+ assert.equal(exp.quotedPriceIssues('2 potes Brigadeiro: 40 Bs cada uno',catalog)[0].precoAtual,20);
+ assert.equal(exp.quotedPriceIssues('2 potes Brigadeiro: 20 Bs',catalog)[0].precoAtual,40);
+ assert.equal(exp.quotedPriceIssues('2 potes Brigadeiro: 20 Bs; 1 pote Doce de Leite com Chocolate: 20 Bs cada uno',catalog)[0].precoAtual,40);
+});

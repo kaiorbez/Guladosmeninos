@@ -26,6 +26,9 @@ export function quotedPriceIssues(message:string, items:Item[]) {
   let start=0;
   for(const price of prices){
    const clause=line.slice(start,price.index);start=(price.index||0)+price[0].length;
+   // Unit qualifiers can follow the amount: "20 Bs cada uno" / "Bs 20 c/u".
+   // Only inspect the immediate suffix, never qualifiers belonging to the next item.
+   const unitPrice=/\bcada\b|por unidade|por unidad|c\/u/.test(clause)||/^\s*(?:cada\b|por unidad(?:e)?\b|c\/u\b)/.test(line.slice(start));
    // A combined basket total is not an individual product price, even when its description names a pot/slice.
    if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause))continue;
    if(/docinh|brigadeiros|pacoca|\bdoces\b/.test(clause))continue;
@@ -34,11 +37,11 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    // Do not select the longest product name and compare that total to its unit price.
    // Separate price clauses still receive their own normal validation below.
    const basketParts=clause.split(/\s*(?:\+|\by\b|\be\b|,)\s*(?=(?:(?:\d+|um|uma|un|uno|una|dois|duas|dos|tres)\s*(?:[x×]\s*)?)?(?:pote|fatia)\b)/);
-   if(basketParts.length>1&&basketParts.every(part=>family(part))&&!/\bcada\b|por unidade|por unidad|c\/u/.test(clause))continue;
+   if(basketParts.length>1&&basketParts.every(part=>family(part))&&!unitPrice)continue;
    const quantity=/\b(\d+|um|uma|un|uno|una|dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez)\s*(?:[x×]\s*)?(?:bolos? (?:de|no) )?(?:porc|fatia|pote|cuchareable)/.exec(clause) || /(?:pote|fatia|porcion)[^:;]*?\b[x×]\s*(\d+)\b/.exec(clause) || /\b(\d+)\s*unidades?\b/.exec(clause);
    const numbers:Record<string,number>={um:1,uma:1,un:1,uno:1,una:1,dois:2,duas:2,dos:2,tres:3,quatro:4,cuatro:4,cinco:5,seis:6,sete:7,siete:7,oito:8,ocho:8,nove:9,nueve:9,dez:10,diez:10};
    const count=quantity?(numbers[quantity[1]]||Number(quantity[1])):1;
-   const multiplier=/cada|por unidade|por unidad|c\/u/.test(clause)?1:count;
+   const multiplier=unitPrice?1:count;
    const kind=family(clause)||section;if(!kind)continue;
    const familyItems=items.filter(p=>productFamily(normalize(p.produto))===kind).map(p=>({p,tokens:productTokens(p.produto)}));
    const candidates=familyItems.filter(x=>!x.p.precoSobConsulta&&x.tokens.length&&x.tokens.every(t=>new RegExp('\\b'+t+'\\b').test(clause)));
