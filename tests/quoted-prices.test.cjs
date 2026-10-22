@@ -100,3 +100,10 @@ test('mermelada normalizes to geleia for matching names and checking real prices
  assert.equal(exp.quotedPriceIssues('porción Nido con frutos rojos: 35 Bs',catalog).length,0);
  assert.equal(exp.quotedPriceIssues('porción Nido con mermelada de frutos rojos: 35 Bs',synonymCatalog).length,0);
 });
+test('basket amount is not the unit price of the longest named pot (Nicky)',()=>{
+ const catalog=[{produto:'Pote Brigadeiro',preco:20,precoSobConsulta:false},{produto:'Pote Doce de Leite com Chocolate',preco:20,precoSobConsulta:false}];
+ for(const text of ['1 pote de Brigadeiro y 1 pote de Dulce de leche con Chocolate: 40 Bs\nTotal: 40 Bs','1 pote Brigadeiro + 1 pote Doce de Leite com Chocolate: 40 Bs','Um pote Brigadeiro e um pote Doce de Leite com Chocolate: 40 Bs','1 cuchareable Brigadeiro, 1 cuchareable Dulce de leche con Chocolate: 40 Bs'])assert.equal(exp.quotedPriceIssues(text,catalog).length,0,text);
+ assert.equal(exp.quotedPriceIssues('1 pote de Dulce de leche con Chocolate: 40 Bs',catalog).length,1);
+ assert.equal(exp.quotedPriceIssues('1 pote Brigadeiro: 20 Bs y 1 pote Dulce de leche con Chocolate: 40 Bs',catalog).length,1);
+ assert.equal(exp.quotedPriceIssues('1 pote Brigadeiro y 1 pote Dulce de leche con Chocolate, cada: 40 Bs',catalog).length,1);
+});

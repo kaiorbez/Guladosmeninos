@@ -30,6 +30,11 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause))continue;
    if(/docinh|brigadeiros|pacoca|\bdoces\b/.test(clause))continue;
    if(/\b(?:combo|promo|promocion|par de|par promocional)\b/.test(clause))continue;
+   // A single amount after several explicitly named products is a basket price.
+   // Do not select the longest product name and compare that total to its unit price.
+   // Separate price clauses still receive their own normal validation below.
+   const basketParts=clause.split(/\s*(?:\+|\by\b|\be\b|,)\s*(?=(?:(?:\d+|um|uma|un|uno|una|dois|duas|dos|tres)\s*(?:[x×]\s*)?)?(?:pote|fatia)\b)/);
+   if(basketParts.length>1&&basketParts.every(part=>family(part))&&!/\bcada\b|por unidade|por unidad|c\/u/.test(clause))continue;
    const quantity=/\b(\d+|um|uma|un|uno|una|dois|duas|dos|tres|quatro|cuatro|cinco|seis|sete|siete|oito|ocho|nove|nueve|dez|diez)\s*(?:[x×]\s*)?(?:bolos? (?:de|no) )?(?:porc|fatia|pote|cuchareable)/.exec(clause) || /(?:pote|fatia|porcion)[^:;]*?\b[x×]\s*(\d+)\b/.exec(clause) || /\b(\d+)\s*unidades?\b/.exec(clause);
    const numbers:Record<string,number>={um:1,uma:1,un:1,uno:1,una:1,dois:2,duas:2,dos:2,tres:3,quatro:4,cuatro:4,cinco:5,seis:6,sete:7,siete:7,oito:8,ocho:8,nove:9,nueve:9,dez:10,diez:10};
    const count=quantity?(numbers[quantity[1]]||Number(quantity[1])):1;
