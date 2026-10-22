@@ -12,6 +12,9 @@ const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').to
  .replace(/\b(?:frutillas?|fresas?)\b/g,'morango').replace(/\b(?:nueces|nuez)\b/g,'nozes');
 const family=(s:string)=>/\bfatia\b/.test(s)?'fatias':/\bpote\b/.test(s)?'potes':null;
 const productFamily=(s:string)=>/^fatia\b|^porcao\b.*torta/.test(s)?'fatias':/^pote\b/.test(s)?'potes':null;
+/** Negation of availability anywhere in the same sentence ("está a 30 bs, pero no tengo para hoy"). */
+const unavailable=/\b(?:nao|no tenemos|no tengo|no hay|nao tenho|nao temos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/;
+const sentenceOf=(line:string,at:number)=>{const start=Math.max(line.lastIndexOf('.',at-1),line.lastIndexOf('!',at-1),line.lastIndexOf('?',at-1))+1;const ends=['.','!','?'].map(c=>line.indexOf(c,at)).filter(x=>x>=0);return line.slice(start,ends.length?Math.min(...ends):line.length);};
 const noise=new Set(['fatia','porcao','pote','torta','premium','especial','de','com','e','do','da','um','uma']);
 const flavorWords=new Set('ninho prestigio maracuja brigadeiro cenoura morango nozes frutas vermelhas chocolate beijinho churros cafe pistache amendoim coco limao abacaxi banana baunilha oreo nutella doce leite'.split(' '));
 const productTokens=(s:string)=>normalize(s).split(/[^a-z0-9]+/).filter(t=>t.length>1&&!noise.has(t));
@@ -55,12 +58,12 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    if(!found.length) found=partial.filter(x=>!x.p.precoSobConsulta);
    if(!found.length){
     // Do not invent a price for a named flavor absent from this product family.
-    if(cited.length&&!partial.length&&!/[?]|\b(?:nao|no tenemos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/.test(clause))issues.push({produto:clause.trim().replace(/^[-•\s]+/,''),precoCitado:Number((price[1]||price[2]).replace(',','.')),precoAtual:null,motivo:'FORA_CATALOGO'});
+    if(cited.length&&!partial.length&&!/[?]/.test(clause)&&!unavailable.test(clause)&&!unavailable.test(sentenceOf(line,price.index||0)))issues.push({produto:clause.trim().replace(/^[-•\s]+/,''),precoCitado:Number((price[1]||price[2]).replace(',','.')),precoAtual:null,motivo:'FORA_CATALOGO'});
     continue;
    }
    if(new Set(found.map(x=>x.p.produto)).size!==1||new Set(found.map(x=>x.p.preco)).size!==1)continue;
    const p=found[0].p,amount=Number((price[1]||price[2]).replace(',','.'));
-   if(p.controlaEstoque===true&&Number(p.estoque)<=0&&!/[?]|\b(?:nao|no tenemos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/.test(clause)){issues.push({produto:p.produto,precoCitado:amount,precoAtual:null,motivo:'SEM_ESTOQUE'});continue;}
+   if(p.controlaEstoque===true&&Number(p.estoque)<=0&&!/[?]/.test(clause)&&!unavailable.test(clause)&&!unavailable.test(sentenceOf(line,price.index||0))){issues.push({produto:p.produto,precoCitado:amount,precoAtual:null,motivo:'SEM_ESTOQUE'});continue;}
    const expected=Number(p.preco)*multiplier;
    if(amount!==expected&&!issues.some(x=>x.produto===p.produto&&x.precoCitado===amount))issues.push({produto:p.produto,precoCitado:amount,precoAtual:expected});
   }

@@ -161,7 +161,11 @@ export async function ticket(b: Body) {
       receiptMedia=media.filter(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;}).map(m=>({id:m.key,url:text((m.payload as Body).sourceUrl,3000),kind:String((m.payload as Body).media)})).filter(m=>m.url);
       if(priorReceipt) return priorReceipt;
       const analyzed=await tx.agentInbox.findMany({where:{phone:p,messageId:{in:ids},ready:true}});
-      if(analyzed.some(m=>/Tipo\s*:\s*(OUTRA_IMAGEM|REFERENCIA_BOLO)|[\"']tipo[\"']\s*:\s*[\"'](OUTRA_IMAGEM|REFERENCIA_BOLO)/i.test(m.content||''))) throw new AgentError('Analisador identificou mídia que não é comprovante: não confirmar recebimento de pagamento.');
+      // A batch may carry a real receipt plus another picture (e.g. the customer's own sum). Keep only receipt media;
+      // reject only when every analyzed medium is something else.
+      const notReceipt=new Set(analyzed.filter(m=>/Tipo\s*:\s*(OUTRA_IMAGEM|REFERENCIA_BOLO)|[\"']tipo[\"']\s*:\s*[\"'](OUTRA_IMAGEM|REFERENCIA_BOLO)/i.test(m.content||'')).map(m=>m.messageId));
+      if(notReceipt.size&&ids.every(id=>notReceipt.has(id))) throw new AgentError('Analisador identificou mídia que não é comprovante: não confirmar recebimento de pagamento.');
+      if(notReceipt.size) receiptMedia=receiptMedia.filter(m=>!notReceipt.has(m.id.slice(`in:${p}:`.length)));
       const receipt=b.comprovante;
       if(!receipt || typeof receipt!=='object' || (receipt as Body).tipo!=='COMPROVANTE_BANCARIO') throw new AgentError('Classifique a mídia atual e informe campos visíveis do comprovante.');
       const orderId=text((receipt as Body).pedidoId,100);
