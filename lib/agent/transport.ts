@@ -6,7 +6,7 @@ export async function lockConversation(tx: Prisma.TransactionClient, phone: stri
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${phone}))`;
 }
 /** Durable claim first: a crash after sending leaves SENDING, never a blind retry. */
-export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string, failureReply = false) {
+export async function sendOnce(id: string, target: string, message: string, ticketId?: string, generation?: number, media?: 'qr' | 'menu' | 'receipt-image' | 'receipt-pdf', sourceUrl?: string, failureReply = false, qrOrder?: {id:string;version:number;total:number;paid:number}) {
   // Send plain text consistently, including captions and model-generated replies.
   message = message.replace(/\*+/g, '');
   if (target !== process.env.WHATSAPP_EQUIPE) message = message.replace(/\s*[\u2013\u2014]\s*/g, ', ');
@@ -40,7 +40,25 @@ export async function sendOnce(id: string, target: string, message: string, tick
     await lockConversation(tx, target);
     if (generation !== undefined) {
       const c = await tx.agentConversation.findUnique({ where: { phone: target } });
-      if (!c || c.generation !== generation || (!failureReply && c.pausedUntil && c.pausedUntil > new Date())) {
+      let unchangedQr = false;
+      let validQrOrder = true;
+      if (media === 'qr' && qrOrder) {
+        const order = await tx.order.findFirst({where:{id:qrOrder.id,customerPhone:target,status:'PENDENTE'}});
+        validQrOrder = !!order && order.agentVersion === qrOrder.version && Number(order.total) === qrOrder.total && Number(order.paid) === qrOrder.paid &&
+          (order.deliveryMode !== 'ENTREGA' || !!order.deliveryAddress?.trim());
+        if (validQrOrder && c && c.generation > generation && c.generation-generation <= 100) {
+          const events = await tx.agentEvent.findMany({where:{phone:target,kind:'INBOUND'},orderBy:{createdAt:'desc'},take:100});
+          const incoming = events.map(e=>e.payload as Record<string,unknown>).filter(e=>Number(e.generation)>generation&&Number(e.generation)<=c.generation);
+          // Prove every intervening input is harmless. Unknown text, quotes, media,
+          // payment receipts and human intervention require the normal re-evaluation.
+          const covered = new Set(incoming.map(e=>Number(e.generation)));
+          unchangedQr = covered.size === c.generation-generation && incoming.every(e=>{
+            const text=String(e.text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/[.!?¿¡]+$/g,'').trim();
+            return e.fromMe === false && e.media === 'texto' && !e.quoted && /^(?:ok+|si+m*|sim+|si|gracias|obrigad[oa]|perfecto|perfeito|confirmo|confirmado|por favor|porfavor|aguardo|estou aguardando|sigo esperando|\?|(?:me )?(?:envia|envie|manda|mande|pasa|passe)(?:me)? (?:el |o )?qr(?: por ?favor)?)$/.test(text);
+          });
+        }
+      }
+      if (!c || !validQrOrder || (c.generation !== generation && !unchangedQr) || (!failureReply && c.pausedUntil && c.pausedUntil > new Date())) {
         await tx.agentDelivery.update({ where: { key: id }, data: { status: 'SUPERADA' } });
         return { enviado: false, estado: 'SUPERADA', messageId: null };
       }

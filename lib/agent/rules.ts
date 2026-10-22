@@ -66,6 +66,7 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
   if (total <= 0) throw new AgentError('Preço precisa ser definido antes de registrar.');
   const mode = text(raw.modalidade, 20);
   if (!['ENTREGA', 'RETIRADA'].includes(mode)) throw new AgentError('Defina entrega ou retirada.');
+  if (mode === 'ENTREGA' && !text(raw.endereco, 1000)) throw new AgentError('ENDERECO_OBRIGATORIO: peça ao cliente o endereço ou a localização da entrega antes de registrar o pedido e enviar o QR.');
   const weekday=new Date(date+'T12:00:00Z').getUTCDay();
   const preserved = existing?.deliveryDate.toISOString().slice(0,10) === date;
   if(weekday===2 && mode!=='ENTREGA') throw new AgentError('Terça-feira: somente entrega de encomendas antecipadas; sem retirada presencial.');

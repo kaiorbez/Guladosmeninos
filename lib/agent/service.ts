@@ -89,6 +89,7 @@ export async function saveOrder(b: Body) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AgentError('Pedido inválido.');
   const raw = input as Body, orderId = text(raw.id, 100), name = text(raw.cliente, 120);
   if (!name) throw new AgentError('Nome do cliente obrigatório.');
+  if (text(raw.modalidade,20)==='ENTREGA' && !text(raw.endereco,1000)) return {ok:false,registrado:false,motivo:'ENDERECO_OBRIGATORIO',orientacao:'Peça ao cliente o endereço ou a localização da entrega. Não registre nem envie QR até receber esse dado; não é necessário abrir pendência para a equipe.'};
   if (!Array.isArray(raw.itens) || !raw.itens.length) throw new AgentError('Informe os itens da encomenda.');
   const prices=await catalog();
   const eventKey = `order:${p}:${source}`;
@@ -577,7 +578,7 @@ export async function operate(b: Body) {
       if(prior && !explicitResend) return {ok:true,enviado:false,motivo:'QR_JA_ENVIADO',messageId:prior.messageId,orientacao:'O QR deste pedido e valor já foi enviado. Responda à dúvida atual; interrogação, espera e cobrança de status não autorizam nova cobrança.',...plan};
       const caption = b.idioma === 'es' ? `Pago: ${plan.pagarAgora} Bs. Envíanos el comprobante para revisión.` : `Pagamento: ${plan.pagarAgora} Bs. Envie o comprovante para conferência.`;
       const deliveryKey=prior && explicitResend?`qr:${p}:${key(b.messageId)}`:billingKey;
-      const sent = await sendOnce(deliveryKey, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined);
+      const sent = await sendOnce(deliveryKey, p, caption, undefined, Number(b.geracao), 'qr', text(b.arquivoUrl,3000)||undefined, false, {id:order.id,version:order.agentVersion,total:Number(order.total),paid:Number(order.paid)});
       if(sent.enviado) {
         const delivery=await prisma.agentDelivery.findUnique({where:{key:deliveryKey}});
         if(delivery) await prisma.agentDelivery.update({where:{key:deliveryKey},data:{body:json({...delivery.body as Body,orderId:order.id,pagarAgora:plan.pagarAgora,pagoConfirmado:Number(order.paid)})}});

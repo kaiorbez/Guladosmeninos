@@ -44,3 +44,9 @@ test('promessa de QR sem ficha registrada não substitui a ferramenta de registr
  assert.equal(failedCommercialTools([],'Posso te enviar o QR?',{pedidos:[]}).length,0);
  assert.equal(failedCommercialTools([step('registrar_encomenda',{ok:true,registrado:true})],'Te envío el QR',{pedidos:[]}).length,0);
 });
+test('missing delivery address asks the customer without a technical escalation',()=>{
+ const steps=[step('registrar_encomenda',{ok:false,registrado:false,motivo:'ENDERECO_OBRIGATORIO'})];
+ assert.equal(failedCommercialTools(steps,'¿Me pasas la dirección de entrega?').length,0);
+ assert.equal(failedCommercialTools(steps,'Pedido registrado').length,1);
+ assert.equal(failedCommercialTools(steps,'Te envío el QR').length,1);
+});

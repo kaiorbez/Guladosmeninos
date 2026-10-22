@@ -15,6 +15,7 @@ function failedCommercialTools(steps, output, current = {}) {
     const bad = !result || result.ok === false || Boolean(result.error) || result.registrado !== true;
     const operation = name + ':' + (name === 'avisar_equipe' ? String(step.action?.toolInput?.tipo || 'DUVIDA') : 'pedido');
     if (name === 'registrar_encomenda') orderRegistered = !bad;
+    if (name === 'registrar_encomenda' && result?.motivo === 'ENDERECO_OBRIGATORIO') { pending.delete(operation); continue; }
     if (name === 'avisar_equipe' && step.action?.toolInput?.tipo === 'COMPROVANTE') receiptRegistered = !bad;
     if (bad) pending.set(operation, { ferramenta: name, motivo: 'A operação não foi registrada; conferir a conversa e a ficha.' });
     else if (name === 'avisar_equipe' && result.notificacaoEnviada !== true) pending.set(operation, { ferramenta: name, motivo: 'A pendência foi registrada, mas o envio do aviso à equipe não foi confirmado.' });

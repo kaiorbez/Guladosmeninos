@@ -807,3 +807,50 @@ test('panel uses customer language and group notification failure does not repea
  assert.equal(r.enviado,true);assert.equal(r.groupNoticeSent,false);assert.match(f.state().agentDelivery.find(d=>d.phone===phone).body.message,/Sigue tu entrega/);assert(f.state().order[0].deliveryLinkSentAt);
  const calls=f.calls();await f.service.sendYangoLink({orderId:id,link:'https://delivery.yango.com/route/#new',source:'painel'});assert.equal(f.calls(),calls);
 });
+
+test('delivery registration rejects empty address without saving or charging',async()=>{
+ for(const endereco of ['', '   ',null,undefined]){
+  const f=fixture();const r=await f.service.saveOrder({...body(),pedido:{...order(),endereco}});
+  assert.equal(r.registrado,false);assert.equal(r.motivo,'ENDERECO_OBRIGATORIO');assert.equal(f.state().order.length,0);assert.equal(f.calls(),0);
+ }
+ const f=fixture();assert.equal((await f.service.saveOrder({...body(),pedido:{...order(),modalidade:'RETIRADA',endereco:''}})).registrado,true);
+});
+test('QR survives harmless new input and stays deduplicated',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());
+ await f.prisma.agentConversation.update({where:{phone},data:{generation:2}});
+ const req={acao:'qr',telefone:phone,messageId:'m1',pedidoId:saved.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'};
+ assert.equal((await f.service.operate(req)).estado,'SUPERADA');
+ await f.prisma.agentEvent.create({data:{key:'in:ok',phone,kind:'INBOUND',payload:{generation:2,media:'texto',fromMe:false,text:'Me pasa QR',quoted:''}}});
+ const results=await Promise.all([f.service.operate(req),f.service.operate(req)]);
+ assert.ok(results.some(r=>r.enviado));assert.equal(f.calls(),1);
+});
+test('QR never ignores changes, receipts, unknown input or human pause',async()=>{
+ for(const payload of [
+  {text:'troque para retirada'}, {text:'já paguei'}, {text:'ok',media:'pdf'},
+  {text:'ok',fromMe:true}, {text:'ok',quoted:'troque o sabor'},
+  {text:'quanto custa mais um pote?'}
+ ]){
+  const f=fixture();const saved=await f.service.saveOrder(body());
+  await f.prisma.agentConversation.update({where:{phone},data:{generation:2}});
+  await f.prisma.agentEvent.create({data:{key:'in:new',phone,kind:'INBOUND',payload:{generation:2,media:'texto',fromMe:false,text:'ok',...payload}}});
+  const r=await f.service.operate({acao:'qr',telefone:phone,messageId:'m1',pedidoId:saved.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'});
+  assert.equal(r.estado,'SUPERADA');assert.equal(f.calls(),0);
+ }
+ const f=fixture();const saved=await f.service.saveOrder(body());
+ await f.prisma.agentConversation.update({where:{phone},data:{generation:2,pausedUntil:new Date(Date.now()+60000)}});
+ await f.prisma.agentEvent.create({data:{key:'in:ok',phone,kind:'INBOUND',payload:{generation:2,media:'texto',fromMe:false,text:'ok'}}});
+ const r=await f.service.operate({acao:'qr',telefone:phone,messageId:'m1',pedidoId:saved.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'});
+ assert.equal(r.estado,'SUPERADA');assert.equal(f.calls(),0);
+});
+test('QR snapshot rejects changed order and incomplete generation history',async()=>{
+ const f=fixture();const saved=await f.service.saveOrder(body());const o=f.state().order[0];
+ const snapshot={id:o.id,version:o.agentVersion,total:Number(o.total),paid:Number(o.paid)};
+ await f.prisma.order.update({where:{id:o.id},data:{agentVersion:2}});
+ const r=await f.transport.sendOnce('qr:snapshot',phone,'Pagar',undefined,1,'qr','https://example.com/qr.png',false,snapshot);
+ assert.equal(r.estado,'SUPERADA');assert.equal(f.calls(),0);
+ const g=fixture();const s=await g.service.saveOrder(body());
+ await g.prisma.agentConversation.update({where:{phone},data:{generation:3}});
+ await g.prisma.agentEvent.create({data:{key:'in:last',phone,kind:'INBOUND',payload:{generation:3,media:'texto',fromMe:false,text:'ok'}}});
+ const result=await g.service.operate({acao:'qr',telefone:phone,messageId:'m1',pedidoId:s.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'});
+ assert.equal(result.estado,'SUPERADA');assert.equal(g.calls(),0);
+});
