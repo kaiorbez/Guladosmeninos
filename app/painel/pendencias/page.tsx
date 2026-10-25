@@ -17,7 +17,10 @@ export default async function Pendencias({searchParams}:{searchParams:Promise<{a
     {!tickets.length && <p>Nenhuma pendência registrada.</p>}
     {tickets.map(t => <article key={t.id} className="space-y-3 rounded-lg border border-creme-300 bg-white p-4">
       <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold">{t.customerName} — {t.kind === 'COMPROVANTE' ? 'Conferir comprovante' : t.kind==='ENTREGA'?'Entrega / rastreio':'Dúvida'}</h2><span>{t.status === 'ABERTA' ? 'Aguardando equipe' : t.status === 'ASSUMIDA' ? 'Em atendimento · lembretes suspensos' : 'Resolvida'}</span></div>
-      <Link className="underline" href={`https://wa.me/${t.phone}`} target="_blank" rel="noreferrer">Abrir conversa</Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="text-sm text-cacau-600">Telefone: <span className="select-text">+{t.phone.replace(/\D/g, '')}</span></span>
+        <a className="underline" href={`https://web.whatsapp.com/send?phone=${t.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">Abrir conversa</a>
+      </div>
       <p className="whitespace-pre-wrap">{t.question}</p>
       <p className="text-sm text-cacau-500">{t.createdAt.toLocaleString('pt-BR', { timeZone: 'America/La_Paz' })} · {t.reminderCount} lembrete(s)</p>
       {t.kind === 'COMPROVANTE' && <p className="font-medium">Resolver este aviso não confirma pagamento. Registre o valor recebido na encomenda após conferir o banco.</p>}
