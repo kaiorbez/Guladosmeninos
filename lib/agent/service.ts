@@ -108,6 +108,8 @@ export async function saveOrder(b: Body) {
       if(field==='total')return Number(previous)===Number(value);
       if(value instanceof Date)return previous instanceof Date&&previous.getTime()===value.getTime();
       if(value===null||value===undefined)return previous===null||previous===undefined;
+      // SKU repetido/desatualizado não conta como alteração: compara os itens sem o variantId.
+      if(field==='agentItems'){const strip=(v:unknown)=>JSON.stringify(Array.isArray(v)?v.map(i=>{const {variantId:_v,...rest}=(i||{}) as Body;return rest;}):v);return strip(previous)===strip(value);}
       if(typeof value==='object')return JSON.stringify(previous)===JSON.stringify(value);
       return previous===value;
     });

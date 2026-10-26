@@ -9,6 +9,7 @@ import { setOrderProduced } from "@/lib/order-production";
 import { recordOrderActivity } from "@/lib/order-history";
 import { InventoryError } from "@/lib/inventory";
 import { OrderError, addPayment, bookPayment, deliverOrder, removePayment, undoAllOrderSales, undoOrderSale } from "@/lib/orders";
+import { syncOrderStock } from "@/lib/order-stock";
 
 const STATUSES: OrderStatus[] = ["PENDENTE", "ENTREGUE", "CANCELADA"];
 const CHANNELS: SaleChannel[] = ["BALCAO", "WHATSAPP", "DELIVERY", "INSTAGRAM", "PEDIDOSYA"];
@@ -121,6 +122,7 @@ export async function setOrderStatusAction(form: FormData) {
       await undoOrderSale(order.saleId, session.userId);
       await prisma.$transaction(async tx => {
         await tx.order.update({ where: { id: order.id }, data: { status, saleId: null } });
+        await syncOrderStock(tx, order.id, { userId: session.userId });
         await recordOrderActivity(tx, order.id, status === "CANCELADA" ? "Encomenda cancelada" : "Retornado para pendente", session.userId);
       });
     }
@@ -136,6 +138,7 @@ export async function deleteOrderAction(form: FormData) {
   const order = await prisma.order.findUnique({ where: { id: String(form.get("orderId")) } });
   if (!order) return;
   await undoAllOrderSales(order.id, session.userId);
+  await prisma.$transaction(tx => syncOrderStock(tx, order.id, { release: true, userId: session.userId }));
   await prisma.order.delete({ where: { id: order.id } });
   revalidatePath("/painel", "layout");
 }

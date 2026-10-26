@@ -76,6 +76,8 @@ function fixture({ total = 230, paid = 115, booked = true, failPayment = false, 
     require: (name) => {
       if (name === "./db") return { prisma };
       if (name === "./inventory") return inventory;
+      // Baixa de estoque das encomendas é testada em order-stock.test.cjs.
+      if (name === "./order-stock") return { syncOrderStock: async () => ({ ok: true, changes: [] }) };
       if (name === "./order-history") return { recordOrderActivity: async(tx,orderId,action,userId)=>tx._state.activities.push({orderId,action,userId}) };
       throw new Error("Unexpected import: " + name);
     },

@@ -50,7 +50,7 @@ export function resolvedCommand(v: unknown) {
   const s = text(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return /^(respondid[oa]|resolvid[oa]|duvida respondida|ja respondi|cliente respondido)[.!\s]*$/.test(s);
 }
-export type OrderLine = { descricao: string; quantidade: number; precoUnitario: number };
+export type OrderLine = { descricao: string; quantidade: number; precoUnitario: number; variantId?: string };
 export function orderInput(raw: Record<string, unknown>, now = new Date(), existing?: { deliveryDate: Date; createdAt: Date; topping?: string | null; product?: string; deliveryTime?: string | null }) {
   const date = dateOnly(raw.data);
   if (date < dayLaPaz(now)) throw new AgentError('Data passada: consulte a encomenda existente antes de criar outra.');
@@ -60,7 +60,9 @@ export function orderInput(raw: Record<string, unknown>, now = new Date(), exist
     if (!i || typeof i !== 'object') throw new AgentError('Item inválido.');
     const descricao = text(i.descricao, 300), quantidade = i.quantidade;
     if (!descricao || !Number.isInteger(quantidade) || quantidade < 1 || quantidade > 1000) throw new AgentError('Descrição e quantidade são obrigatórias.');
-    return { descricao, quantidade, precoUnitario: money(i.precoUnitario) };
+    const variantId = text(i.variantId, 100);
+    // variantId fica guardado para a baixa de estoque quando o pagamento for confirmado.
+    return { descricao, quantidade, precoUnitario: money(i.precoUnitario), ...(variantId ? { variantId } : {}) };
   });
   const total = money(lines.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0));
   if (total <= 0) throw new AgentError('Preço precisa ser definido antes de registrar.');

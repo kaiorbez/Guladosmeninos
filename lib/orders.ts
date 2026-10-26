@@ -3,6 +3,7 @@ import type { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { InventoryError, cancelSale, createSale } from "./inventory";
 import { recordOrderActivity } from "./order-history";
+import { syncOrderStock } from "./order-stock";
 
 export class OrderError extends Error {}
 
@@ -101,6 +102,8 @@ export function decorationPhotoUrl(o: { id: string; decorationPhotoAt: Date | nu
 export async function refreshPaid(orderId: string, db: Tx = prisma) {
   const { _sum } = await db.orderPayment.aggregate({ where: { orderId }, _sum: { amount: true } });
   await db.order.update({ where: { id: orderId }, data: { paid: _sum.amount ?? 0 } });
+  // Pagamento confirmado (ou removido) acerta a baixa de estoque dos itens da encomenda.
+  await syncOrderStock(db, orderId);
 }
 
 /** Primeira linha dos produtos, para a descrição da venda. */
@@ -206,6 +209,7 @@ export async function deliverOrder(orderId: string, userId?: string, method: Pay
       await refreshPaid(orderId, tx);
     }
     await tx.order.update({ where: { id: orderId }, data: { saleId } });
+    await syncOrderStock(tx, orderId, { userId });
     await recordOrderActivity(tx, orderId, "Marcado como entregue", userId);
   });
 }
