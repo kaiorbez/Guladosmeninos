@@ -87,10 +87,14 @@ export async function inbound(b: Body) {
 export async function saveOrder(b: Body) {
   const p = phone(b.telefone), source = key(b.messageId), input = b.pedido;
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AgentError('Pedido inválido.');
-  const raw = input as Body, orderId = text(raw.id, 100), name = text(raw.cliente, 120);
+  let raw = input as Body;
+  const orderId = text(raw.id, 100), name = text(raw.cliente, 120);
   if (!name) throw new AgentError('Nome do cliente obrigatório.');
-  if (text(raw.modalidade,20)==='ENTREGA' && !text(raw.endereco,1000)) return {ok:false,registrado:false,motivo:'ENDERECO_OBRIGATORIO',orientacao:'Peça ao cliente o endereço ou a localização da entrega. Não registre nem envie QR até receber esse dado; não é necessário abrir pendência para a equipe.'};
-  if (!Array.isArray(raw.itens) || !raw.itens.length) throw new AgentError('Informe os itens da encomenda.');
+  // Alteração só de data/horário/entrega/endereço de pedido existente: itens podem vir vazios e são mantidos
+  // (inclui pedidos criados pela equipe no painel, com produto em texto livre e preço combinado).
+  const keepItems = !!orderId && (!Array.isArray(raw.itens) || !raw.itens.length);
+  if (text(raw.modalidade,20)==='ENTREGA' && !text(raw.endereco,1000) && !keepItems) return {ok:false,registrado:false,motivo:'ENDERECO_OBRIGATORIO',orientacao:'Peça ao cliente o endereço ou a localização da entrega. Não registre nem envie QR até receber esse dado; não é necessário abrir pendência para a equipe.'};
+  if (!keepItems && (!Array.isArray(raw.itens) || !raw.itens.length)) throw new AgentError('Informe os itens da encomenda.');
   const prices=await catalog();
   const eventKey = `order:${p}:${source}`;
   const result = await prisma.$transaction(async tx => {
@@ -100,7 +104,27 @@ export async function saveOrder(b: Body) {
     await current(tx, p, b);
     const existing = orderId ? await tx.order.findFirst({ where: { id: orderId, customerPhone: p, status: 'PENDENTE' } }) : null;
     if (orderId && !existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);
+    if (keepItems && existing) {
+      // Campos não enviados ficam como estão na ficha; itens, produto e valor nunca mudam neste modo.
+      raw = { ...raw,
+        itens: [{ descricao: existing.product.split('\n')[0].slice(0, 300) || 'Encomenda', quantidade: 1, precoUnitario: Number(existing.total) }],
+        modalidade: text(raw.modalidade, 20) || existing.deliveryMode || '',
+        endereco: text(raw.endereco, 1000) || existing.deliveryAddress || '',
+        data: raw.data || existing.deliveryDate.toISOString().slice(0, 10),
+        horario: raw.horario ?? existing.deliveryTime ?? '' };
+      if (text(raw.modalidade,20)==='ENTREGA' && !text(raw.endereco,1000)) return {ok:false,registrado:false,motivo:'ENDERECO_OBRIGATORIO',orientacao:'Peça ao cliente o endereço ou a localização da entrega antes de alterar o pedido.'};
+    }
     const data = orderInput(raw, new Date(), existing || undefined);
+    if (keepItems && existing) {
+      data.product = existing.product; data.total = Number(existing.total);
+      data.agentItems = (existing.agentItems ?? null) as unknown as typeof data.agentItems;
+      data.payFull = existing.payFull || raw.pagarIntegral === true;
+      if (!text(raw.massa, 200)) data.dough = existing.dough;
+      if (!text(raw.recheio, 300)) data.filling = existing.filling;
+      if (!text(raw.cobertura, 300)) data.topping = existing.topping;
+      if (!text(raw.decoracao, 1000)) data.decoration = existing.decoration;
+      data.notes = text(raw.observacoes, 2000) ? [existing.notes, text(raw.observacoes, 2000)].filter(Boolean).join('\n') : existing.notes;
+    }
     // A repeated save of the exact persisted order is a read, not another update.
     // Receipt processing must not invalidate a valid payment because the model repeated stale SKU ids.
     const unchanged=existing && Number(raw.versao)===existing.agentVersion && name===existing.customerName && Object.entries(data).every(([field,value])=>{
@@ -114,7 +138,7 @@ export async function saveOrder(b: Body) {
       return previous===value;
     });
     if(unchanged) return {ok:true,registrado:true,semAlteracao:true,pedido:presentOrder(existing),pagamentoConfirmado:false};
-    for (const line of raw.itens as Body[]) {
+    if (!keepItems) for (const line of raw.itens as Body[]) {
     const variant=prices.find(v=>v.variantId===line.variantId);
     if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual. Consulte consultar_cardapio para obter o variantId exato; não invente SKU nem repita a tentativa com o mesmo ID. Se for preço sob consulta, encaminhe orçamento à equipe.');
     if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError(`Preço mudou no painel: ${variant.produto} ${variant.tamanho} custa ${variant.preco} Bs. Confirme o novo resumo com o cliente antes de registrar.`);

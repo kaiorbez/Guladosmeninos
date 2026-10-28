@@ -854,3 +854,14 @@ test('QR snapshot rejects changed order and incomplete generation history',async
  const result=await g.service.operate({acao:'qr',telefone:phone,messageId:'m1',pedidoId:s.pedido.id,geracao:1,arquivoUrl:'https://example.com/qr.png'});
  assert.equal(result.estado,'SUPERADA');assert.equal(g.calls(),0);
 });
+
+test('alteração de data/entrega sem itens mantém produto, valor e pagamento (pedido criado pela equipe)',async()=>{
+ const f=fixture();const r=await f.service.saveOrder(body());const o=f.state().order[0];
+ Object.assign(o,{agentItems:null,product:'Bolo GG personalizado Homem Aranha',total:540,paid:270,notes:'Topper: Homem aranha',deliveryMode:null,deliveryAddress:null,dough:'Branca'});
+ const nd=new Date(Date.parse(future+'T12:00:00Z')+86400000);if(nd.getUTCDay()===2)nd.setUTCDate(nd.getUTCDate()+1);const nova=nd.toISOString().slice(0,10);
+ const res=await f.service.saveOrder({...body(),messageId:'m2',pedido:{cliente:'Cliente',id:r.pedido.id,versao:1,data:nova,horario:'15:30',modalidade:'ENTREGA',endereco:'Guardería Safari Kids'}});
+ assert.equal(res.registrado,true);const s=f.state().order[0];
+ assert.equal(s.deliveryDate.toISOString().slice(0,10),nova);assert.equal(s.deliveryTime,'15:30');assert.equal(s.deliveryMode,'ENTREGA');assert.equal(s.deliveryAddress,'Guardería Safari Kids');
+ assert.equal(s.product,'Bolo GG personalizado Homem Aranha');assert.equal(Number(s.total),540);assert.equal(Number(s.paid),270);assert.equal(s.notes,'Topper: Homem aranha');assert.equal(s.dough,'Branca');assert.equal(s.agentItems,null);
+ await assert.rejects(f.service.saveOrder({...body(),messageId:'m3',pedido:{cliente:'Cliente',data:nova,horario:'15:30',modalidade:'RETIRADA'}}),/itens/);
+});
