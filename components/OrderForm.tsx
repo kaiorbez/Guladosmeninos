@@ -185,7 +185,7 @@ export function OrderForm({
             <div>
               <span className="label">Já pago</span>
               <p className="py-1.5 text-xl font-semibold tabular-nums">{fmt(parse(paid))}</p>
-              <p className="text-xs text-cacau-500">Os pagamentos ficam no quadro abaixo.</p>
+              <a href="#pagamentos" className="btn-ghost mt-1 inline-flex px-2.5 py-1 text-xs">Lançar / corrigir pagamento ↓</a>
             </div>
           ) : (
             <div>

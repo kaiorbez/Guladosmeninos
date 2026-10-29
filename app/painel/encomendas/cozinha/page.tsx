@@ -54,7 +54,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
                 <span className="w-14 shrink-0 text-xl font-semibold tabular-nums">{o.deliveryTime === "AGORA" ? "Agora" : o.deliveryTime ?? "—"}</span>
                 <div className="min-w-0 flex-1">
                   <p className="whitespace-pre-line text-lg font-semibold">{o.product}</p>
-                  <p className="text-sm text-cacau-500">#{o.number} · {o.customerName}</p>
+                  <p className="text-sm text-cacau-500"><Link href={`/painel/encomendas/${o.id}`} className="underline print:no-underline">#{o.number}</Link> · {o.customerName}</p>
                 </div>
                 <span className="text-sm font-medium">{o.producedAt ? "✓ Produzido" : "A produzir"}</span>
               </div>

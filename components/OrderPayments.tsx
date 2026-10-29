@@ -16,7 +16,7 @@ export function OrderPayments({ orderId, payments, missing }: { orderId: string;
   const [error, action, pending] = useActionState(addPaymentAction, null);
 
   return (
-    <section className="card max-w-2xl">
+    <section id="pagamentos" className="card max-w-2xl scroll-mt-4">
       <h2 className="text-base">Pagamentos</h2>
       {payments.length === 0 ? (
         <p className="mt-2 text-sm text-cacau-500">Nenhum pagamento registrado.</p>

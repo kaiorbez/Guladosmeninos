@@ -11,6 +11,8 @@ export default async function Pendencias({searchParams}:{searchParams:Promise<{a
   const archived=(await searchParams).arquivo==='1';
   const tickets = await prisma.agentTicket.findMany({ where: {status:archived?'RESOLVIDA':{in:['ABERTA','ASSUMIDA']}}, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], take: 200 });
   const linkedOrders=new Map(await Promise.all(tickets.filter(t=>compatibleReceipt(t.kind,t.question)).map(async t=>[t.id,await deliveryOrderForTicket(t)] as const)));
+  // Pedido de cada pendência, para abrir a ficha (editar / lançar pagamento) direto daqui.
+  const orderOf=new Map(await Promise.all(tickets.map(async t=>[t.id,await ticketOrder(t,linkedOrders.get(t.id))] as const)));
   return <main className="space-y-6">
     <div><h1 className="text-2xl font-semibold">Pendências do atendimento</h1><p className="text-cacau-600">Dúvidas e comprovantes aguardando a equipe. Resolver libera a IA para a próxima mensagem do cliente.</p></div>
     <nav className="flex gap-4"><Link className={!archived?'font-semibold underline':''} href="/painel/pendencias">Pendentes</Link><Link className={archived?'font-semibold underline':''} href="/painel/pendencias?arquivo=1">Resolvidas / arquivo</Link></nav>
@@ -20,6 +22,7 @@ export default async function Pendencias({searchParams}:{searchParams:Promise<{a
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="text-sm text-cacau-600">Telefone: <span className="select-text">+{t.phone.replace(/\D/g, '')}</span></span>
         <a className="underline" href={`https://web.whatsapp.com/send?phone=${t.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">Abrir conversa</a>
+        {orderOf.get(t.id)&&<Link className="btn-ghost px-2.5 py-1 text-xs" href={`/painel/encomendas/${orderOf.get(t.id)!.id}`}>Abrir pedido #{orderOf.get(t.id)!.number} · editar / lançar pagamento</Link>}
       </div>
       <p className="whitespace-pre-wrap">{t.question}</p>
       <p className="text-sm text-cacau-500">{t.createdAt.toLocaleString('pt-BR', { timeZone: 'America/La_Paz' })} · {t.reminderCount} lembrete(s)</p>
@@ -31,4 +34,15 @@ export default async function Pendencias({searchParams}:{searchParams:Promise<{a
 
     </article>)}
   </main>;
+}
+
+/** Pedido ligado à pendência: vínculo gravado, comprovante conferido, "#N" citado no texto ou o único pedido pendente do cliente. */
+async function ticketOrder(t:{phone:string;question:string;orderId:string|null},linked?:{id:string;number:number}|null){
+  if(linked) return {id:linked.id,number:linked.number};
+  const select={id:true,number:true} as const;
+  if(t.orderId){const o=await prisma.order.findUnique({where:{id:t.orderId},select});if(o)return o;}
+  const n=Number(/#\s?(\d{1,6})\b/.exec(t.question)?.[1]);
+  if(n){const o=await prisma.order.findFirst({where:{number:n,customerPhone:t.phone},select});if(o)return o;}
+  const pend=await prisma.order.findMany({where:{customerPhone:t.phone,status:'PENDENTE'},select,take:2});
+  return pend.length===1?pend[0]:null;
 }
