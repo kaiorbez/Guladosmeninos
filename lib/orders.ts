@@ -77,7 +77,16 @@ export function lateLabel(min: number) {
 }
 
 /** AI orders stay out of the kitchen and pending lists until a payment is recorded (owners' request, 16/10). */
-export const UNPAID_AI: Prisma.OrderWhereInput = { agentRef: { not: null }, paid: 0 };
+/**
+ * Pedido da IA ainda sem pagamento (fica só em "Aguardando pagamento").
+ * Exceção: pagamento em efectivo/dinheiro na retirada — esse pedido é firme e precisa
+ * aparecer em Pedidos de hoje, Próximas e na Folha da cozinha mesmo com pago 0.
+ */
+const CASH_ON_PICKUP: Prisma.OrderWhereInput = {
+  OR: ["efectivo", "efetivo", "dinheiro"].map((word) => ({ notes: { contains: word, mode: "insensitive" as const } })),
+};
+// notes nulo precisa do OR explícito: NOT sobre campo nulo no Prisma exclui a linha.
+export const UNPAID_AI: Prisma.OrderWhereInput = { agentRef: { not: null }, paid: 0, OR: [{ notes: null }, { NOT: CASH_ON_PICKUP }] };
 export const NOT_UNPAID_AI: Prisma.OrderWhereInput = { NOT: UNPAID_AI };
 
 /** Encomendas pendentes atrasadas (para o aviso no topo do painel). */
