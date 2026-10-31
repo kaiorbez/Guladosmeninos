@@ -16,6 +16,7 @@ const future=(()=>{const d=new Date(Date.now()+7*86400000);if(d.getUTCDay()===2)
 function matches(o,w={}) {return Object.entries(w).every(([k,v])=>{
  if(k==='NOT')return !matches(o,v);
  const x=o[k];if(v&&typeof v==='object'&&!(v instanceof Date)&&!Array.isArray(v)) {
+ if('path' in v){let y=x;for(const k2 of v.path)y=y==null?undefined:y[k2];return y===v.equals;}
  if('startsWith' in v)return typeof x==='string'&&x.startsWith(v.startsWith);
  if('gte'in v)return x>=v.gte;if('gt'in v)return x>v.gt;
  if('in' in v)return v.in.includes(x);if('lt'in v)return x<v.lt;if('lte'in v)return x<=v.lte;
@@ -730,6 +731,13 @@ test('registro bloqueia quantidade sem estoque e preserva produtos sem controle 
  const f=fixture();f.state().product[0].trackStock=true;f.state().product[0].variants[0].stock=1;
  const b=body();b.pedido.itens[0].quantidade=2;await assert.rejects(f.service.saveOrder(b),/Estoque insuficiente/);assert.equal(f.state().order.length,0);
  f.state().product[0].trackStock=false;assert.equal((await f.service.saveOrder(b)).registrado,true);
+});
+test('venda conduzida pela equipe registra mesmo acima do estoque, com aviso nas observações',async()=>{
+ const f=fixture();f.state().product[0].trackStock=true;f.state().product[0].variants[0].stock=1;
+ const b=body();b.pedido.itens[0].quantidade=2;await assert.rejects(f.service.saveOrder(b),/Estoque insuficiente/);
+ await f.service.inbound({telefone:phone,messageId:'equipe-1',midia:'texto',texto:'claro, te paso el QR',humano:true,momento:Date.now()});
+ const c=f.state().agentConversation.find(x=>x.phone===phone);if(c)c.pausedUntil=null;b.geracao=c?c.generation:b.geracao;
+ const r=await f.service.saveOrder(b);assert.equal(r.registrado,true);assert.match(f.state().order[0].notes,/Venda da equipe acima do estoque do painel: .*disponível 1, vendido 2/);
 });
 test('PDF ilegível registra uma única pendência sem pagamento nem confirmação de preparo',async()=>{
  const f=fixture();await f.service.inbound({telefone:phone,messageId:'pdf',midia:'pdf',texto:'comprovante',momento:Date.now()});

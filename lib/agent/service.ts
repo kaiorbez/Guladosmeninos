@@ -138,13 +138,23 @@ export async function saveOrder(b: Body) {
       return previous===value;
     });
     if(unchanged) return {ok:true,registrado:true,semAlteracao:true,pedido:presentOrder(existing),pagamentoConfirmado:false};
+    // Venda conduzida pela equipe (mensagem humana recente na conversa): o estoque do painel não bloqueia o registro,
+    // porque a equipe já aceitou e muitas vezes já recebeu o pagamento. Fica o aviso nas observações.
+    const stockWarnings:string[]=[];
+    let teamSale:boolean|undefined;
     if (!keepItems) for (const line of raw.itens as Body[]) {
     const variant=prices.find(v=>v.variantId===line.variantId);
     if(!variant || variant.precoSobConsulta) throw new AgentError('Item sem preço autorizado no catálogo atual. Consulte consultar_cardapio para obter o variantId exato; não invente SKU nem repita a tentativa com o mesmo ID. Se for preço sob consulta, encaminhe orçamento à equipe.');
     if(moneyValue(line.precoUnitario)!==variant.preco) throw new AgentError(`Preço mudou no painel: ${variant.produto} ${variant.tamanho} custa ${variant.preco} Bs. Confirme o novo resumo com o cliente antes de registrar.`);
     const sameSku=(raw.itens as Body[]).filter(i=>i.variantId===line.variantId).reduce((sum,i)=>sum+Number(i.quantidade),0);
-    if(!existing && variant.controlaEstoque && sameSku>variant.estoque)throw new AgentError(`Estoque insuficiente no painel: ${variant.produto}, disponível ${variant.estoque}; solicitado ${sameSku}. Não registrar nem cobrar; consulte alternativas ou equipe.`);
+    if(!existing && variant.controlaEstoque && sameSku>variant.estoque){
+      if(teamSale===undefined)teamSale=!!(await tx.agentEvent.findFirst({where:{phone:p,kind:'INBOUND',createdAt:{gte:new Date(Date.now()-36*3600000)},payload:{path:['fromMe'],equals:true}},select:{key:true}}));
+      if(!teamSale)throw new AgentError(`Estoque insuficiente no painel: ${variant.produto}, disponível ${variant.estoque}; solicitado ${sameSku}. Não registrar nem cobrar; consulte alternativas ou equipe.`);
+      const warning=`⚠️ Venda da equipe acima do estoque do painel: ${variant.produto} (disponível ${variant.estoque}, vendido ${sameSku}).`;
+      if(!stockWarnings.includes(warning))stockWarnings.push(warning);
     }
+    }
+    if(stockWarnings.length)data.notes=[data.notes,...stockWarnings].filter(Boolean).join('\n');
     let order;
     if (orderId) {
       if (!existing) throw new AgentError('Encomenda deste cliente não encontrada ou encerrada.', 404);
