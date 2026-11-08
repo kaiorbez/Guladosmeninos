@@ -16,8 +16,8 @@ export function receiptReview(r: Record<string, unknown>, expected: number | nul
   const beneficiary = text(r.beneficiario, 200);
   const normalize = (s:string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').trim();
   const names = normalize(beneficiary).split(/\s+/);
-  if (!['MATHEUS','LAZZARINI','FRANCA'].every(n=>names.includes(n))) issues.push('Beneficiário diferente da referência oficial ou ilegível: conferir');
-  if (!/GANADERO/i.test(text(r.bancoDestino,200))) issues.push('Banco de destino não identificado como Banco Ganadero: conferir');
+  const officialAccount = Object.values(r).some(v => /1311711?0927/.test(String(v ?? ''))); /* BCP mostra só a conta de destino: a conta oficial vale como destinatário */ if (!officialAccount && !['MATHEUS','LAZZARINI','FRANCA'].every(n=>names.includes(n))) issues.push('Beneficiário diferente da referência oficial ou ilegível: conferir');
+  if (!officialAccount && !/GANADERO/i.test(text(r.bancoDestino,200))) issues.push('Banco de destino não identificado como Banco Ganadero: conferir');
   const date = text(r.data, 40);
   if (!date) issues.push('Data ausente/ilegível');
   else if (!receiptDate(date)) issues.push('Data inválida/ilegível: conferir com a equipe');
