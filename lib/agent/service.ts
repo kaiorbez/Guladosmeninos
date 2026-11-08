@@ -370,8 +370,12 @@ export async function sendYangoLink(input:{orderId?:string;ticketId?:string;link
  return {ok:true,enviado:true,telefone:p,orderId:order?.id,link,sentAt:sentAt.toISOString(),encerrado:true,...finalized,groupNoticeSent};
 }
 
-export async function reminders(testTarget?: string) {
-  const due = await prisma.agentTicket.findMany({ where: { ...(testTarget==='59175678921'?{phone:testTarget,customerName:{startsWith:'[TESTE]'}}:{}), status: 'ABERTA', kind: { in: ['DUVIDA','COMPROVANTE'] }, NOT: { kind: 'COMPROVANTE', question: { startsWith: '📌 *Resumo*\n✅ CONFERE:' } }, reminderCount: { lt: 3 }, nextReminderAt: { lte: new Date() } }, take: 30 });
+export async function reminders(testTarget?: string, tipos?: unknown, maxIdadeHoras?: unknown) {
+  // tipos: limita os lembretes (ex.: só COMPROVANTE). maxIdadeHoras: ignora pendências antigas para não disparar lembretes em massa.
+  const kinds = Array.isArray(tipos) ? tipos.map(String).filter(k => k === 'DUVIDA' || k === 'COMPROVANTE') : [];
+  const horas = Number(maxIdadeHoras);
+  const desde = Number.isFinite(horas) && horas > 0 ? new Date(Date.now() - horas * 3600000) : null;
+  const due = await prisma.agentTicket.findMany({ where: { ...(testTarget==='59175678921'?{phone:testTarget,customerName:{startsWith:'[TESTE]'}}:{}), ...(desde?{createdAt:{gte:desde}}:{}), status: 'ABERTA', kind: { in: kinds.length ? kinds : ['DUVIDA','COMPROVANTE'] }, NOT: { kind: 'COMPROVANTE', question: { startsWith: '📌 *Resumo*\n✅ CONFERE:' } }, reminderCount: { lt: 3 }, nextReminderAt: { lte: new Date() } }, take: 30 });
   const results = [];
   for (const t of due) {
     if (compatibleReceipt(t.kind,t.question)) continue;
@@ -530,7 +534,7 @@ export async function operate(b: Body) {
     case 'pedido': return saveOrder(b);
     case 'pendencia': return ticket(b);
     case 'equipe': return team(b);
-    case 'lembretes': return reminders(text(b.destinoTeste));
+    case 'lembretes': return reminders(text(b.destinoTeste), b.tipos, b.maxIdadeHoras);
     case 'diagnosticoHistorico': return importHistory(phone(b.telefone), true);
     case 'consultarEntregaYango': return {ok:true,valorEntrega:await lookupYangoFee(text(b.link,3000)),moeda:'Bs'};
     case 'diagnosticoConexao': {
