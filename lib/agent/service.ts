@@ -183,7 +183,7 @@ export async function ticket(b: Body) {
   let receiptMedia: Array<{id:string;url:string;kind:string}>=[];
   let report=question;
   let receiptKey:string|null=null;
-  let linkedOrderId:string|null=null;
+  let linkedOrderId:string|null=null; let paymentRecorded=false;
   const t = await prisma.$transaction(async tx => {
     await lockConversation(tx, p);
     await current(tx, p, b);
@@ -222,7 +222,7 @@ export async function ticket(b: Body) {
         const ownMedia=media.find(m=>{const v=m.payload as Body;return ['imagem','pdf'].includes(String(v.media))&&v.fromMe===false&&m.createdAt.getTime()>Date.now()-10*60000;});
         if(!ownMedia)throw new AgentError('Comprovante sem mídia vinculada ao cliente.');
         const mediaId=ownMedia.key.slice(`in:${p}:`.length);
-        await recordReceiptPayment(tx,order.id,p,mediaId,review.valorVisivel);
+        await recordReceiptPayment(tx,order.id,p,mediaId,review.valorVisivel); paymentRecorded=true;
       }
     }
     const sourceKey = receiptKey || `ticket:${p}:${kind}:${id}`;
@@ -233,7 +233,7 @@ export async function ticket(b: Body) {
   catch { sent = { enviado: false, estado: 'NAO_CONFIGURADO', messageId: null }; }
   let mediaSent=kind!=='COMPROVANTE'||receiptMedia.length>0;
   for(const m of receiptMedia) { try {const r=await sendOnce(`receipt:${t.id}:${m.id}`,destination(b),'📎 Comprovante original — '+t.customerName,t.id,undefined,m.kind==='pdf'?'receipt-pdf':'receipt-image',m.url);mediaSent=mediaSent&&r.enviado;} catch {mediaSent=false;} }
-  return { midiaEnviada:mediaSent, ok: true, registrado: true, ticketId: t.id, tipo: t.kind, notificacaoEnviada: sent.enviado, estadoEnvio: sent.estado, messageId: sent.messageId };
+  return { midiaEnviada:mediaSent, ok: true, registrado: true, ticketId: t.id, tipo: t.kind, ...(kind==='COMPROVANTE'?{pagamentoRegistrado:paymentRecorded}:{}), notificacaoEnviada: sent.enviado, estadoEnvio: sent.estado, messageId: sent.messageId };
 }
 export async function resolveTicket(id: string, answer: string, who: string) {
   return prisma.$transaction(tx => resolveTicketInTransaction(tx,id,answer,who));
