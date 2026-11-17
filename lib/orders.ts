@@ -76,11 +76,12 @@ export function lateLabel(min: number) {
   return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
 }
 
-/** AI orders stay out of the kitchen and pending lists until a payment is recorded (owners' request, 16/10). */
 /**
- * Pedido da IA ainda sem pagamento (fica só em "Aguardando pagamento").
- * Exceção: pagamento em efectivo/dinheiro na retirada — esse pedido é firme e precisa
- * aparecer em Pedidos de hoje, Próximas e na Folha da cozinha mesmo com pago 0.
+ * Pedido da IA ainda sem pagamento lançado. Desde 16/11 ele APARECE em Pedidos de hoje,
+ * Próximas, Visão geral e Folha da cozinha com a etiqueta "Aguardando pagamento" (pedido da loja:
+ * todo pedido precisa estar visível). Os de data já passada ficam só na aba "Aguardando pagamento"
+ * e fora do aviso de atrasadas, para carrinho abandonado não poluir a fila.
+ * Exceção: pagamento em efectivo/dinheiro na retirada conta como pedido firme, sem etiqueta.
  */
 const CASH_ON_PICKUP: Prisma.OrderWhereInput = {
   OR: ["efectivo", "efetivo", "dinheiro"].map((word) => ({ notes: { contains: word, mode: "insensitive" as const } })),
@@ -88,6 +89,26 @@ const CASH_ON_PICKUP: Prisma.OrderWhereInput = {
 // notes nulo precisa do OR explícito: NOT sobre campo nulo no Prisma exclui a linha.
 export const UNPAID_AI: Prisma.OrderWhereInput = { agentRef: { not: null }, paid: 0, OR: [{ notes: null }, { NOT: CASH_ON_PICKUP }] };
 export const NOT_UNPAID_AI: Prisma.OrderWhereInput = { NOT: UNPAID_AI };
+
+/** Filtro das listas de pendentes: tudo, menos pedido da IA sem pagamento com data já passada. */
+export function visiblePending(today: string): Prisma.OrderWhereInput {
+  return { AND: [{ OR: [NOT_UNPAID_AI, { deliveryDate: { gte: new Date(`${today}T00:00:00Z`) } }] }] };
+}
+
+/** Mesmo critério de UNPAID_AI, para etiquetar a linha na tela. */
+export function isUnpaidAi(o: { agentRef: string | null; paid: unknown; notes: string | null }) {
+  return o.agentRef !== null && Number(o.paid) === 0 && !/efectivo|efetivo|dinheiro/i.test(o.notes ?? "");
+}
+
+/** Ids das encomendas com pendência da IA em aberto (aviso ainda não resolvido pela equipe). */
+export async function ordersWithOpenTicket(ids: string[]) {
+  if (!ids.length) return new Set<string>();
+  const rows = await prisma.agentTicket.findMany({
+    where: { orderId: { in: ids }, status: { in: ["ABERTA", "ASSUMIDA"] } },
+    select: { orderId: true },
+  });
+  return new Set(rows.map((r) => r.orderId!));
+}
 
 /** Encomendas pendentes atrasadas (para o aviso no topo do painel). */
 export async function lateOrders() {
