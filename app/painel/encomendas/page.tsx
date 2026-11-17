@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
 import { compareOrderQueue, groupOrderQueue } from "@/lib/order-queue";
-import { decorationPhotoUrl, lateLabel, minutesLate, NOT_UNPAID_AI, UNPAID_AI } from "@/lib/orders";
+import { decorationPhotoUrl, isUnpaidAi, lateLabel, minutesLate, ordersWithOpenTicket, UNPAID_AI, visiblePending } from "@/lib/orders";
 import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
 import type { SaleChannel } from "@prisma/client";
 import { OrderFilters } from "./OrderFilters";
@@ -58,7 +58,7 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
   const producao = sp.producao === "feito" || sp.producao === "fazer" ? sp.producao : "";
   const where = {
         status: TABS[tab].status,
-        ...((tab === "proximas" || tab === "hoje") ? NOT_UNPAID_AI : tab === "aguardando" ? UNPAID_AI : {}),
+        ...((tab === "proximas" || tab === "hoje") ? visiblePending(today) : tab === "aguardando" ? UNPAID_AI : {}),
         ...(producao ? { producedAt: producao === "feito" ? { not: null } : null } : {}),
         ...(pgto ? { paid: pgto === "falta" ? { lt: prisma.order.fields.total } : { gte: prisma.order.fields.total } } : {}),
         ...(hora === "agora" ? { deliveryTime: "AGORA" } : hora === "sem" ? { deliveryTime: null } : hora ? { deliveryTime: { startsWith: `${hora}:` } } : {}),
@@ -91,10 +91,11 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
       orderBy: [{ deliveryDate: "desc" }, { deliveryTime: "asc" }, { id: "asc" }],
       ...(sortedQueue ? {} : { take: pageSize, skip: (page - 1) * pageSize }),
     }),
-    prisma.order.findMany({ where: { status: "PENDENTE", ...NOT_UNPAID_AI }, select: { deliveryDate: true, total: true, paid: true } }),
+    prisma.order.findMany({ where: { status: "PENDENTE", ...visiblePending(today) }, select: { deliveryDate: true, total: true, paid: true } }),
     // Horários que existem nesta aba, para as opções do filtro.
     prisma.order.findMany({ where: { status: TABS[tab].status, deliveryTime: { not: null } }, select: { deliveryTime: true }, distinct: ["deliveryTime"] }),
   ]);
+  const withTicket = await ordersWithOpenTicket(orders.map((o) => o.id));
   if (sortedQueue) {
     const positions = new Map(sortedQueue.map((order, index) => [order.id, index]));
     orders.sort((a, b) => positions.get(a.id)! - positions.get(b.id)!);
@@ -208,6 +209,12 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base font-semibold">{o.customerName}</p>
+                          {(isUnpaidAi(o) || withTicket.has(o.id)) && (
+                            <p className="mb-0.5 flex flex-wrap gap-1">
+                              {isUnpaidAi(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Aguardando pagamento</span>}
+                              {withTicket.has(o.id) && <Link href="/painel/pendencias" className="badge bg-coral-500/15 text-coral-600 hover:underline">Pendência da IA</Link>}
+                            </p>
+                          )}
                           <p className="flex flex-wrap items-center gap-x-2 text-xs text-cacau-500">
                             <span className="tabular-nums">#{o.number}</span>
                             {o.customerPhone &&
