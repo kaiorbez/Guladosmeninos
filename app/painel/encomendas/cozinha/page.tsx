@@ -4,7 +4,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { OrderProducedButton } from "@/components/OrderProducedButton";
 import { prisma } from "@/lib/db";
 import { dayKey } from "@/lib/time";
-import { decorationPhotoUrl, NOT_UNPAID_AI } from "@/lib/orders";
+import { decorationPhotoUrl, isUnpaidAi, visiblePending } from "@/lib/orders";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const shift = (k: string, days: number) => new Date(new Date(`${k}T00:00:00Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
@@ -16,7 +16,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
   const day = sp.dia && /^\d{4}-\d{2}-\d{2}$/.test(sp.dia) ? sp.dia : today;
 
   const orders = await prisma.order.findMany({
-    where: { status: "PENDENTE", deliveryDate: new Date(`${day}T00:00:00Z`), ...NOT_UNPAID_AI },
+    where: { status: "PENDENTE", deliveryDate: new Date(`${day}T00:00:00Z`), ...visiblePending(today) },
     orderBy: [{ deliveryTime: "asc" }, { number: "asc" }],
   });
 
@@ -53,6 +53,7 @@ export default async function FolhaCozinha({ searchParams }: { searchParams: Pro
               <div className="flex items-baseline gap-3">
                 <span className="w-14 shrink-0 text-xl font-semibold tabular-nums">{o.deliveryTime === "AGORA" ? "Agora" : o.deliveryTime ?? "—"}</span>
                 <div className="min-w-0 flex-1">
+                  {isUnpaidAi(o) && <p className="text-xs font-semibold uppercase tracking-wide text-coral-600">Aguardando pagamento · confirmar antes de produzir</p>}
                   <p className="whitespace-pre-line text-lg font-semibold">{o.product}</p>
                   <p className="text-sm text-cacau-500"><Link href={`/painel/encomendas/${o.id}`} className="underline print:no-underline">#{o.number}</Link> · {o.customerName}</p>
                 </div>
