@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
 import { getDailySeries, getOverview, getSalesByChannel, getTopProducts } from "@/lib/metrics";
 import { dayKey, startOfMonth } from "@/lib/time";
-import { NOT_UNPAID_AI } from "@/lib/orders";
+import { isUnpaidAi, visiblePending } from "@/lib/orders";
 
 export default async function VisaoGeral() {
   const month = startOfMonth();
@@ -26,7 +26,7 @@ export default async function VisaoGeral() {
     }),
     // Pendentes até amanhã (inclui as atrasadas)
     prisma.order.findMany({
-      where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) }, ...NOT_UNPAID_AI },
+      where: { status: "PENDENTE", deliveryDate: { lte: new Date(`${tomorrowKey}T00:00:00Z`) }, ...visiblePending(todayKey) },
       orderBy: [{ deliveryDate: "asc" }, { deliveryTime: "asc" }],
       take: 12,
     }),
@@ -71,6 +71,7 @@ export default async function VisaoGeral() {
                     </span>
                     <span className="w-12 tabular-nums text-cacau-500">{o.deliveryTime ?? "—"}</span>
                     <span className="font-medium">{o.customerName}</span>
+                    {isUnpaidAi(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Aguardando pagamento</span>}
                     <span className="min-w-0 flex-1 truncate text-cacau-500">{o.product}</span>
                     {missing > 0 && <span className="text-coral-600">falta {bs(missing)}</span>}
                   </Link>
