@@ -12,6 +12,7 @@ export function catalogForPrompt(items: Item[], query: unknown, search?: unknown
  const family=(item:Item)=>{
   const name=normalize(item.produto);
   if(/^pote\b/.test(name))return 'potes';
+  if(/^pave\b/.test(name))return 'potes'; // pavês (nov/2026) entram na mesma família dos potes
   if(/^fatia\b|^porcao\b.*\btorta\b/.test(name))return 'fatias';
   if(/^docinh/.test(name))return 'docinhos';
   if(/^empad|^torta pao/.test(name))return 'salgados';
