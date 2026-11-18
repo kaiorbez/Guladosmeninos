@@ -76,12 +76,12 @@ export async function sendOnce(id: string, target: string, message: string, tick
     const body = media === 'qr' || media === 'receipt-image' ? { phone: target, image: mediaUrl, caption: message } : media === 'menu' || media === 'receipt-pdf' ? { phone: target, document: mediaUrl, fileName: media === 'receipt-pdf' ? 'Comprovante-Gula' : 'Cardapio-Gula-dos-Meninos', caption: message } : { phone: target, message };
     let status = 'UNKNOWN', messageId: string | null = null, error: string | null = null;
     try {
-      const r = await fetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Client-Token': client }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+      const r = await fetch(`https://api.z-api.io/instances/${encodeURIComponent(instance)}/token/${encodeURIComponent(token)}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Client-Token': client }, body: JSON.stringify(body), signal: AbortSignal.timeout(media ? 20000 : 10000) }); // imagem/PDF: o Z-API baixa o arquivo antes de responder (18/11: QR estourou os 10 s)
       const result = await r.json();
       if (r.ok && typeof (result.messageId || result.id) === 'string') { status = 'SENT'; messageId = result.messageId || result.id; }
       else { status = r.status >= 400 && r.status < 500 ? 'FAILED' : 'UNKNOWN'; error = `Resposta Z-API sem confirmação (${r.status})`; }
     } catch { error = 'Envio sem confirmação: conferir WhatsApp antes de repetir.'; }
     await tx.agentDelivery.update({ where: { key: id }, data: { status, messageId, error } });
     return { enviado: status === 'SENT', estado: status, messageId };
-  }, { timeout: 20000 });
+  }, { timeout: 30000 });
 }
