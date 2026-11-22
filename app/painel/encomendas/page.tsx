@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { bs } from "@/lib/format";
 import { dayKey } from "@/lib/time";
 import { compareOrderQueue, groupOrderQueue } from "@/lib/order-queue";
-import { decorationPhotoUrl, isUnpaidAi, lateLabel, minutesLate, ordersWithOpenTicket, UNPAID_AI, visiblePending } from "@/lib/orders";
+import { addressPending, decorationPhotoUrl, hasOpenBalance, isCashOnPickup, isUnpaidAi, lateLabel, minutesLate, ordersWithOpenTicket, UNPAID_AI, visiblePending } from "@/lib/orders";
 import { ORDER_CHANNELS, PAYMENT_METHODS as METHODS } from "@/lib/format";
 import type { SaleChannel } from "@prisma/client";
 import { OrderFilters } from "./OrderFilters";
@@ -209,9 +209,12 @@ export default async function EncomendasPage({ searchParams }: { searchParams: P
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base font-semibold">{o.customerName}</p>
-                          {(isUnpaidAi(o) || withTicket.has(o.id)) && (
+                          {(isUnpaidAi(o) || isCashOnPickup(o) || hasOpenBalance(o) || addressPending(o) || withTicket.has(o.id)) && (
                             <p className="mb-0.5 flex flex-wrap gap-1">
                               {isUnpaidAi(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Aguardando pagamento</span>}
+                              {isCashOnPickup(o) && <span className="badge bg-coral-500/15 text-coral-600">Paga em dinheiro na retirada</span>}
+                              {hasOpenBalance(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Falta receber</span>}
+                              {addressPending(o) && <span className="badge bg-coral-500/15 text-coral-600">Endereço pendente</span>}
                               {withTicket.has(o.id) && <Link href="/painel/pendencias" className="badge bg-coral-500/15 text-coral-600 hover:underline">Pendência da IA</Link>}
                             </p>
                           )}
