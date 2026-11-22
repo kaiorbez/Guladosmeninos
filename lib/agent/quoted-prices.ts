@@ -10,8 +10,9 @@ const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').to
  .replace(/\bfrut(?:as|os) roj(?:as|os)\b/g,'frutas vermelhas')
  .replace(/\bfrutos\b/g,'frutas').replace(/\broj[oa]s\b/g,'vermelhas')
  .replace(/\b(?:frutillas?|fresas?)\b/g,'morango').replace(/\b(?:nueces|nuez)\b/g,'nozes');
-const family=(s:string)=>/\bfatia\b/.test(s)?'fatias':/\bpote\b/.test(s)?'potes':null;
-const productFamily=(s:string)=>/^fatia\b|^porcao\b.*torta/.test(s)?'fatias':/^pote\b/.test(s)?'potes':null;
+// Pavês (nov/2026) são vendidos junto com os potes: sem isso, "pavé de maracuyá, frutilla y tradicional" era lido como pote inexistente e a resposta era bloqueada.
+const family=(s:string)=>/\bfatia\b/.test(s)?'fatias':/\bpote\b|\bpave\b/.test(s)?'potes':null;
+const productFamily=(s:string)=>/^fatia\b|^porcao\b.*torta/.test(s)?'fatias':/^pote\b|^pave\b/.test(s)?'potes':null;
 /** Negation of availability anywhere in the same sentence ("está a 30 bs, pero no tengo para hoy"). */
 const unavailable=/\b(?:nao|no tenemos|no tengo|no hay|nao tenho|nao temos|indisponivel|agotad|esgotad|sin stock|sem estoque|antes|historico)\b/;
 const sentenceOf=(line:string,at:number)=>{const start=Math.max(line.lastIndexOf('.',at-1),line.lastIndexOf('!',at-1),line.lastIndexOf('?',at-1))+1;const ends=['.','!','?'].map(c=>line.indexOf(c,at)).filter(x=>x>=0);return line.slice(start,ends.length?Math.min(...ends):line.length);};
@@ -34,6 +35,8 @@ export function quotedPriceIssues(message:string, items:Item[]) {
    const unitPrice=/\bcada\b|por unidade|por unidad|c\/u/.test(clause)||/^\s*(?:cada\b|por unidad(?:e)?\b|c\/u\b)/.test(line.slice(start));
    // A combined basket total is not an individual product price, even when its description names a pot/slice.
    if(/\b(?:total|subtotal|frete|envio|sinal|saldo|pagar|pagamento|pago)\b/.test(clause))continue;
+   // "desde 25 Bs" / "a partir de 25 Bs" é faixa de preço de vários itens, não preço unitário de um produto.
+   if(/\b(?:desde|a partir de)\s*$/.test(clause))continue;
    if(/docinh|brigadeiros|pacoca|\bdoces\b/.test(clause))continue;
    if(/\b(?:combo|promo|promocion|par de|par promocional)\b/.test(clause))continue;
    // A single amount after several explicitly named products is a basket price.
