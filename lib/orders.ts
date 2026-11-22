@@ -100,6 +100,22 @@ export function isUnpaidAi(o: { agentRef: string | null; paid: unknown; notes: s
   return o.agentRef !== null && Number(o.paid) === 0 && !/efectivo|efetivo|dinheiro/i.test(o.notes ?? "");
 }
 
+/** Pedido da IA combinado para pagar em dinheiro na retirada/entrega: é firme, mas ainda não recebeu nada (etiqueta própria, 21/11). */
+export function isCashOnPickup(o: { agentRef: string | null; paid: unknown; notes: string | null }) {
+  return o.agentRef !== null && Number(o.paid) === 0 && /efectivo|efetivo|dinheiro/i.test(o.notes ?? "");
+}
+
+/** Sinal pago e saldo em aberto: "Aguardando pagamento" não cobre esse caso, e o saldo precisa ser cobrado antes de entregar (21/11). */
+export function hasOpenBalance(o: { paid: unknown; total: unknown }) {
+  const paid = Number(o.paid), total = Number(o.total);
+  return paid > 0 && total > paid;
+}
+
+/** Entrega registrada sem endereço definitivo: a IA grava "PENDENTE: ..." quando o cliente fica de mandar a localização depois. */
+export function addressPending(o: { deliveryAddress?: string | null }) {
+  return /^\s*(PENDENTE|A CONFIRMAR)\b/i.test(o.deliveryAddress ?? "");
+}
+
 /** Ids das encomendas com pendência da IA em aberto (aviso ainda não resolvido pela equipe). */
 export async function ordersWithOpenTicket(ids: string[]) {
   if (!ids.length) return new Set<string>();
