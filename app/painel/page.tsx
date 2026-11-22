@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { CHANNEL_LABEL, bs, dateTime, variantLabel } from "@/lib/format";
 import { getDailySeries, getOverview, getSalesByChannel, getTopProducts } from "@/lib/metrics";
 import { dayKey, startOfMonth } from "@/lib/time";
-import { isUnpaidAi, visiblePending } from "@/lib/orders";
+import { addressPending, hasOpenBalance, isCashOnPickup, isUnpaidAi, visiblePending } from "@/lib/orders";
 
 export default async function VisaoGeral() {
   const month = startOfMonth();
@@ -72,6 +72,9 @@ export default async function VisaoGeral() {
                     <span className="w-12 tabular-nums text-cacau-500">{o.deliveryTime ?? "—"}</span>
                     <span className="font-medium">{o.customerName}</span>
                     {isUnpaidAi(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Aguardando pagamento</span>}
+                    {isCashOnPickup(o) && <span className="badge bg-coral-500/15 text-coral-600">Paga em dinheiro na retirada</span>}
+                    {hasOpenBalance(o) && <span className="badge bg-dourado-400/25 text-dourado-600">Falta receber</span>}
+                    {addressPending(o) && <span className="badge bg-coral-500/15 text-coral-600">Endereço pendente</span>}
                     <span className="min-w-0 flex-1 truncate text-cacau-500">{o.product}</span>
                     {missing > 0 && <span className="text-coral-600">falta {bs(missing)}</span>}
                   </Link>
